@@ -1,0 +1,143 @@
+:root {
+  --fundo-conversa: #f4f1ec;
+  --superficie-barra: #fbfaf7;
+  --superficie-elevada: #ffffff;
+  --borda-estrutura: #e6e1d8;
+  --borda-componente: #dfd9d0;
+  --borda-divisor-card: #ebe6dd;
+  --texto-primario: #1c1a17;
+  --texto-secundario: #5e5b54;
+  --texto-placeholder: #6e6a62;
+  --marca: #a2452a;
+  --marca-contraste: #fbfaf7;
+  --foco: #b04a2b;
+  --neutro: #5e5b54;
+  --sucesso: #1e5637;
+  --atencao: #6b4a11;
+  --erro: #8a2318;
+  --inativo-fundo: #ece6dc;
+  --inativo-borda: #dcd5ca;
+  --inativo-texto: #5e5b54;
+
+  --raio-bolha: 18px;
+  --raio-card: 12px;
+  --raio-campo: 26px;
+  --raio-acao-evento: 22px;
+  --raio-marca-estado: 2px;
+
+  --coluna: 720px;
+  --corpo: 18px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) {
+    --fundo-conversa: #14130f;
+    --superficie-barra: #1c1b16;
+    --superficie-elevada: #24231d;
+    --borda-estrutura: #35342c;
+    --borda-componente: #35342c;
+    --borda-divisor-card: #35342c;
+    --texto-primario: #f1eee6;
+    --texto-secundario: #a8a49a;
+    --texto-placeholder: #9a968c;
+    --marca: #e0855f;
+    --marca-contraste: #14130f;
+    --foco: #eca184;
+    --neutro: #a8a49a;
+    --sucesso: #8fd3a8;
+    --atencao: #e3be7b;
+    --erro: #f0a398;
+    --inativo-fundo: #2b2a23;
+    --inativo-borda: #3e3d34;
+    --inativo-texto: #a8a49a;
+  }
+}
+
+:root[data-tema='escuro'] {
+  --fundo-conversa: #14130f;
+  --superficie-barra: #1c1b16;
+  --superficie-elevada: #24231d;
+  --borda-estrutura: #35342c;
+  --borda-componente: #35342c;
+  --borda-divisor-card: #35342c;
+  --texto-primario: #f1eee6;
+  --texto-secundario: #a8a49a;
+  --texto-placeholder: #9a968c;
+  --marca: #e0855f;
+  --marca-contraste: #14130f;
+  --foco: #eca184;
+  --neutro: #a8a49a;
+  --sucesso: #8fd3a8;
+  --atencao: #e3be7b;
+  --erro: #f0a398;
+  --inativo-fundo: #2b2a23;
+  --inativo-borda: #3e3d34;
+  --inativo-texto: #a8a49a;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: var(--fundo-conversa);
+  color: var(--texto-primario);
+  font-family: 'Libre Franklin', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-size: var(--corpo);
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+p {
+  margin: 0;
+}
+
+a {
+  color: var(--marca);
+  text-decoration: none;
+  border-bottom: 1px solid color-mix(in srgb, var(--marca) 40%, transparent);
+}
+
+a:hover {
+  border-bottom-color: var(--marca);
+}
+
+:focus-visible {
+  outline: 2px solid var(--foco);
+  outline-offset: 2px;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}
+
+@keyframes liaRespira {
+  0%,
+  100% {
+    opacity: 0.32;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-ponto] {
+    animation: none !important;
+    opacity: 0.62;
+  }
+}
+
+@media (max-width: 640px) {
+  :root {
+    --corpo: 17px;
+    --raio-campo: 24px;
+  }
+}
