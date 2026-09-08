@@ -1,7 +1,7 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ConversaApi } from './conversa-api';
-import { MensagemHistorico, MensagemResponse, ProximaAcao } from './contrato';
-import { horaAgora, horaDe } from './horario';
+import { MensagemDaConversa, MensagemResponse, ProximaAcao } from './contrato';
+import { HOJE, diaDe, horaAgora, horaDe, rotuloDeDia } from './horario';
 import { AcaoEvento, EstadoConversa, ItemTrilha } from './trilha';
 
 const CHAVE_CONSENTIMENTO = 'solar.consentimento';
@@ -59,11 +59,15 @@ export class ConversaStore {
       try {
         const conversa = await this.api.obterConversa(salva);
         this.itens.set(this.reconstruir(conversa.mensagens));
-        this.estado.set('conversando');
-        return;
+        this.estado.set(this.estadoDe(conversa.mensagens));
       } catch {
+        // A conversa salva existe e nao vamos perde-la por uma falha de rede:
+        // abrir() aqui geraria um guid novo e sobrescreveria o do localStorage,
+        // apagando o historico para sempre sem avisar ninguem.
         this.itens.set([]);
+        this.registrarFalhaAoRetomar();
       }
+      return;
     }
 
     await this.abrir();
@@ -129,6 +133,10 @@ export class ConversaStore {
       case 'nova-conversa':
         void this.novaConversa();
         return;
+      case 'retomar':
+        this.itens.set([]);
+        void this.iniciar();
+        return;
     }
   }
 
@@ -136,7 +144,7 @@ export class ConversaStore {
     this.conversaId = crypto.randomUUID();
     this.gravar(CHAVE_CONVERSA, this.conversaId);
     this.itens.set([
-      { tipo: 'divisor', id: this.proximoId(), rotulo: 'Hoje' },
+      { tipo: 'divisor', id: this.proximoId(), rotulo: HOJE },
     ]);
     this.ultimoEnvio = ABERTURA;
     this.ultimoEnvioVisivel = false;
@@ -204,6 +212,19 @@ export class ConversaStore {
     }
   }
 
+  private registrarFalhaAoRetomar(): void {
+    this.acrescentar({
+      tipo: 'evento',
+      id: this.proximoId(),
+      variante: 'erro',
+      rotulo: 'Falha ao retomar a conversa',
+      texto:
+        'Não foi possível carregar sua conversa anterior. Ela continua salva — tente novamente em instantes.',
+      acao: { rotulo: 'Tentar novamente', tipo: 'retomar' },
+    });
+    this.estado.set('falha');
+  }
+
   private registrarFalha(): void {
     this.acrescentar({
       tipo: 'evento',
@@ -218,30 +239,71 @@ export class ConversaStore {
     this.estado.set('falha');
   }
 
-  private reconstruir(mensagens: MensagemHistorico[]): ItemTrilha[] {
-    const itens: ItemTrilha[] = [{ tipo: 'divisor', id: this.proximoId(), rotulo: 'Hoje' }];
-    for (const mensagem of mensagens) {
+  /**
+   * Redesenha a trilha inteira a partir do que o banco guardou: divisores por
+   * dia de calendario, as falas, e os mesmos eventos de desfecho que a sessao
+   * ao vivo teria mostrado. Imoveis nao voltam -- a API nao os persiste.
+   */
+  private reconstruir(mensagens: MensagemDaConversa[]): ItemTrilha[] {
+    const itens: ItemTrilha[] = [];
+    let dia = '';
+
+    for (const [indice, mensagem] of mensagens.entries()) {
+      if (indice === 0 && mensagem.papel === 'lead' && mensagem.texto === ABERTURA) {
+        continue;
+      }
+
+      const diaDaMensagem = diaDe(mensagem.em);
+      if (diaDaMensagem !== dia) {
+        dia = diaDaMensagem;
+        itens.push({
+          tipo: 'divisor',
+          id: this.proximoId(),
+          rotulo: rotuloDeDia(mensagem.em),
+        });
+      }
+
       if (mensagem.papel === 'lead') {
-        if (itens.length === 1 && mensagem.texto === ABERTURA) {
-          continue;
-        }
         itens.push({
           tipo: 'pessoa',
           id: this.proximoId(),
           texto: mensagem.texto,
           hora: horaDe(mensagem.em),
         });
-      } else {
-        itens.push({
-          tipo: 'lia',
-          id: this.proximoId(),
-          texto: mensagem.texto,
-          hora: horaDe(mensagem.em),
-          imoveis: [],
-        });
+        continue;
+      }
+
+      itens.push({
+        tipo: 'lia',
+        id: this.proximoId(),
+        texto: mensagem.texto,
+        hora: horaDe(mensagem.em),
+        imoveis: [],
+      });
+
+      const desfecho = mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao);
+      if (desfecho) {
+        itens.push({ tipo: 'evento', id: this.proximoId(), ...desfecho });
       }
     }
+
+    if (itens.length === 0) {
+      itens.push({ tipo: 'divisor', id: this.proximoId(), rotulo: HOJE });
+    }
+
     return itens;
+  }
+
+  /** Conversa encerrada continua encerrada depois de um reload. */
+  private estadoDe(mensagens: MensagemDaConversa[]): EstadoConversa {
+    for (let i = mensagens.length - 1; i >= 0; i--) {
+      const mensagem = mensagens[i];
+      if (mensagem.papel !== 'agente' || !mensagem.proximaAcao) {
+        continue;
+      }
+      return mensagem.proximaAcao === 'encerrar' ? 'encerrada' : 'conversando';
+    }
+    return 'conversando';
   }
 
   private acrescentar(item: ItemTrilha): void {

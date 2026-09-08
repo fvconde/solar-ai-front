@@ -11,7 +11,7 @@ export type EstadoConversa =
 
 export type VarianteEvento = 'neutro' | 'sucesso' | 'atencao' | 'erro';
 
-export type TipoAcao = 'rever-escolha' | 'tentar-novamente' | 'nova-conversa';
+export type TipoAcao = 'rever-escolha' | 'tentar-novamente' | 'nova-conversa' | 'retomar';
 
 export interface AcaoEvento {
   rotulo: string;
