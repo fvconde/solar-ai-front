@@ -34,7 +34,12 @@
               <app-mensagem-pessoa [texto]="item.texto" [hora]="item.hora" />
             }
             @case ('lia') {
-              <app-mensagem-lia [texto]="item.texto" [hora]="item.hora" [imoveis]="item.imoveis" />
+              <app-mensagem-lia
+                [texto]="item.texto"
+                [hora]="item.hora"
+                [imoveis]="item.imoveis"
+                [intencao]="item.intencao"
+              />
             }
             @case ('evento') {
               <app-evento-sistema

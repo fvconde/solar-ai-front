@@ -30,6 +30,8 @@ export interface ItemLia {
   texto: string;
   hora: string;
   imoveis: ImovelSugerido[];
+  /** Decide qual dos dois precos o cartao mostra. Null quando nao se sabe. */
+  intencao: string | null;
 }
 
 export interface ItemPessoa {

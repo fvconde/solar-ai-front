@@ -16,7 +16,7 @@ import { CardImovel } from './card-imovel';
       @if (imoveis().length) {
         <div class="pilha">
           @for (imovel of imoveis().slice(0, 3); track imovel.id) {
-            <app-card-imovel [imovel]="imovel" />
+            <app-card-imovel [imovel]="imovel" [intencao]="intencao()" />
           }
         </div>
       }
@@ -78,4 +78,5 @@ export class MensagemLia {
   readonly texto = input.required<string>();
   readonly hora = input.required<string>();
   readonly imoveis = input<ImovelSugerido[]>([]);
+  readonly intencao = input<string | null>(null);
 }

@@ -171,6 +171,7 @@ export class ConversaStore {
       texto: resposta.resposta,
       hora: horaAgora(),
       imoveis: resposta.imoveisSugeridos ?? [],
+      intencao: resposta.intencao,
     });
 
     const desfecho = this.desfecho(resposta.proximaAcao);
@@ -279,6 +280,7 @@ export class ConversaStore {
         texto: mensagem.texto,
         hora: horaDe(mensagem.em),
         imoveis: [],
+        intencao: null,
       });
 
       const desfecho = mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao);

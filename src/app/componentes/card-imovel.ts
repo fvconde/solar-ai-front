@@ -2,6 +2,8 @@ import { ChangeDetectionStrategy, Component, computed, input } from '@angular/co
 import { ImovelSugerido } from '../conversa/contrato';
 import { reais } from '../conversa/horario';
 
+const SOB_CONSULTA = { valor: 'Sob consulta', sufixo: '' };
+
 @Component({
   selector: 'app-card-imovel',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -70,16 +72,23 @@ import { reais } from '../conversa/horario';
 })
 export class CardImovel {
   readonly imovel = input.required<ImovelSugerido>();
+  readonly intencao = input<string | null>(null);
 
+  /**
+   * Quem quer comprar precisa ver o valor de venda. Quase todo imovel da base
+   * tem os dois precos, entao preferir o aluguel sempre mostrava R$ 2.200/mes
+   * para quem acabou de dizer "ate 600 mil".
+   */
   protected readonly preco = computed(() => {
     const item = this.imovel();
-    if (item.precoAluguel != null) {
-      return { valor: reais(item.precoAluguel), sufixo: '/mês' };
+    const aluguel = { valor: reais(item.precoAluguel ?? 0), sufixo: '/mês' };
+    const venda = { valor: reais(item.precoVenda ?? 0), sufixo: '' };
+
+    if (this.intencao() === 'aluguel') {
+      return item.precoAluguel != null ? aluguel : item.precoVenda != null ? venda : SOB_CONSULTA;
     }
-    if (item.precoVenda != null) {
-      return { valor: reais(item.precoVenda), sufixo: '' };
-    }
-    return { valor: 'Sob consulta', sufixo: '' };
+
+    return item.precoVenda != null ? venda : item.precoAluguel != null ? aluguel : SOB_CONSULTA;
   });
 
   protected readonly dados = computed(() => {
