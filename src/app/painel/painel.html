@@ -1,0 +1,135 @@
+<section class="painel-container">
+  @if (!corretorAtivo()) {
+    <div class="cartao-identificacao">
+      <div class="cabecalho-identificacao">
+        <span class="icone-cadeado">🔒</span>
+        <h2>Identificação do Corretor</h2>
+        <p>
+          O acesso aos dados dos leads exige identificação ativa de corretor.
+          Selecione seu perfil abaixo para visualizar a fila.
+        </p>
+      </div>
+
+      @if (carregandoCorretores()) {
+        <div class="carregando">Carregando corretores disponíveis...</div>
+      } @else {
+        <div class="grade-corretores">
+          @for (corretor of corretores(); track corretor.id) {
+            <button
+              type="button"
+              class="botao-corretor"
+              (click)="identificarCorretor(corretor)"
+            >
+              <span class="nome-corretor">{{ corretor.nome }}</span>
+              <span class="especialidade-corretor">{{ corretor.especialidade }}</span>
+            </button>
+          }
+        </div>
+      }
+    </div>
+  } @else {
+    <header class="barra-superior-painel">
+      <div class="identificacao-ativa">
+        <span class="rotulo-identidade">Atendimento por:</span>
+        <strong class="nome-ativo">{{ corretorAtivo()!.nome }}</strong>
+        <span class="especialidade-ativa">({{ corretorAtivo()!.especialidade }})</span>
+      </div>
+      <button type="button" class="botao-deslogar" (click)="deslogarCorretor()">
+        Trocar corretor
+      </button>
+    </header>
+
+    <div class="barra-filtros">
+      <div class="grupo-filtro">
+        <label for="filtro-intencao">Intenção:</label>
+        <select
+          id="filtro-intencao"
+          [ngModel]="filtroIntencao()"
+          (ngModelChange)="mudarFiltroIntencao($event)"
+        >
+          @for (opcao of intencoesDisponiveis; track opcao.valor) {
+            <option [value]="opcao.valor">{{ opcao.rotulo }}</option>
+          }
+        </select>
+      </div>
+
+      <div class="grupo-filtro">
+        <button
+          type="button"
+          class="botao-filtro-meus"
+          [class.ativo]="filtroMeusLeads()"
+          (click)="alternarFiltroMeusLeads()"
+        >
+          {{ filtroMeusLeads() ? '✓ Apenas meus leads' : 'Todos os leads' }}
+        </button>
+      </div>
+
+      <div class="contador-leads">
+        <span>Total: <strong>{{ leads().length }}</strong> lead{{ leads().length === 1 ? '' : 's' }}</span>
+      </div>
+    </div>
+
+    @if (carregandoLeads()) {
+      <div class="carregando">Atualizando fila de leads...</div>
+    } @else if (erroLeads()) {
+      <div class="mensagem-erro">{{ erroLeads() }}</div>
+    } @else if (leads().length === 0) {
+      <div class="estado-vazio">
+        <span class="icone-vazio">📋</span>
+        <h3>Nenhum lead na fila</h3>
+        <p>Nenhum lead encontrado com os filtros selecionados ou aguardando atendimento.</p>
+      </div>
+    } @else {
+      <div class="tabela-responsiva">
+        <table class="tabela-leads">
+          <thead>
+            <tr>
+              <th>Score</th>
+              <th>Nome</th>
+              <th>Intenção</th>
+              <th>Corretor Atribuído</th>
+              <th>Status</th>
+              <th>Região</th>
+              <th>Contato</th>
+              <th>Última Interação</th>
+            </tr>
+          </thead>
+          <tbody>
+            @for (lead of leads(); track lead.id) {
+              <tr class="linha-lead">
+                <td class="celula-score">
+                  <span class="badge-score" [ngClass]="classeScore(lead.score)">
+                    {{ lead.score !== null ? lead.score : '—' }}
+                  </span>
+                </td>
+                <td class="celula-nome">
+                  <strong>{{ lead.nome || 'Lead sem nome' }}</strong>
+                </td>
+                <td>
+                  <span class="badge-intencao" [attr.data-intencao]="lead.intencao">
+                    {{ lead.intencao || 'Indefinida' }}
+                  </span>
+                </td>
+                <td>
+                  @if (lead.corretorNome) {
+                    <span class="badge-corretor">{{ lead.corretorNome }}</span>
+                  } @else {
+                    <span class="badge-sem-corretor">⚠️ Sem corretor</span>
+                  }
+                </td>
+                <td>
+                  <span class="badge-status">{{ lead.status }}</span>
+                </td>
+                <td>{{ lead.regiao || '—' }}</td>
+                <td class="celula-contato">
+                  {{ lead.telefone || lead.email || 'Não informado' }}
+                </td>
+                <td class="celula-data">{{ formatarData(lead.ultimaInteracao) }}</td>
+              </tr>
+            }
+          </tbody>
+        </table>
+      </div>
+    }
+  }
+</section>
