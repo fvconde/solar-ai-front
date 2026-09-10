@@ -7,16 +7,21 @@ import { CorretorIdentificacao, FilaLeadsResponse } from './painel-contrato';
 export class PainelApi {
   private readonly http = inject(HttpClient);
 
-  listarCorretores(): Observable<CorretorIdentificacao[]> {
-    return this.http.get<CorretorIdentificacao[]>('/painel/corretores');
+  listarCorretores(chavePrivacidade: string): Observable<CorretorIdentificacao[]> {
+    const headers = new HttpHeaders({
+      'X-Chave-Privacidade': chavePrivacidade,
+    });
+    return this.http.get<CorretorIdentificacao[]>('/painel/corretores', { headers });
   }
 
   listarLeads(
+    chavePrivacidade: string,
     corretorId: string,
     intencao?: string | null,
     meusLeads?: boolean | null
   ): Observable<FilaLeadsResponse> {
     const headers = new HttpHeaders({
+      'X-Chave-Privacidade': chavePrivacidade,
       'X-Corretor-Id': corretorId,
     });
 

@@ -5,25 +5,49 @@
         <span class="icone-cadeado">🔒</span>
         <h2>Identificação do Corretor</h2>
         <p>
-          O acesso aos dados dos leads exige identificação ativa de corretor.
-          Selecione seu perfil abaixo para visualizar a fila.
+          O acesso aos dados do painel exige autorização de privacidade e identificação de corretor ativo.
+          Informe a chave de acesso da equipe e selecione seu perfil.
         </p>
       </div>
 
-      @if (carregandoCorretores()) {
-        <div class="carregando">Carregando corretores disponíveis...</div>
-      } @else {
-        <div class="grade-corretores">
-          @for (corretor of corretores(); track corretor.id) {
-            <button
-              type="button"
-              class="botao-corretor"
-              (click)="identificarCorretor(corretor)"
-            >
-              <span class="nome-corretor">{{ corretor.nome }}</span>
-              <span class="especialidade-corretor">{{ corretor.especialidade }}</span>
-            </button>
-          }
+      <div class="campo-chave">
+        <input
+          type="password"
+          class="input-chave"
+          [ngModel]="chaveAcesso()"
+          (ngModelChange)="chaveAcesso.set($event)"
+          placeholder="Chave de acesso da equipe"
+          (keyup.enter)="autenticarChave()"
+        />
+        <button
+          type="button"
+          class="botao-autenticar"
+          [disabled]="carregandoCorretores()"
+          (click)="autenticarChave()"
+        >
+          {{ carregandoCorretores() ? 'Validando...' : 'Acessar' }}
+        </button>
+      </div>
+
+      @if (erroAutenticacao()) {
+        <div class="mensagem-erro erro-inline">{{ erroAutenticacao() }}</div>
+      }
+
+      @if (corretores().length > 0) {
+        <div class="secao-selecao-corretor">
+          <p class="instrucao-selecao">Selecione seu nome para iniciar o atendimento:</p>
+          <div class="grade-corretores">
+            @for (corretor of corretores(); track corretor.id) {
+              <button
+                type="button"
+                class="botao-corretor"
+                (click)="identificarCorretor(corretor)"
+              >
+                <span class="nome-corretor">{{ corretor.nome }}</span>
+                <span class="especialidade-corretor">{{ corretor.especialidade }}</span>
+              </button>
+            }
+          </div>
         </div>
       }
     </div>
@@ -90,7 +114,6 @@
               <th>Corretor Atribuído</th>
               <th>Status</th>
               <th>Região</th>
-              <th>Contato</th>
               <th>Última Interação</th>
             </tr>
           </thead>
@@ -121,9 +144,6 @@
                   <span class="badge-status">{{ lead.status }}</span>
                 </td>
                 <td>{{ lead.regiao || '—' }}</td>
-                <td class="celula-contato">
-                  {{ lead.telefone || lead.email || 'Não informado' }}
-                </td>
                 <td class="celula-data">{{ formatarData(lead.ultimaInteracao) }}</td>
               </tr>
             }

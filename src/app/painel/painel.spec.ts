@@ -9,6 +9,7 @@ import { CorretorIdentificacao, FilaLeadsResponse } from './painel-contrato';
 
 describe('Painel', () => {
   let httpMock: HttpTestingController;
+  const chaveValida = 'chave_teste_painel_123';
 
   const corretoresMock: CorretorIdentificacao[] = [
     {
@@ -35,8 +36,6 @@ describe('Painel', () => {
         status: 'encaminhado',
         corretorId: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
         corretorNome: 'Helena Braga',
-        telefone: '11988881111',
-        email: 'lead1@teste.local',
         regiao: 'Pinheiros',
       },
       {
@@ -48,8 +47,6 @@ describe('Painel', () => {
         status: 'encaminhado',
         corretorId: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
         corretorNome: 'Helena Braga',
-        telefone: '11988882222',
-        email: 'lead2@teste.local',
         regiao: 'Vila Mariana',
       },
       {
@@ -61,8 +58,6 @@ describe('Painel', () => {
         status: 'encaminhado',
         corretorId: '3f6b9c21-4d0a-4c7e-9a11-000000000002',
         corretorNome: 'Rafael Nunes',
-        telefone: '11988883333',
-        email: 'lead3@teste.local',
         regiao: 'Moema',
       },
       {
@@ -74,8 +69,6 @@ describe('Painel', () => {
         status: 'novo',
         corretorId: null,
         corretorNome: null,
-        telefone: null,
-        email: null,
         regiao: 'Perdizes',
       },
     ],
@@ -94,54 +87,57 @@ describe('Painel', () => {
     httpMock.verify();
   });
 
-  it('inicia pedindo a identificação do corretor e não exibe a fila', () => {
+  it('inicia pedindo a chave de acesso e não exibe corretores nem fila', () => {
     const fixture = TestBed.createComponent(Painel);
-    fixture.detectChanges();
-
-    const reqCorretores = httpMock.expectOne('/painel/corretores');
-    expect(reqCorretores.request.method).toBe('GET');
-    reqCorretores.flush(corretoresMock);
     fixture.detectChanges();
 
     const html = fixture.nativeElement as HTMLElement;
     expect(html.querySelector('.cartao-identificacao')).toBeTruthy();
+    expect(html.querySelector('.input-chave')).toBeTruthy();
+    expect(html.querySelector('.grade-corretores')).toBeNull();
     expect(html.querySelector('.tabela-leads')).toBeNull();
-
-    const botoes = html.querySelectorAll('.botao-corretor');
-    expect(botoes.length).toBe(2);
-    expect(botoes[0].textContent).toContain('Helena Braga');
   });
 
-  it('exibe a fila após o corretor se identificar e envia cabeçalho X-Corretor-Id', () => {
+  it('valida a chave de acesso, carrega os corretores com header X-Chave-Privacidade e permite identificar', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
+    fixture.componentInstance.chaveAcesso.set(chaveValida);
+    fixture.componentInstance.autenticarChave();
+    fixture.detectChanges();
+
     const reqCorretores = httpMock.expectOne('/painel/corretores');
+    expect(reqCorretores.request.method).toBe('GET');
+    expect(reqCorretores.request.headers.get('X-Chave-Privacidade')).toBe(chaveValida);
     reqCorretores.flush(corretoresMock);
     fixture.detectChanges();
 
-    // Corretor se identifica clicando em Helena Braga
+    const html = fixture.nativeElement as HTMLElement;
+    const botoes = html.querySelectorAll('.botao-corretor');
+    expect(botoes.length).toBe(2);
+    expect(botoes[0].textContent).toContain('Helena Braga');
+
+    // Identifica corretor Helena Braga
     fixture.componentInstance.identificarCorretor(corretoresMock[0]);
     fixture.detectChanges();
 
     const reqLeads = httpMock.expectOne((req) => req.url === '/painel/leads');
+    expect(reqLeads.request.headers.get('X-Chave-Privacidade')).toBe(chaveValida);
     expect(reqLeads.request.headers.get('X-Corretor-Id')).toBe(corretoresMock[0].id);
     reqLeads.flush(filaLeadsMock);
     fixture.detectChanges();
 
-    const html = fixture.nativeElement as HTMLElement;
-    expect(html.querySelector('.cartao-identificacao')).toBeNull();
     expect(html.querySelector('.tabela-leads')).toBeTruthy();
     expect(html.querySelector('.nome-ativo')?.textContent).toContain('Helena Braga');
-
-    // Verifica que 4 leads aparecem na tabela
-    const linhas = html.querySelectorAll('.linha-lead');
-    expect(linhas.length).toBe(4);
+    expect(html.querySelectorAll('.linha-lead').length).toBe(4);
   });
 
   it('ordenação coloca score 100 acima do 45', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
+
+    fixture.componentInstance.chaveAcesso.set(chaveValida);
+    fixture.componentInstance.autenticarChave();
 
     httpMock.expectOne('/painel/corretores').flush(corretoresMock);
     fixture.componentInstance.identificarCorretor(corretoresMock[0]);
@@ -159,13 +155,33 @@ describe('Painel', () => {
     expect(Number(scores[0])).toBeGreaterThan(Number(scores[3]));
   });
 
+  it('tabela não exibe colunas de contato nem telefone nem email (LGPD)', () => {
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    fixture.componentInstance.chaveAcesso.set(chaveValida);
+    fixture.componentInstance.autenticarChave();
+    httpMock.expectOne('/painel/corretores').flush(corretoresMock);
+    fixture.componentInstance.identificarCorretor(corretoresMock[0]);
+    httpMock.expectOne((req) => req.url === '/painel/leads').flush(filaLeadsMock);
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const headers = Array.from(html.querySelectorAll('th')).map((th) => th.textContent?.trim());
+    expect(headers).not.toContain('Contato');
+    expect(headers).not.toContain('Telefone');
+    expect(headers).not.toContain('Email');
+    expect(html.querySelector('.celula-contato')).toBeNull();
+  });
+
   it('lead sem corretor aparece marcado e não escondido', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
+    fixture.componentInstance.chaveAcesso.set(chaveValida);
+    fixture.componentInstance.autenticarChave();
     httpMock.expectOne('/painel/corretores').flush(corretoresMock);
     fixture.componentInstance.identificarCorretor(corretoresMock[0]);
-
     httpMock.expectOne((req) => req.url === '/painel/leads').flush(filaLeadsMock);
     fixture.detectChanges();
 
@@ -175,14 +191,14 @@ describe('Painel', () => {
     expect(semCorretor?.textContent).toContain('Sem corretor');
   });
 
-  it('filtro meus leads muda a lista', () => {
+  it('filtro meus leads muda a lista enviando ambos os cabeçalhos de segurança', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
+    fixture.componentInstance.chaveAcesso.set(chaveValida);
+    fixture.componentInstance.autenticarChave();
     httpMock.expectOne('/painel/corretores').flush(corretoresMock);
     fixture.componentInstance.identificarCorretor(corretoresMock[0]);
-
-    // Primeira chamada: todos os leads (4 leads)
     httpMock.expectOne((req) => req.url === '/painel/leads').flush(filaLeadsMock);
     fixture.detectChanges();
 
@@ -193,9 +209,10 @@ describe('Painel', () => {
     fixture.detectChanges();
 
     const reqMeus = httpMock.expectOne((req) => req.url === '/painel/leads');
+    expect(reqMeus.request.headers.get('X-Chave-Privacidade')).toBe(chaveValida);
+    expect(reqMeus.request.headers.get('X-Corretor-Id')).toBe(corretoresMock[0].id);
     expect(reqMeus.request.params.get('meusLeads')).toBe('true');
 
-    // Resposta filtrada com apenas os 2 leads de Helena
     const apenasHelena: FilaLeadsResponse = {
       total: 2,
       leads: filaLeadsMock.leads.slice(0, 2),
@@ -205,17 +222,17 @@ describe('Painel', () => {
 
     expect(fixture.componentInstance.leads().length).toBe(2);
     const html = fixture.nativeElement as HTMLElement;
-    const linhas = html.querySelectorAll('.linha-lead');
-    expect(linhas.length).toBe(2);
+    expect(html.querySelectorAll('.linha-lead').length).toBe(2);
   });
 
   it('fila vazia mostra estado vazio e não tabela em branco', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
+    fixture.componentInstance.chaveAcesso.set(chaveValida);
+    fixture.componentInstance.autenticarChave();
     httpMock.expectOne('/painel/corretores').flush(corretoresMock);
     fixture.componentInstance.identificarCorretor(corretoresMock[0]);
-
     httpMock.expectOne((req) => req.url === '/painel/leads').flush({
       total: 0,
       leads: [],
@@ -226,5 +243,24 @@ describe('Painel', () => {
     expect(html.querySelector('.estado-vazio')).toBeTruthy();
     expect(html.querySelector('.estado-vazio')?.textContent).toContain('Nenhum lead na fila');
     expect(html.querySelector('.tabela-leads')).toBeNull();
+  });
+
+  it('chave inválida exibe mensagem de erro', () => {
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    fixture.componentInstance.chaveAcesso.set('chave_falsa');
+    fixture.componentInstance.autenticarChave();
+
+    httpMock.expectOne('/painel/corretores').flush('Chave inválida', {
+      status: 403,
+      statusText: 'Forbidden',
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    expect(fixture.componentInstance.erroAutenticacao()).toContain('inválida');
+    expect(html.querySelector('.mensagem-erro')).toBeTruthy();
+    expect(fixture.componentInstance.corretores().length).toBe(0);
   });
 });

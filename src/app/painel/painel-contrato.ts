@@ -13,8 +13,6 @@ export interface LeadPainelItem {
   status: string;
   corretorId: string | null;
   corretorNome: string | null;
-  telefone: string | null;
-  email: string | null;
   regiao: string | null;
 }
 

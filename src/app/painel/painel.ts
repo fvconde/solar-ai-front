@@ -2,7 +2,6 @@ import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
-  OnInit,
   inject,
   signal,
 } from '@angular/core';
@@ -17,12 +16,14 @@ import { CorretorIdentificacao, LeadPainelItem } from './painel-contrato';
   templateUrl: './painel.html',
   styleUrl: './painel.scss',
 })
-export class Painel implements OnInit {
+export class Painel {
   private readonly api = inject(PainelApi);
 
+  readonly chaveAcesso = signal<string>('');
   readonly corretores = signal<CorretorIdentificacao[]>([]);
   readonly corretorAtivo = signal<CorretorIdentificacao | null>(null);
   readonly carregandoCorretores = signal<boolean>(false);
+  readonly erroAutenticacao = signal<string | null>(null);
 
   readonly leads = signal<LeadPainelItem[]>([]);
   readonly carregandoLeads = signal<boolean>(false);
@@ -38,19 +39,30 @@ export class Painel implements OnInit {
     { rotulo: 'Investimento', valor: 'investimento' },
   ];
 
-  ngOnInit(): void {
-    this.carregarCorretores();
-  }
+  autenticarChave(): void {
+    const chave = this.chaveAcesso().trim();
+    if (!chave) {
+      this.erroAutenticacao.set('Informe a chave de acesso da equipe / privacidade.');
+      return;
+    }
 
-  carregarCorretores(): void {
     this.carregandoCorretores.set(true);
-    this.api.listarCorretores().subscribe({
+    this.erroAutenticacao.set(null);
+
+    this.api.listarCorretores(chave).subscribe({
       next: (lista) => {
         this.corretores.set(lista);
         this.carregandoCorretores.set(false);
       },
-      error: () => {
+      error: (err) => {
         this.carregandoCorretores.set(false);
+        if (err?.status === 401 || err?.status === 403) {
+          this.erroAutenticacao.set('Chave de acesso inválida ou não autorizada.');
+        } else if (err?.status === 503) {
+          this.erroAutenticacao.set('Chave de segurança não configurada no servidor (falha fechada).');
+        } else {
+          this.erroAutenticacao.set('Não foi possível validar o acesso ao painel.');
+        }
       },
     });
   }
@@ -78,7 +90,8 @@ export class Painel implements OnInit {
 
   carregarLeads(): void {
     const corretor = this.corretorAtivo();
-    if (!corretor) {
+    const chave = this.chaveAcesso().trim();
+    if (!corretor || !chave) {
       this.leads.set([]);
       return;
     }
@@ -88,6 +101,7 @@ export class Painel implements OnInit {
 
     this.api
       .listarLeads(
+        chave,
         corretor.id,
         this.filtroIntencao() || null,
         this.filtroMeusLeads()
@@ -100,7 +114,7 @@ export class Painel implements OnInit {
         error: (err) => {
           this.carregandoLeads.set(false);
           this.erroLeads.set(
-            err?.status === 401
+            err?.status === 401 || err?.status === 403
               ? 'Acesso não autorizado. Identifique-se novamente.'
               : 'Não foi possível carregar a fila de leads.'
           );

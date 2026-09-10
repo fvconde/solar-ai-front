@@ -6,6 +6,21 @@
   h2 { margin: 0 0 8px; font-size: 20px; }
   p { font-size: 14px; color: var(--texto-secundario); margin: 0 0 24px; }
 }
+.campo-chave {
+  display: flex; gap: 8px; max-width: 420px; margin: 0 auto 16px;
+  .input-chave {
+    flex: 1; padding: 8px 12px; border-radius: 6px; border: 1px solid var(--borda-componente);
+    background: var(--superficie-barra); color: var(--texto-primario); font-size: 14px;
+  }
+  .botao-autenticar {
+    padding: 8px 16px; border-radius: 6px; background: var(--marca); color: var(--marca-contraste);
+    border: none; font-weight: 500; cursor: pointer;
+  }
+}
+.secao-selecao-corretor {
+  margin-top: 20px; border-top: 1px solid var(--borda-divisor-card); padding-top: 18px;
+  .instrucao-selecao { font-size: 13px; color: var(--texto-primario); margin-bottom: 12px; }
+}
 .grade-corretores { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
 .botao-corretor {
   display: flex; flex-direction: column; padding: 12px 14px; background: var(--superficie-barra);
@@ -58,7 +73,6 @@
 .badge-sem-corretor { color: var(--atencao); font-weight: 500; background: color-mix(in srgb, var(--atencao) 10%, transparent); padding: 2px 6px; border-radius: 4px; }
 .badge-status { text-transform: capitalize; font-size: 12px; color: var(--texto-secundario); }
 .celula-data { white-space: nowrap; color: var(--texto-secundario); }
-.celula-contato { white-space: nowrap; font-family: monospace; }
 .estado-vazio {
   text-align: center; padding: 48px 20px; background: var(--superficie-elevada); border: 1px solid var(--borda-estrutura); border-radius: var(--raio-card);
   .icone-vazio { font-size: 32px; margin-bottom: 8px; display: block; }
@@ -66,4 +80,5 @@
   p { margin: 0; color: var(--texto-secundario); font-size: 13px; }
 }
 .carregando, .mensagem-erro { text-align: center; padding: 24px 16px; background: var(--superficie-elevada); border: 1px solid var(--borda-estrutura); border-radius: var(--raio-card); font-size: 13px; }
+.erro-inline { max-width: 420px; margin: 0 auto 16px; padding: 8px 12px; }
 .mensagem-erro { color: var(--erro); }
