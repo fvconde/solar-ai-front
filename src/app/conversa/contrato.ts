@@ -30,6 +30,18 @@ export interface ImovelSugerido {
   motivo: string;
 }
 
+export interface SlotOferecido {
+  id: number;
+  inicio: string;
+  fim: string;
+}
+
+export interface AgendamentoDaConversa {
+  estado: 'confirmado' | 'indisponivel';
+  horario: SlotOferecido | null;
+  alternativas: SlotOferecido[];
+}
+
 export interface MensagemHistorico {
   papel: Papel;
   texto: string;
@@ -48,6 +60,7 @@ export interface MensagemDaConversa {
   proximaAcao: ProximaAcao | null;
   /** Nome do corretor atribuido, nas falas que fecharam em handoff. */
   corretor: string | null;
+  agendamento: AgendamentoDaConversa | null;
 }
 
 export interface ContatoRequest {
@@ -73,6 +86,7 @@ export interface MensagemResponse {
   imoveisSugeridos: ImovelSugerido[];
   corretor: string | null;
   contatoPendente: boolean;
+  agendamento: AgendamentoDaConversa | null;
 }
 
 export interface ConversaResponse {

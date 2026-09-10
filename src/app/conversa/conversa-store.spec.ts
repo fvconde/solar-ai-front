@@ -3,7 +3,13 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ConversaApi } from './conversa-api';
 import { ConversaStore } from './conversa-store';
-import { ConversaResponse, MensagemDaConversa, PerfilLead, ProximaAcao } from './contrato';
+import {
+  AgendamentoDaConversa,
+  ConversaResponse,
+  MensagemDaConversa,
+  PerfilLead,
+  ProximaAcao,
+} from './contrato';
 import { ItemTrilha } from './trilha';
 
 const PERFIL_VAZIO: PerfilLead = {
@@ -24,10 +30,11 @@ function fala(
   proximaAcao: ProximaAcao | null = null,
   dias = 0,
   corretor: string | null = null,
+  agendamento: AgendamentoDaConversa | null = null,
 ): MensagemDaConversa {
   const em = new Date();
   em.setDate(em.getDate() - dias);
-  return { papel, texto, em: em.toISOString(), proximaAcao, corretor };
+  return { papel, texto, em: em.toISOString(), proximaAcao, corretor, agendamento };
 }
 
 function conversa(
@@ -123,6 +130,52 @@ describe('ConversaStore ao retomar', () => {
     expect(textoDoEvento(store.itens())).toBe(
       'Sua conversa foi encaminhada para a Solar. Um corretor assume a partir do que você já contou.',
     );
+  });
+
+  it('reconstroi a confirmacao do horario como fato do sistema', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa([
+        fala('lead', 'quinta as tres'),
+        fala('agente', 'Vou reservar esse horário.', 'agendar_reuniao', 0, 'Helena Braga', {
+          estado: 'confirmado',
+          horario: {
+            id: 42,
+            inicio: '2026-09-10T15:00:00-03:00',
+            fim: '2026-09-10T16:00:00-03:00',
+          },
+          alternativas: [],
+        }),
+      ]),
+    );
+
+    await store.iniciar();
+
+    expect(textoDoEvento(store.itens())).toContain('15:00');
+    expect(textoDoEvento(store.itens())).toContain('10/09/2026');
+  });
+
+  it('corrida perdida mostra as alternativas livres', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa([
+        fala('lead', 'quinta as tres'),
+        fala('agente', 'Vou reservar esse horário.', 'agendar_reuniao', 0, 'Helena Braga', {
+          estado: 'indisponivel',
+          horario: null,
+          alternativas: [
+            {
+              id: 43,
+              inicio: '2026-09-11T11:00:00-03:00',
+              fim: '2026-09-11T12:00:00-03:00',
+            },
+          ],
+        }),
+      ]),
+    );
+
+    await store.iniciar();
+
+    expect(textoDoEvento(store.itens())).toContain('acabou de ser reservado');
+    expect(textoDoEvento(store.itens())).toContain('11:00');
   });
 
   it('pede contato no handoff quando o lead ainda nao informou', async () => {
