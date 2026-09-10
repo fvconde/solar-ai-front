@@ -1,6 +1,13 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ConversaApi } from './conversa-api';
-import { ContatoRequest, MensagemDaConversa, MensagemResponse, ProximaAcao } from './contrato';
+import {
+  AgendamentoDaConversa,
+  ContatoRequest,
+  MensagemDaConversa,
+  MensagemResponse,
+  ProximaAcao,
+  SlotOferecido,
+} from './contrato';
 import { HOJE, diaDe, horaAgora, horaDe, rotuloDeDia } from './horario';
 import { AcaoEvento, EstadoConversa, ItemTrilha } from './trilha';
 
@@ -210,9 +217,10 @@ export class ConversaStore {
       intencao: resposta.intencao,
     });
 
-    const desfecho = this.desfecho(resposta.proximaAcao, resposta.corretor);
-    if (desfecho) {
-      this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...desfecho });
+    const eventoAgendamento = this.eventoDoAgendamento(resposta.agendamento);
+    const evento = eventoAgendamento ?? this.desfecho(resposta.proximaAcao, resposta.corretor);
+    if (evento) {
+      this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
     }
 
     if (ehHandoff(resposta.proximaAcao) && resposta.contatoPendente) {
@@ -255,6 +263,46 @@ export class ConversaStore {
       default:
         return null;
     }
+  }
+
+  private eventoDoAgendamento(
+    agendamento: AgendamentoDaConversa | null,
+  ): Omit<Extract<ItemTrilha, { tipo: 'evento' }>, 'tipo' | 'id'> | null {
+    if (!agendamento) {
+      return null;
+    }
+
+    if (agendamento.estado === 'confirmado' && agendamento.horario) {
+      return {
+        variante: 'sucesso',
+        rotulo: 'Horário confirmado',
+        texto: `Reunião marcada para ${this.rotuloDoHorario(agendamento.horario)}.`,
+        acao: null,
+      };
+    }
+
+    const alternativas = agendamento.alternativas.map((slot) => this.rotuloDoHorario(slot));
+
+    return {
+      variante: 'atencao',
+      rotulo: 'Horário indisponível',
+      texto: alternativas.length
+        ? `Esse horário acabou de ser reservado. Ainda estão livres: ${alternativas.join('; ')}.`
+        : 'Esse horário acabou de ser reservado. O corretor confirma uma alternativa pelo seu contato.',
+      acao: null,
+    };
+  }
+
+  private rotuloDoHorario(slot: SlotOferecido): string {
+    return new Intl.DateTimeFormat('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo',
+    }).format(new Date(slot.inicio));
   }
 
   private registrarFalhaAoRetomar(): void {
@@ -327,10 +375,12 @@ export class ConversaStore {
         intencao: null,
       });
 
-      const desfecho =
-        mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao, mensagem.corretor);
-      if (desfecho) {
-        itens.push({ tipo: 'evento', id: this.proximoId(), ...desfecho });
+      const eventoAgendamento = this.eventoDoAgendamento(mensagem.agendamento);
+      const evento =
+        eventoAgendamento ??
+        (mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao, mensagem.corretor));
+      if (evento) {
+        itens.push({ tipo: 'evento', id: this.proximoId(), ...evento });
       }
     }
 
