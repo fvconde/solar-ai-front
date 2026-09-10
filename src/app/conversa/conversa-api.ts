@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
+  ContatoRequest,
+  ContatoResponse,
   ConversaResponse,
   MensagemResponse,
   NovaMensagemRequest,
@@ -15,6 +17,12 @@ export class ConversaApi {
     const corpo: NovaMensagemRequest = { texto };
     return firstValueFrom(
       this.http.post<MensagemResponse>(`/conversas/${conversaId}/mensagens`, corpo),
+    );
+  }
+
+  registrarContato(conversaId: string, dados: ContatoRequest): Promise<ContatoResponse> {
+    return firstValueFrom(
+      this.http.post<ContatoResponse>(`/conversas/${conversaId}/contato`, dados),
     );
   }
 

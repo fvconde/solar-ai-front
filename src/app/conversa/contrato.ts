@@ -46,6 +46,18 @@ export interface MensagemDaConversa {
   texto: string;
   em: string;
   proximaAcao: ProximaAcao | null;
+  /** Nome do corretor atribuido, nas falas que fecharam em handoff. */
+  corretor: string | null;
+}
+
+export interface ContatoRequest {
+  nome: string | null;
+  telefone: string | null;
+  email: string | null;
+}
+
+export interface ContatoResponse {
+  leadId: string;
 }
 
 export interface NovaMensagemRequest {
@@ -59,12 +71,18 @@ export interface MensagemResponse {
   proximaAcao: ProximaAcao;
   perfilLead: PerfilLead;
   imoveisSugeridos: ImovelSugerido[];
+  corretor: string | null;
+  contatoPendente: boolean;
 }
 
 export interface ConversaResponse {
   conversaId: string;
   perfilLead: PerfilLead;
   mensagens: MensagemDaConversa[];
+  contatoPendente: boolean;
 }
 
 export const LIMITE_MENSAGEM = 4000;
+export const LIMITE_NOME = 200;
+export const LIMITE_TELEFONE = 20;
+export const LIMITE_EMAIL = 200;

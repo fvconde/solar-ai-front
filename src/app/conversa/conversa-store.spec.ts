@@ -23,14 +23,23 @@ function fala(
   texto: string,
   proximaAcao: ProximaAcao | null = null,
   dias = 0,
+  corretor: string | null = null,
 ): MensagemDaConversa {
   const em = new Date();
   em.setDate(em.getDate() - dias);
-  return { papel, texto, em: em.toISOString(), proximaAcao };
+  return { papel, texto, em: em.toISOString(), proximaAcao, corretor };
 }
 
-function conversa(mensagens: MensagemDaConversa[]): ConversaResponse {
-  return { conversaId: 'c1', perfilLead: PERFIL_VAZIO, mensagens };
+function conversa(
+  mensagens: MensagemDaConversa[],
+  contatoPendente = false,
+): ConversaResponse {
+  return { conversaId: 'c1', perfilLead: PERFIL_VAZIO, mensagens, contatoPendente };
+}
+
+function textoDoEvento(itens: ItemTrilha[]): string {
+  const evento = itens.find((item) => item.tipo === 'evento');
+  return evento && evento.tipo === 'evento' ? evento.texto : '';
 }
 
 describe('ConversaStore ao retomar', () => {
@@ -38,7 +47,11 @@ describe('ConversaStore ao retomar', () => {
   let api: jasmine.SpyObj<ConversaApi>;
 
   beforeEach(() => {
-    api = jasmine.createSpyObj<ConversaApi>('ConversaApi', ['obterConversa', 'enviarMensagem']);
+    api = jasmine.createSpyObj<ConversaApi>('ConversaApi', [
+      'obterConversa',
+      'enviarMensagem',
+      'registrarContato',
+    ]);
 
     TestBed.configureTestingModule({
       providers: [
@@ -82,6 +95,114 @@ describe('ConversaStore ao retomar', () => {
     await store.iniciar();
 
     expect(tipos(store.itens())).toEqual(['divisor', 'lia', 'pessoa', 'lia', 'evento']);
+  });
+
+  it('o evento reconstruido nomeia o corretor atribuido', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa([
+        fala('lead', 'quero marcar'),
+        fala('agente', 'Vou te passar para um corretor.', 'agendar_reuniao', 0, 'Helena Braga'),
+      ]),
+    );
+
+    await store.iniciar();
+
+    expect(textoDoEvento(store.itens())).toContain('Helena Braga');
+  });
+
+  it('sem corretor atribuido o evento nao inventa nome', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa([
+        fala('lead', 'quero marcar'),
+        fala('agente', 'Vou te passar para um corretor.', 'agendar_reuniao'),
+      ]),
+    );
+
+    await store.iniciar();
+
+    expect(textoDoEvento(store.itens())).toBe(
+      'Sua conversa foi encaminhada para a Solar. Um corretor assume a partir do que você já contou.',
+    );
+  });
+
+  it('pede contato no handoff quando o lead ainda nao informou', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'quero marcar'),
+          fala('agente', 'Vou te passar.', 'agendar_reuniao', 0, 'Helena Braga'),
+        ],
+        true,
+      ),
+    );
+
+    await store.iniciar();
+
+    expect(tipos(store.itens())).toEqual(['divisor', 'pessoa', 'lia', 'evento', 'contato']);
+  });
+
+  it('lead que ja tem contato nao ve o formulario de novo', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'quero marcar'),
+          fala('agente', 'Vou te passar.', 'agendar_reuniao', 0, 'Helena Braga'),
+        ],
+        false,
+      ),
+    );
+
+    await store.iniciar();
+
+    expect(tipos(store.itens())).not.toContain('contato');
+  });
+
+  it('sem handoff nenhum o formulario nao aparece', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa([fala('lead', 'oi'), fala('agente', 'Em que regiao?', 'continuar_conversa')], true),
+    );
+
+    await store.iniciar();
+
+    expect(tipos(store.itens())).not.toContain('contato');
+  });
+
+  it('contato enviado troca o formulario por um evento de confirmacao', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'quero marcar'),
+          fala('agente', 'Vou te passar.', 'agendar_reuniao', 0, 'Helena Braga'),
+        ],
+        true,
+      ),
+    );
+    api.registrarContato.and.resolveTo({ leadId: 'l1' });
+
+    await store.iniciar();
+    await store.enviarContato({ nome: 'Ana', telefone: '11999998888', email: null });
+
+    expect(tipos(store.itens())).not.toContain('contato');
+    expect(store.contatoErro()).toBeNull();
+  });
+
+  it('falha ao registrar contato mantem o formulario e avisa', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'quero marcar'),
+          fala('agente', 'Vou te passar.', 'agendar_reuniao', 0, 'Helena Braga'),
+        ],
+        true,
+      ),
+    );
+    api.registrarContato.and.rejectWith(new Error('rede fora'));
+
+    await store.iniciar();
+    await store.enviarContato({ nome: 'Ana', telefone: '11999998888', email: null });
+
+    expect(tipos(store.itens())).toContain('contato');
+    expect(store.contatoErro()).not.toBeNull();
   });
 
   it('conversa encerrada continua encerrada depois do reload', async () => {

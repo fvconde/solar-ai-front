@@ -1,8 +1,12 @@
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ConversaApi } from './conversa-api';
-import { MensagemDaConversa, MensagemResponse, ProximaAcao } from './contrato';
+import { ContatoRequest, MensagemDaConversa, MensagemResponse, ProximaAcao } from './contrato';
 import { HOJE, diaDe, horaAgora, horaDe, rotuloDeDia } from './horario';
 import { AcaoEvento, EstadoConversa, ItemTrilha } from './trilha';
+
+function ehHandoff(acao: ProximaAcao | null): boolean {
+  return acao === 'agendar_reuniao' || acao === 'direcionar_especialista';
+}
 
 const CHAVE_CONSENTIMENTO = 'solar.consentimento';
 const CHAVE_CONVERSA = 'solar.conversaId';
@@ -15,6 +19,8 @@ export class ConversaStore {
 
   readonly estado = signal<EstadoConversa>('aceite-pendente');
   readonly itens = signal<ItemTrilha[]>([]);
+  readonly contatoEnviando = signal(false);
+  readonly contatoErro = signal<string | null>(null);
 
   readonly aguardando = computed(
     () => this.estado() === 'preparando' || this.estado() === 'espera-prolongada',
@@ -58,7 +64,7 @@ export class ConversaStore {
       this.conversaId = salva;
       try {
         const conversa = await this.api.obterConversa(salva);
-        this.itens.set(this.reconstruir(conversa.mensagens));
+        this.itens.set(this.reconstruir(conversa.mensagens, conversa.contatoPendente));
         this.estado.set(this.estadoDe(conversa.mensagens));
       } catch {
         // A conversa salva existe e nao vamos perde-la por uma falha de rede:
@@ -112,6 +118,36 @@ export class ConversaStore {
     this.ultimoEnvio = limpo;
     this.ultimoEnvioVisivel = true;
     await this.turno();
+  }
+
+  /**
+   * Grava o contato pelo endpoint proprio, e nao pela conversa: o valor vai do
+   * formulario direto ao Postgres, sem passar pelo turno e sem chegar ao modelo.
+   */
+  async enviarContato(dados: ContatoRequest): Promise<void> {
+    if (this.contatoEnviando()) {
+      return;
+    }
+
+    this.contatoEnviando.set(true);
+    this.contatoErro.set(null);
+
+    try {
+      await this.api.registrarContato(this.conversaId, dados);
+      this.removerContato();
+      this.acrescentar({
+        tipo: 'evento',
+        id: this.proximoId(),
+        variante: 'sucesso',
+        rotulo: 'Contato registrado',
+        texto: 'Pronto. O corretor da Solar usa esse contato para retomar com você.',
+        acao: null,
+      });
+    } catch {
+      this.contatoErro.set('Não foi possível registrar seu contato. Tente novamente.');
+    } finally {
+      this.contatoEnviando.set(false);
+    }
   }
 
   async tentarNovamente(): Promise<void> {
@@ -174,31 +210,39 @@ export class ConversaStore {
       intencao: resposta.intencao,
     });
 
-    const desfecho = this.desfecho(resposta.proximaAcao);
+    const desfecho = this.desfecho(resposta.proximaAcao, resposta.corretor);
     if (desfecho) {
       this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...desfecho });
     }
+
+    if (ehHandoff(resposta.proximaAcao) && resposta.contatoPendente) {
+      this.acrescentar({ tipo: 'contato', id: this.proximoId() });
+    }
+
     this.estado.set(resposta.proximaAcao === 'encerrar' ? 'encerrada' : 'conversando');
   }
 
-  private desfecho(acao: ProximaAcao): Omit<
-    Extract<ItemTrilha, { tipo: 'evento' }>,
-    'tipo' | 'id'
-  > | null {
+  private desfecho(
+    acao: ProximaAcao,
+    corretor: string | null,
+  ): Omit<Extract<ItemTrilha, { tipo: 'evento' }>, 'tipo' | 'id'> | null {
     switch (acao) {
       case 'agendar_reuniao':
         return {
           variante: 'sucesso',
           rotulo: 'Encaminhado',
-          texto:
-            'Sua conversa foi encaminhada para um corretor da Solar. Ele continua a partir do que você já contou.',
+          texto: corretor
+            ? `Sua conversa foi encaminhada para ${corretor}, da Solar. O atendimento continua a partir do que você já contou.`
+            : 'Sua conversa foi encaminhada para a Solar. Um corretor assume a partir do que você já contou.',
           acao: null,
         };
       case 'direcionar_especialista':
         return {
           variante: 'neutro',
           rotulo: 'Próxima etapa',
-          texto: 'Preparando a próxima etapa com um corretor.',
+          texto: corretor
+            ? `${corretor}, da Solar, assume a próxima etapa com você.`
+            : 'Preparando a próxima etapa com um corretor.',
           acao: null,
         };
       case 'encerrar':
@@ -245,7 +289,7 @@ export class ConversaStore {
    * dia de calendario, as falas, e os mesmos eventos de desfecho que a sessao
    * ao vivo teria mostrado. Imoveis nao voltam -- a API nao os persiste.
    */
-  private reconstruir(mensagens: MensagemDaConversa[]): ItemTrilha[] {
+  private reconstruir(mensagens: MensagemDaConversa[], contatoPendente: boolean): ItemTrilha[] {
     const itens: ItemTrilha[] = [];
     let dia = '';
 
@@ -283,7 +327,8 @@ export class ConversaStore {
         intencao: null,
       });
 
-      const desfecho = mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao);
+      const desfecho =
+        mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao, mensagem.corretor);
       if (desfecho) {
         itens.push({ tipo: 'evento', id: this.proximoId(), ...desfecho });
       }
@@ -291,6 +336,10 @@ export class ConversaStore {
 
     if (itens.length === 0) {
       itens.push({ tipo: 'divisor', id: this.proximoId(), rotulo: HOJE });
+    }
+
+    if (contatoPendente && mensagens.some((mensagem) => ehHandoff(mensagem.proximaAcao))) {
+      itens.push({ tipo: 'contato', id: this.proximoId() });
     }
 
     return itens;
@@ -310,6 +359,10 @@ export class ConversaStore {
 
   private acrescentar(item: ItemTrilha): void {
     this.itens.update((atual) => [...atual, item]);
+  }
+
+  private removerContato(): void {
+    this.itens.update((atual) => atual.filter((item) => item.tipo !== 'contato'));
   }
 
   private removerEventoFinal(): void {

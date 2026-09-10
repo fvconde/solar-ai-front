@@ -12,9 +12,11 @@ import { Cabecalho } from './componentes/cabecalho';
 import { Composer } from './componentes/composer';
 import { DivisorData } from './componentes/divisor-data';
 import { EventoSistema } from './componentes/evento-sistema';
+import { FormularioContato } from './componentes/formulario-contato';
 import { Indicador } from './componentes/indicador';
 import { MensagemLia } from './componentes/mensagem-lia';
 import { MensagemPessoa } from './componentes/mensagem-pessoa';
+import { ContatoRequest } from './conversa/contrato';
 import { ConversaStore } from './conversa/conversa-store';
 import { AcaoEvento } from './conversa/trilha';
 
@@ -28,6 +30,7 @@ import { AcaoEvento } from './conversa/trilha';
     MensagemLia,
     MensagemPessoa,
     EventoSistema,
+    FormularioContato,
     Indicador,
     Composer,
   ],
@@ -58,5 +61,9 @@ export class App implements OnInit {
 
   protected enviar(texto: string): void {
     void this.store.enviar(texto);
+  }
+
+  protected registrarContato(dados: ContatoRequest): void {
+    void this.store.enviarContato(dados);
   }
 }

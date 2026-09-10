@@ -50,6 +50,13 @@
                 (acionar)="atender($event)"
               />
             }
+            @case ('contato') {
+              <app-formulario-contato
+                [erro]="store.contatoErro()"
+                [enviando]="store.contatoEnviando()"
+                (enviar)="registrarContato($event)"
+              />
+            }
           }
         }
         @if (store.aguardando()) {

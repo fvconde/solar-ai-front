@@ -50,4 +50,10 @@ export interface ItemEvento {
   acao: AcaoEvento | null;
 }
 
-export type ItemTrilha = ItemDivisor | ItemLia | ItemPessoa | ItemEvento;
+/** O formulario de contato do handoff, enquanto o lead nao informou como falar com ele. */
+export interface ItemContato {
+  tipo: 'contato';
+  id: string;
+}
+
+export type ItemTrilha = ItemDivisor | ItemLia | ItemPessoa | ItemEvento | ItemContato;
