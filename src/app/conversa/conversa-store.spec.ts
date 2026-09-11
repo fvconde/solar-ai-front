@@ -59,7 +59,7 @@ function conversa(
     mensagens,
     contatoPendente,
     consentimentoEm: new Date().toISOString(),
-    versaoAvisoPrivacidade: '2026-09-11.2',
+    versaoAvisoPrivacidade: '2026-09-11',
   };
 }
 
@@ -344,7 +344,7 @@ describe('ConversaStore ao retomar', () => {
       conversaId: 'c1',
       leadId: 'l1',
       consentimentoEm: new Date().toISOString(),
-      versaoAvisoPrivacidade: '2026-09-11.2',
+      versaoAvisoPrivacidade: '2026-09-11',
     });
     api.obterConversa.and.resolveTo(conversa([]));
     api.enviarMensagem.and.resolveTo(RESPOSTA_ABERTURA);

@@ -21,8 +21,10 @@ describe('Chat', () => {
     const fixture = TestBed.createComponent(Chat);
     fixture.detectChanges();
     const html = fixture.nativeElement as HTMLElement;
+    const texto = html.textContent?.replace(/\s+/g, ' ') ?? '';
     expect(html.querySelector('app-aviso-consentimento')).toBeTruthy();
-    expect(html.textContent).toContain('esse provedor usa o conteúdo para treino');
-    expect(html.textContent).toContain('a Solar compartilha a conversa com um corretor humano');
+    expect(texto).toContain('processarão as mensagens que você enviar');
+    expect(texto).toContain('mensagens não são usadas pelo provedor para treinar ou melhorar modelos');
+    expect(texto).toContain('encaminhar a conversa para atendimento humano');
   });
 });

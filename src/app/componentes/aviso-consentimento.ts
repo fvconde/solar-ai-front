@@ -13,11 +13,14 @@ import { RouterLink } from '@angular/router';
           <span class="rotulo">Antes de começar</span>
         </div>
         <p>
-          Antes de começarmos: a Solar processa o que você me contar com um provedor de inteligência
-          artificial — no free tier, esse provedor usa o conteúdo para treino — e, quando necessário,
-          a Solar compartilha a conversa com um corretor humano.
+          A Solar e seu provedor de inteligência artificial processarão as mensagens que você enviar
+          para compreender sua busca, recomendar imóveis e, quando necessário, encaminhar a conversa
+          para atendimento humano.
         </p>
-        <p>Consulte o <a routerLink="/privacidade">Aviso de Privacidade completo</a>.</p>
+        <p>
+          Suas mensagens não são usadas pelo provedor para treinar ou melhorar modelos de
+          inteligência artificial. Consulte o <a routerLink="/privacidade">Aviso de Privacidade completo</a>.
+        </p>
         <p>Não envie documentos, dados bancários ou informações sensíveis.</p>
       </div>
 

@@ -8,7 +8,7 @@ import { RouterLink } from '@angular/router';
   template: `
     <main class="pagina">
       <article>
-        <p class="rotulo">Aviso de Privacidade · versão 2026-09-11.2</p>
+        <p class="rotulo">Aviso de Privacidade · versão 2026-09-11</p>
         <h1>Como a Solar usa os dados desta conversa</h1>
 
         <h2>Dados e finalidade</h2>
@@ -19,9 +19,8 @@ import { RouterLink } from '@angular/router';
 
         <h2>Inteligência artificial</h2>
         <p>
-          As mensagens são processadas por um provedor de inteligência artificial. No free tier
-          usado nesta demonstração, o provedor usa o conteúdo enviado para treino e melhoria dos
-          seus modelos.
+          As mensagens são processadas por um provedor de inteligência artificial e não são usadas
+          por ele para treinar ou melhorar modelos de inteligência artificial.
         </p>
 
         <h2>Atendimento humano</h2>
