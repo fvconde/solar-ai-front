@@ -4,6 +4,8 @@ import { firstValueFrom } from 'rxjs';
 import {
   ContatoRequest,
   ContatoResponse,
+  ConsentimentoRequest,
+  ConsentimentoResponse,
   ConversaResponse,
   MensagemResponse,
   NovaMensagemRequest,
@@ -17,6 +19,15 @@ export class ConversaApi {
     const corpo: NovaMensagemRequest = { texto };
     return firstValueFrom(
       this.http.post<MensagemResponse>(`/conversas/${conversaId}/mensagens`, corpo),
+    );
+  }
+
+  registrarConsentimento(
+    conversaId: string,
+    dados: ConsentimentoRequest,
+  ): Promise<ConsentimentoResponse> {
+    return firstValueFrom(
+      this.http.post<ConsentimentoResponse>(`/conversas/${conversaId}/consentimento`, dados),
     );
   }
 

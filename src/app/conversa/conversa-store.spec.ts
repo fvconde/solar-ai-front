@@ -24,6 +24,18 @@ const PERFIL_VAZIO: PerfilLead = {
   score: null,
 };
 
+const RESPOSTA_ABERTURA = {
+  conversaId: 'c1',
+  resposta: 'Olá, como posso ajudar?',
+  intencao: 'INDEFINIDA',
+  proximaAcao: 'continuar_conversa' as const,
+  perfilLead: PERFIL_VAZIO,
+  imoveisSugeridos: [],
+  corretor: null,
+  contatoPendente: true,
+  agendamento: null,
+};
+
 function fala(
   papel: 'lead' | 'agente',
   texto: string,
@@ -41,7 +53,14 @@ function conversa(
   mensagens: MensagemDaConversa[],
   contatoPendente = false,
 ): ConversaResponse {
-  return { conversaId: 'c1', perfilLead: PERFIL_VAZIO, mensagens, contatoPendente };
+  return {
+    conversaId: 'c1',
+    perfilLead: PERFIL_VAZIO,
+    mensagens,
+    contatoPendente,
+    consentimentoEm: new Date().toISOString(),
+    versaoAvisoPrivacidade: '2026-09-11',
+  };
 }
 
 function textoDoEvento(itens: ItemTrilha[]): string {
@@ -58,6 +77,7 @@ describe('ConversaStore ao retomar', () => {
       'obterConversa',
       'enviarMensagem',
       'registrarContato',
+      'registrarConsentimento',
     ]);
 
     TestBed.configureTestingModule({
@@ -68,7 +88,6 @@ describe('ConversaStore ao retomar', () => {
       ],
     });
 
-    localStorage.setItem('solar.consentimento', 'aceito');
     localStorage.setItem('solar.conversaId', 'c1');
     store = TestBed.inject(ConversaStore);
   });
@@ -318,5 +337,55 @@ describe('ConversaStore ao retomar', () => {
 
     expect(store.estado()).toBe('conversando');
     expect(tipos(store.itens())).toEqual(['divisor', 'pessoa', 'lia']);
+  });
+
+  it('confirma o carimbo no servidor antes de enviar o kickoff', async () => {
+    api.registrarConsentimento.and.resolveTo({
+      conversaId: 'c1',
+      leadId: 'l1',
+      consentimentoEm: new Date().toISOString(),
+      versaoAvisoPrivacidade: '2026-09-11',
+    });
+    api.obterConversa.and.resolveTo(conversa([]));
+    api.enviarMensagem.and.resolveTo(RESPOSTA_ABERTURA);
+
+    await store.aceitar();
+
+    expect(api.registrarConsentimento).toHaveBeenCalledBefore(api.enviarMensagem);
+    expect(api.enviarMensagem).toHaveBeenCalledOnceWith('c1', 'Olá');
+    expect(store.estado()).toBe('conversando');
+  });
+
+  it('falha no carimbo nao envia kickoff', async () => {
+    api.registrarConsentimento.and.rejectWith(new Error('rede fora'));
+
+    await store.aceitar();
+
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+    expect(store.estado()).toBe('aceite-pendente');
+    expect(store.aceiteErro()).not.toBeNull();
+  });
+
+  it('carimbo ausente no servidor volta a pedir aceite', async () => {
+    api.obterConversa.and.resolveTo({
+      ...conversa([]),
+      consentimentoEm: null,
+      versaoAvisoPrivacidade: null,
+    });
+
+    await store.iniciar();
+
+    expect(store.estado()).toBe('aceite-pendente');
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+  });
+
+  it('recusa sem conversa salva nao chama a API nem cria identificador', () => {
+    localStorage.clear();
+
+    store.recusar();
+
+    expect(api.registrarConsentimento).not.toHaveBeenCalled();
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+    expect(localStorage.getItem('solar.conversaId')).toBeNull();
   });
 });

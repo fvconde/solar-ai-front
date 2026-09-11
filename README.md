@@ -21,11 +21,12 @@ A API e o agente sobem pelo `docker compose` do `solar-ai-docs` (ver `ESTADO.md`
 
 - `POST /conversas/{guid}/mensagens` — corpo `{ "texto": string }`, resposta
   `{ conversaId, resposta, intencao, proximaAcao, perfilLead, imoveisSugeridos }`.
+- `POST /conversas/{guid}/consentimento` — registra no lead a data/hora e a versão do aviso.
 - `GET /conversas/{guid}` — histórico e perfil, para retomar a conversa ao recarregar.
 
-O `guid` da conversa e o consentimento ficam em `localStorage`. A conversa nasce no
-primeiro `POST`: após o aceite, o front envia uma mensagem de abertura que **não** é
-exibida, e a primeira fala visível é a resposta da Lia.
+Somente o `guid` da conversa fica em `localStorage`; o aceite é confirmado pelo servidor.
+Após o carimbo existir no lead, o front envia uma mensagem de abertura que **não** é exibida,
+e a primeira fala visível é a resposta da Lia.
 
 ## Mapa de `proximaAcao` para a interface
 
@@ -46,7 +47,6 @@ do handoff. Tema claro/escuro por `prefers-color-scheme`, com override manual vi
 
 ### Pendências do handoff que dependem de decisão fora do front
 
-- Texto final da Política de Privacidade (link do aviso aponta para `#politica-de-privacidade`).
 - Retomada proativa (follow-up) — controle de ativar/desativar ainda não existe.
 - Estado "sem resultado" quando nenhum imóvel atende à faixa.
 - `imoveisSugeridos` não é persistido no histórico da API: ao recarregar, os cards de

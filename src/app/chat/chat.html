@@ -3,6 +3,8 @@
     @switch (store.estado()) {
       @case ('aceite-pendente') {
         <app-aviso-consentimento
+          [enviando]="store.aceiteEnviando()"
+          [erro]="store.aceiteErro()"
           (aceitar)="store.aceitar()"
           (recusar)="store.recusar()"
         />

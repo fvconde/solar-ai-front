@@ -77,6 +77,17 @@ export interface NovaMensagemRequest {
   texto: string;
 }
 
+export interface ConsentimentoRequest {
+  versaoAvisoPrivacidade: string;
+}
+
+export interface ConsentimentoResponse {
+  conversaId: string;
+  leadId: string;
+  consentimentoEm: string;
+  versaoAvisoPrivacidade: string;
+}
+
 export interface MensagemResponse {
   conversaId: string;
   resposta: string;
@@ -94,7 +105,11 @@ export interface ConversaResponse {
   perfilLead: PerfilLead;
   mensagens: MensagemDaConversa[];
   contatoPendente: boolean;
+  consentimentoEm: string | null;
+  versaoAvisoPrivacidade: string | null;
 }
+
+export const VERSAO_AVISO_PRIVACIDADE = '2026-09-11';
 
 export const LIMITE_MENSAGEM = 4000;
 export const LIMITE_NOME = 200;
