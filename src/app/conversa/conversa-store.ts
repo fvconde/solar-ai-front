@@ -1,12 +1,15 @@
+import { HttpErrorResponse } from '@angular/common/http';
 import { Injectable, computed, inject, signal } from '@angular/core';
 import { ConversaApi } from './conversa-api';
 import {
   AgendamentoDaConversa,
   ContatoRequest,
+  ConversaResponse,
   MensagemDaConversa,
   MensagemResponse,
   ProximaAcao,
   SlotOferecido,
+  VERSAO_AVISO_PRIVACIDADE,
 } from './contrato';
 import { HOJE, diaDe, horaAgora, horaDe, rotuloDeDia } from './horario';
 import { AcaoEvento, EstadoConversa, ItemTrilha } from './trilha';
@@ -15,7 +18,6 @@ function ehHandoff(acao: ProximaAcao | null): boolean {
   return acao === 'agendar_reuniao' || acao === 'direcionar_especialista';
 }
 
-const CHAVE_CONSENTIMENTO = 'solar.consentimento';
 const CHAVE_CONVERSA = 'solar.conversaId';
 const ABERTURA = 'Olá';
 const ESPERA_PROLONGADA_MS = 8000;
@@ -28,6 +30,8 @@ export class ConversaStore {
   readonly itens = signal<ItemTrilha[]>([]);
   readonly contatoEnviando = signal(false);
   readonly contatoErro = signal<string | null>(null);
+  readonly aceiteEnviando = signal(false);
+  readonly aceiteErro = signal<string | null>(null);
 
   readonly aguardando = computed(
     () => this.estado() === 'preparando' || this.estado() === 'espera-prolongada',
@@ -61,49 +65,69 @@ export class ConversaStore {
   private cronometro: ReturnType<typeof setTimeout> | undefined;
 
   async iniciar(): Promise<void> {
-    if (this.ler(CHAVE_CONSENTIMENTO) !== 'aceito') {
+    const salva = this.ler(CHAVE_CONVERSA);
+    if (!salva) {
       this.estado.set('aceite-pendente');
       return;
     }
 
-    const salva = this.ler(CHAVE_CONVERSA);
-    if (salva) {
-      this.conversaId = salva;
-      try {
-        const conversa = await this.api.obterConversa(salva);
-        this.itens.set(this.reconstruir(conversa.mensagens, conversa.contatoPendente));
-        this.estado.set(this.estadoDe(conversa.mensagens));
-      } catch {
-        // A conversa salva existe e nao vamos perde-la por uma falha de rede:
-        // abrir() aqui geraria um guid novo e sobrescreveria o do localStorage,
-        // apagando o historico para sempre sem avisar ninguem.
-        this.itens.set([]);
-        this.registrarFalhaAoRetomar();
+    this.conversaId = salva;
+    try {
+      const conversa = await this.api.obterConversa(salva);
+      await this.retomarConversa(conversa);
+    } catch (erro) {
+      this.itens.set([]);
+      if (erro instanceof HttpErrorResponse && erro.status === 404) {
+        this.estado.set('aceite-pendente');
+        return;
       }
+      this.registrarFalhaAoRetomar();
+    }
+  }
+
+  async aceitar(): Promise<void> {
+    if (this.aceiteEnviando()) {
       return;
     }
 
-    await this.abrir();
-  }
+    this.aceiteEnviando.set(true);
+    this.aceiteErro.set(null);
 
-  aceitar(): void {
-    this.gravar(CHAVE_CONSENTIMENTO, 'aceito');
-    void this.abrir();
+    if (!this.conversaId) {
+      this.conversaId = this.ler(CHAVE_CONVERSA) ?? crypto.randomUUID();
+      this.gravar(CHAVE_CONVERSA, this.conversaId);
+    }
+
+    try {
+      await this.api.registrarConsentimento(this.conversaId, {
+        versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+      });
+      const conversa = await this.api.obterConversa(this.conversaId);
+      await this.retomarConversa(conversa);
+    } catch {
+      this.estado.set('aceite-pendente');
+      this.aceiteErro.set('Não foi possível registrar sua autorização. Tente novamente.');
+    } finally {
+      this.aceiteEnviando.set(false);
+    }
   }
 
   recusar(): void {
+    this.aceiteErro.set(null);
     this.estado.set('aceite-recusado');
     this.itens.set([]);
   }
 
   reverEscolha(): void {
+    this.aceiteErro.set(null);
     this.estado.set('aceite-pendente');
   }
 
   async novaConversa(): Promise<void> {
     this.apagar(CHAVE_CONVERSA);
+    this.conversaId = '';
     this.itens.set([]);
-    await this.abrir();
+    this.estado.set('aceite-pendente');
   }
 
   async enviar(texto: string): Promise<void> {
@@ -184,14 +208,31 @@ export class ConversaStore {
   }
 
   private async abrir(): Promise<void> {
-    this.conversaId = crypto.randomUUID();
-    this.gravar(CHAVE_CONVERSA, this.conversaId);
     this.itens.set([
       { tipo: 'divisor', id: this.proximoId(), rotulo: HOJE },
     ]);
     this.ultimoEnvio = ABERTURA;
     this.ultimoEnvioVisivel = false;
     await this.turno();
+  }
+
+  private async retomarConversa(conversa: ConversaResponse): Promise<void> {
+    if (
+      !conversa.consentimentoEm ||
+      conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE
+    ) {
+      this.itens.set([]);
+      this.estado.set('aceite-pendente');
+      return;
+    }
+
+    if (conversa.mensagens.length === 0) {
+      await this.abrir();
+      return;
+    }
+
+    this.itens.set(this.reconstruir(conversa.mensagens, conversa.contatoPendente));
+    this.estado.set(this.estadoDe(conversa.mensagens));
   }
 
   private async turno(): Promise<void> {

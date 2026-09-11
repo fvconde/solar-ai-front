@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-aviso-consentimento',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
   template: `
     <section class="aviso">
       <div class="painel">
@@ -11,14 +13,11 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
           <span class="rotulo">Antes de começar</span>
         </div>
         <p>
-          A Solar e seu provedor de inteligência artificial processarão as mensagens que você enviar
-          para compreender sua busca, recomendar imóveis e, quando necessário, encaminhar a conversa
-          para atendimento humano.
+          Antes de começarmos: a Solar processa o que você me contar com um provedor de inteligência
+          artificial — no free tier, esse provedor usa o conteúdo para treino — e, quando necessário,
+          a Solar compartilha a conversa com um corretor humano.
         </p>
-        <p>
-          Suas mensagens não são usadas pelo provedor para treinar ou melhorar modelos de
-          inteligência artificial. Consulte a <a href="#politica-de-privacidade">Política de Privacidade</a>.
-        </p>
+        <p>Consulte o <a routerLink="/privacidade">Aviso de Privacidade completo</a>.</p>
         <p>Não envie documentos, dados bancários ou informações sensíveis.</p>
       </div>
 
@@ -31,11 +30,21 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
       </label>
 
       <div class="acoes">
-        <button type="button" class="primario" [disabled]="!marcado()" (click)="aceitar.emit()">
-          Concordo e continuar
+        <button
+          type="button"
+          class="primario"
+          [disabled]="!marcado() || enviando()"
+          (click)="aceitar.emit()"
+        >
+          {{ enviando() ? 'Registrando...' : 'Concordo e continuar' }}
         </button>
-        <button type="button" class="secundario" (click)="recusar.emit()">Não concordo</button>
+        <button type="button" class="secundario" [disabled]="enviando()" (click)="recusar.emit()">
+          Não concordo
+        </button>
       </div>
+      @if (erro()) {
+        <p class="erro" role="alert">{{ erro() }}</p>
+      }
     </section>
   `,
   styles: `
@@ -148,6 +157,12 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
       color: var(--texto-primario);
     }
 
+    .erro {
+      color: var(--erro);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
     @media (max-width: 640px) {
       .painel {
         padding: 16px;
@@ -164,6 +179,8 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
   `,
 })
 export class AvisoConsentimento {
+  readonly enviando = input(false);
+  readonly erro = input<string | null>(null);
   readonly aceitar = output<void>();
   readonly recusar = output<void>();
 
