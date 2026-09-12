@@ -61,6 +61,7 @@ export interface MensagemDaConversa {
   /** Nome do corretor atribuido, nas falas que fecharam em handoff. */
   corretor: string | null;
   agendamento: AgendamentoDaConversa | null;
+  imoveisSugeridos?: ImovelSugerido[] | null;
 }
 
 export interface ContatoRequest {
