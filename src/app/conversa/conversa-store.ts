@@ -21,6 +21,7 @@ function ehHandoff(acao: ProximaAcao | null): boolean {
 const CHAVE_CONVERSA = 'solar.conversaId';
 const ABERTURA = 'Olá';
 const ESPERA_PROLONGADA_MS = 8000;
+const INTERVALO_POLLING_MS = 3000;
 
 @Injectable({ providedIn: 'root' })
 export class ConversaStore {
@@ -62,7 +63,9 @@ export class ConversaStore {
   private ultimoEnvio = '';
   private ultimoEnvioVisivel = false;
   private sequencia = 0;
+  private totalMensagens = 0;
   private cronometro: ReturnType<typeof setTimeout> | undefined;
+  private cronometroPolling: ReturnType<typeof setInterval> | undefined;
 
   async iniciar(): Promise<void> {
     const salva = this.ler(CHAVE_CONVERSA);
@@ -113,6 +116,8 @@ export class ConversaStore {
   }
 
   recusar(): void {
+    this.pararPolling();
+    this.totalMensagens = 0;
     this.aceiteErro.set(null);
     this.estado.set('aceite-recusado');
     this.itens.set([]);
@@ -124,8 +129,11 @@ export class ConversaStore {
   }
 
   async novaConversa(): Promise<void> {
+    this.pararPolling();
     this.apagar(CHAVE_CONVERSA);
     this.conversaId = '';
+    this.totalMensagens = 0;
+    this.sequencia = 0;
     this.itens.set([]);
     this.estado.set('aceite-pendente');
   }
@@ -135,6 +143,8 @@ export class ConversaStore {
     if (!limpo || !this.envioDisponivel()) {
       return;
     }
+
+    this.pararPolling();
 
     if (this.estado() === 'falha') {
       this.removerEventoFinal();
@@ -221,6 +231,7 @@ export class ConversaStore {
       !conversa.consentimentoEm ||
       conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE
     ) {
+      this.pararPolling();
       this.itens.set([]);
       this.estado.set('aceite-pendente');
       return;
@@ -231,8 +242,13 @@ export class ConversaStore {
       return;
     }
 
+    this.sequencia = 0;
+    this.totalMensagens = conversa.mensagens.length;
     this.itens.set(this.reconstruir(conversa.mensagens, conversa.contatoPendente));
     this.estado.set(this.estadoDe(conversa.mensagens));
+    if (this.estado() === 'conversando') {
+      this.iniciarPolling();
+    }
   }
 
   private async turno(): Promise<void> {
@@ -268,7 +284,77 @@ export class ConversaStore {
       this.acrescentar({ tipo: 'contato', id: this.proximoId() });
     }
 
-    this.estado.set(resposta.proximaAcao === 'encerrar' ? 'encerrada' : 'conversando');
+    this.totalMensagens += 2;
+    const proximoEstado = resposta.proximaAcao === 'encerrar' ? 'encerrada' : 'conversando';
+    this.estado.set(proximoEstado);
+    if (proximoEstado === 'conversando') {
+      this.iniciarPolling();
+    } else {
+      this.pararPolling();
+    }
+  }
+
+  iniciarPolling(): void {
+    this.pararPolling();
+    if (!this.conversaId || this.estado() !== 'conversando') {
+      return;
+    }
+
+    this.cronometroPolling = setInterval(() => {
+      void this.verificarNovasMensagens();
+    }, INTERVALO_POLLING_MS);
+  }
+
+  pararPolling(): void {
+    if (this.cronometroPolling) {
+      clearInterval(this.cronometroPolling);
+      this.cronometroPolling = undefined;
+    }
+  }
+
+  async verificarNovasMensagens(): Promise<void> {
+    if (!this.conversaId || this.estado() !== 'conversando' || this.aguardando()) {
+      return;
+    }
+
+    try {
+      const conversa = await this.api.obterConversa(this.conversaId);
+      if (conversa.mensagens.length > this.totalMensagens) {
+        const novas = conversa.mensagens.slice(this.totalMensagens);
+        this.totalMensagens = conversa.mensagens.length;
+
+        for (const msg of novas) {
+          if (msg.papel === 'agente') {
+            this.acrescentar({
+              tipo: 'lia',
+              id: this.proximoId(),
+              texto: msg.texto,
+              hora: horaDe(msg.em),
+              imoveis: [],
+              intencao: null,
+            });
+
+            const eventoAgendamento = this.eventoDoAgendamento(msg.agendamento);
+            const evento =
+              eventoAgendamento ??
+              (msg.proximaAcao && this.desfecho(msg.proximaAcao, msg.corretor));
+            if (evento) {
+              this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
+            }
+
+            if (ehHandoff(msg.proximaAcao) && conversa.contatoPendente) {
+              this.acrescentar({ tipo: 'contato', id: this.proximoId() });
+            }
+
+            if (msg.proximaAcao === 'encerrar') {
+              this.estado.set('encerrada');
+              this.pararPolling();
+            }
+          }
+        }
+      }
+    } catch {
+    }
   }
 
   private desfecho(

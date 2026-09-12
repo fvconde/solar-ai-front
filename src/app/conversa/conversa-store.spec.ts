@@ -388,4 +388,89 @@ describe('ConversaStore ao retomar', () => {
     expect(api.enviarMensagem).not.toHaveBeenCalled();
     expect(localStorage.getItem('solar.conversaId')).toBeNull();
   });
+
+  it('reconstroi a trilha com mensagem de reengajamento ao retomar conversa', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa([
+        fala('lead', 'Olá'),
+        fala('agente', 'Oi, em que posso ajudar?', 'continuar_conversa'),
+        fala('lead', 'quero apto no Tatuapé até 500 mil'),
+        fala('agente', 'Tatuapé é uma boa região.', 'continuar_conversa'),
+        fala('agente', 'Oi! Lembrei da sua busca no Tatuapé até 500 mil, quer ver novas opções?', 'continuar_conversa'),
+      ]),
+    );
+
+    await store.iniciar();
+
+    expect(tipos(store.itens())).toEqual(['divisor', 'lia', 'pessoa', 'lia', 'lia']);
+    const ultimoItem = store.itens()[4];
+    expect(ultimoItem.tipo).toBe('lia');
+    if (ultimoItem.tipo === 'lia') {
+      expect(ultimoItem.texto).toContain('Tatuapé até 500 mil');
+    }
+  });
+
+  it('polling na aba aberta entrega mensagem de reengajamento ao vivo', async () => {
+    const inicial = [
+      fala('lead', 'Olá'),
+      fala('agente', 'Oi, em que posso ajudar?', 'continuar_conversa'),
+    ];
+    api.obterConversa.and.resolveTo(conversa(inicial));
+
+    await store.iniciar();
+    expect(tipos(store.itens())).toEqual(['divisor', 'lia']);
+
+    const atualizada = [
+      ...inicial,
+      fala('agente', 'Oi! Lembrei da sua busca por apartamentos, ainda tem interesse?', 'continuar_conversa'),
+    ];
+    api.obterConversa.and.resolveTo(conversa(atualizada));
+
+    await store.verificarNovasMensagens();
+
+    expect(tipos(store.itens())).toEqual(['divisor', 'lia', 'lia']);
+    const ultimoItem = store.itens()[2];
+    expect(ultimoItem.tipo).toBe('lia');
+    if (ultimoItem.tipo === 'lia') {
+      expect(ultimoItem.texto).toContain('Lembrei da sua busca');
+    }
+  });
+
+  it('polling atualiza estado para encerrada quando mensagem proativa tem desfecho encerrar', async () => {
+    const inicial = [
+      fala('lead', 'Olá'),
+      fala('agente', 'Oi, em que posso ajudar?', 'continuar_conversa'),
+    ];
+    api.obterConversa.and.resolveTo(conversa(inicial));
+
+    await store.iniciar();
+    expect(store.estado()).toBe('conversando');
+
+    const atualizada = [
+      ...inicial,
+      fala('agente', 'Esta conversa foi encerrada por inatividade.', 'encerrar'),
+    ];
+    api.obterConversa.and.resolveTo(conversa(atualizada));
+
+    await store.verificarNovasMensagens();
+
+    expect(store.estado()).toBe('encerrada');
+    expect(tipos(store.itens())).toEqual(['divisor', 'lia', 'lia', 'evento']);
+  });
+
+  it('polling nao duplica mensagens se nada mudou', async () => {
+    const inicial = [
+      fala('lead', 'Olá'),
+      fala('agente', 'Oi, em que posso ajudar?', 'continuar_conversa'),
+    ];
+    api.obterConversa.and.resolveTo(conversa(inicial));
+
+    await store.iniciar();
+    const contagemInicial = store.itens().length;
+
+    await store.verificarNovasMensagens();
+    await store.verificarNovasMensagens();
+
+    expect(store.itens().length).toBe(contagemInicial);
+  });
 });
