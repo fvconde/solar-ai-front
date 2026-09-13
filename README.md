@@ -87,7 +87,6 @@ A propriedade `proximaAcao` retornada pela API determina o comportamento visual 
 
 - Retomada proativa (follow-up): implementada com polling na aba aberta, intervalo configurável e limite de 2 tentativas por lead — controle de ativar/desativar pela interface ainda não existe.
 - Estado "sem resultado" quando nenhum imóvel atende à faixa.
-- `imoveisSugeridos` não é persistido no histórico da API: ao recarregar, os cards de turnos antigos não voltam; o texto da conversa volta.
 
 ---
 

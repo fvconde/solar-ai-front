@@ -6,11 +6,12 @@ import { ConversaStore } from './conversa-store';
 import {
   AgendamentoDaConversa,
   ConversaResponse,
+  ImovelSugerido,
   MensagemDaConversa,
   PerfilLead,
   ProximaAcao,
 } from './contrato';
-import { ItemTrilha } from './trilha';
+import { ItemLia, ItemTrilha } from './trilha';
 
 const PERFIL_VAZIO: PerfilLead = {
   nome: null,
@@ -43,19 +44,21 @@ function fala(
   dias = 0,
   corretor: string | null = null,
   agendamento: AgendamentoDaConversa | null = null,
+  imoveisSugeridos: ImovelSugerido[] | null = null,
 ): MensagemDaConversa {
   const em = new Date();
   em.setDate(em.getDate() - dias);
-  return { papel, texto, em: em.toISOString(), proximaAcao, corretor, agendamento };
+  return { papel, texto, em: em.toISOString(), proximaAcao, corretor, agendamento, imoveisSugeridos };
 }
 
 function conversa(
   mensagens: MensagemDaConversa[],
   contatoPendente = false,
+  perfilLead = PERFIL_VAZIO,
 ): ConversaResponse {
   return {
     conversaId: 'c1',
-    perfilLead: PERFIL_VAZIO,
+    perfilLead,
     mensagens,
     contatoPendente,
     consentimentoEm: new Date().toISOString(),
@@ -472,5 +475,111 @@ describe('ConversaStore ao retomar', () => {
     await store.verificarNovasMensagens();
 
     expect(store.itens().length).toBe(contagemInicial);
+  });
+
+  it('reconstroi cartoes de imoveis sugeridos com mesma ordem e motivo ao retomar', async () => {
+    const imoveisExemplo: ImovelSugerido[] = [
+      {
+        id: 'sp-moema-01',
+        tipo: 'apartamento',
+        bairro: 'Moema',
+        quartos: 3,
+        metragem: 95,
+        precoVenda: 1200000,
+        precoAluguel: null,
+        motivo: 'Ideal para família com 3 quartos perto do parque',
+      },
+      {
+        id: 'sp-moema-02',
+        tipo: 'apartamento',
+        bairro: 'Moema',
+        quartos: 2,
+        metragem: 70,
+        precoVenda: 850000,
+        precoAluguel: null,
+        motivo: 'Ótimo custo-benefício na região solicitada',
+      },
+      {
+        id: 'sp-pinheiros-03',
+        tipo: 'apartamento',
+        bairro: 'Pinheiros',
+        quartos: 2,
+        metragem: 65,
+        precoVenda: 900000,
+        precoAluguel: null,
+        motivo: 'Excelente localização com metrô próximo',
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(
+      conversa([
+        fala('lead', 'Olá'),
+        fala(
+          'agente',
+          'Encontrei 3 imóveis para você:',
+          'sugerir_imoveis',
+          0,
+          null,
+          null,
+          imoveisExemplo,
+        ),
+      ]),
+    );
+
+    await store.iniciar();
+
+    const itens = store.itens();
+    expect(tipos(itens)).toEqual(['divisor', 'lia']);
+
+    const itemLia = itens[1] as ItemLia;
+    expect(itemLia.tipo).toBe('lia');
+    expect(itemLia.imoveis.length).toBe(3);
+    expect(itemLia.imoveis[0].id).toBe('sp-moema-01');
+    expect(itemLia.imoveis[0].motivo).toBe('Ideal para família com 3 quartos perto do parque');
+    expect(itemLia.imoveis[1].id).toBe('sp-moema-02');
+    expect(itemLia.imoveis[1].motivo).toBe('Ótimo custo-benefício na região solicitada');
+    expect(itemLia.imoveis[2].id).toBe('sp-pinheiros-03');
+    expect(itemLia.imoveis[2].motivo).toBe('Excelente localização com metrô próximo');
+  });
+
+  it('preserva a intencao do perfil do lead ao reconstruir a fala da Lia com imoveis', async () => {
+    const imoveisExemplo: ImovelSugerido[] = [
+      {
+        id: 'sp-01',
+        tipo: 'apartamento',
+        bairro: 'Moema',
+        quartos: 2,
+        metragem: 60,
+        precoVenda: 700000,
+        precoAluguel: 3500,
+        motivo: 'Boa localização',
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'Olá'),
+          fala(
+            'agente',
+            'Aqui está uma opção:',
+            'sugerir_imoveis',
+            0,
+            null,
+            null,
+            imoveisExemplo,
+          ),
+        ],
+        false,
+        { ...PERFIL_VAZIO, intencao: 'aluguel' },
+      ),
+    );
+
+    await store.iniciar();
+
+    const itemLia = store.itens()[1] as ItemLia;
+    expect(itemLia.intencao).toBe('aluguel');
+    expect(itemLia.imoveis.length).toBe(1);
+    expect(itemLia.imoveis[0].precoAluguel).toBe(3500);
   });
 });

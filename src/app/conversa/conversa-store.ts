@@ -244,7 +244,13 @@ export class ConversaStore {
 
     this.sequencia = 0;
     this.totalMensagens = conversa.mensagens.length;
-    this.itens.set(this.reconstruir(conversa.mensagens, conversa.contatoPendente));
+    this.itens.set(
+      this.reconstruir(
+        conversa.mensagens,
+        conversa.contatoPendente,
+        conversa.perfilLead?.intencao ?? null,
+      ),
+    );
     this.estado.set(this.estadoDe(conversa.mensagens));
     if (this.estado() === 'conversando') {
       this.iniciarPolling();
@@ -330,8 +336,8 @@ export class ConversaStore {
               id: this.proximoId(),
               texto: msg.texto,
               hora: horaDe(msg.em),
-              imoveis: [],
-              intencao: null,
+              imoveis: msg.imoveisSugeridos ?? [],
+              intencao: conversa.perfilLead?.intencao ?? null,
             });
 
             const eventoAgendamento = this.eventoDoAgendamento(msg.agendamento);
@@ -462,9 +468,13 @@ export class ConversaStore {
   /**
    * Redesenha a trilha inteira a partir do que o banco guardou: divisores por
    * dia de calendario, as falas, e os mesmos eventos de desfecho que a sessao
-   * ao vivo teria mostrado. Imoveis nao voltam -- a API nao os persiste.
+   * ao vivo teria mostrado.
    */
-  private reconstruir(mensagens: MensagemDaConversa[], contatoPendente: boolean): ItemTrilha[] {
+  private reconstruir(
+    mensagens: MensagemDaConversa[],
+    contatoPendente: boolean,
+    intencao: string | null = null,
+  ): ItemTrilha[] {
     const itens: ItemTrilha[] = [];
     let dia = '';
 
@@ -498,8 +508,8 @@ export class ConversaStore {
         id: this.proximoId(),
         texto: mensagem.texto,
         hora: horaDe(mensagem.em),
-        imoveis: [],
-        intencao: null,
+        imoveis: mensagem.imoveisSugeridos ?? [],
+        intencao,
       });
 
       const eventoAgendamento = this.eventoDoAgendamento(mensagem.agendamento);
