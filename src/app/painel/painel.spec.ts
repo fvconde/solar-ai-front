@@ -350,7 +350,6 @@ describe('Painel (S-21)', () => {
       b.textContent?.trim(),
     );
     expect(botoes).toEqual(['Sem corretor elegível', 'Visão geral']);
-    expect(html.querySelector('.banner-nota-perfil')).toBeTruthy();
   });
 
   it('7. estado de acesso restrito bloqueia antes de chamada de dados ou em 403', () => {
@@ -412,12 +411,12 @@ describe('Painel (S-21)', () => {
     );
   });
 
-  it('10. lead sem nome é formatado como "Lead sem nome - {referencia}"', () => {
+  it('10. lead sem nome é formatado como "Lead sem nome · {referencia}"', () => {
     const fixture = montarComponente();
     const html = fixture.nativeElement as HTMLElement;
 
     const nomes = Array.from(html.querySelectorAll('.nome-lead')).map((n) => n.textContent?.trim());
-    expect(nomes).toContain('Lead sem nome - 4821');
+    expect(nomes).toContain('Lead sem nome · 4821');
   });
 
   it('11. modal de qualificação abre e exibe fatores e pesos', () => {
@@ -490,5 +489,122 @@ describe('Painel (S-21)', () => {
     expect(f2.nativeElement.querySelector('.fila-vazia')?.textContent).toContain(
       'Nenhum lead sem corretor elegível agora.',
     );
+  });
+
+  it('14. resumo presente com as cinco seções nulas exibe ausência e chama "Gerar de novo" com forcar=true', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    reqDet.flush({
+      ...detalheMockComConversa,
+      resumo: {
+        perfil: null,
+        orcamento: null,
+        imoveis: null,
+        objecoes: null,
+        proximoPasso: null,
+      },
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    expect(html.querySelector('.secao-resumo')?.textContent).toContain(
+      'Resumo ainda não disponível.',
+    );
+
+    const botaoGerar = html.querySelector('.botao-gerar-resumo') as HTMLButtonElement;
+    expect(botaoGerar).toBeTruthy();
+
+    botaoGerar.click();
+    fixture.detectChanges();
+
+    const reqPost = httpMock.expectOne((r) => r.url === '/encaminhamentos/42/resumo');
+    expect(reqPost.request.method).toBe('POST');
+    expect(reqPost.request.params.get('forcar')).toBe('true');
+    reqPost.flush({
+      perfil: 'Perfil regenerado com sucesso',
+      orcamento: null,
+      imoveis: null,
+      objecoes: null,
+      proximoPasso: null,
+    });
+    fixture.detectChanges();
+
+    expect(html.querySelector('.secao-resumo')?.textContent).toContain(
+      'Perfil regenerado com sucesso',
+    );
+  });
+
+  it('15. situação do encaminhamento e linha do corretor usam ponto médio e rótulos sem narrar causa', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    // Caso 1: atribuído com corretor -> "Renata Costa · atribuído há ..."
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+    const reqDet1 = httpMock.expectOne('/painel/leads/l1');
+    reqDet1.flush(detalheMockComConversa);
+    fixture.detectChanges();
+
+    const html1 = fixture.nativeElement as HTMLElement;
+    expect(html1.querySelector('.linha-corretor')?.textContent).toContain('Renata Costa ·');
+
+    // Caso 2: encaminhamento nulo -> "Ainda não encaminhado"
+    comp.selecionarLead(filaMock.itens[1]);
+    fixture.detectChanges();
+    const reqDet2 = httpMock.expectOne('/painel/leads/l3');
+    reqDet2.flush({
+      ...detalheSemResumoNemAgendamento,
+      encaminhamento: null,
+    });
+    fixture.detectChanges();
+
+    const html2 = fixture.nativeElement as HTMLElement;
+    expect(html2.querySelector('.linha-corretor')?.textContent?.trim()).toBe(
+      'Ainda não encaminhado',
+    );
+
+    // Caso 3: encaminhamento aguardando -> "Sem corretor elegível"
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+    const reqDet3 = httpMock.expectOne('/painel/leads/l1');
+    reqDet3.flush({
+      ...detalheMockComConversa,
+      encaminhamento: { id: 99, status: 'aguardando', corretor: null, atribuidoEm: '' },
+    });
+    fixture.detectChanges();
+
+    const html3 = fixture.nativeElement as HTMLElement;
+    expect(html3.querySelector('.linha-corretor')?.textContent?.trim()).toBe(
+      'Sem corretor elegível',
+    );
+  });
+
+  it('16. link voltar para Meus leads a partir de acesso restrito redefine filtro e recarrega a fila', () => {
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    const req403 = httpMock.expectOne((r) => r.url === '/painel/leads');
+    req403.flush({ erro: 'perfil_insuficiente' }, { status: 403, statusText: 'Forbidden' });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const linkVoltar = html.querySelector('.link-voltar-meus') as HTMLButtonElement;
+    expect(linkVoltar).toBeTruthy();
+
+    linkVoltar.click();
+    fixture.detectChanges();
+
+    const reqReload = httpMock.expectOne((r) => r.url === '/painel/leads');
+    expect(reqReload.request.params.get('filtro')).toBe('meus_leads');
+    reqReload.flush(filaMock);
+    fixture.detectChanges();
+
+    expect(html.querySelector('.bloco-acesso-restrito')).toBeNull();
+    expect(html.querySelectorAll('.item-lead').length).toBe(2);
   });
 });

@@ -49,14 +49,7 @@
           </nav>
         }
       </div>
-      <span class="nota-escopo">{{ escopoNota() }}</span>
     </div>
-
-    @if (temNotaPerfil()) {
-      <div class="banner-nota-perfil">
-        <p>{{ notaPerfil }}</p>
-      </div>
-    }
 
     <main class="corpo-painel" [class.detalhe-aberto]="!!leadSelecionadoId()">
       <section class="coluna-fila" aria-label="Lista de leads">
@@ -178,9 +171,7 @@
                       <span class="rotulo-estado">Sem corretor elegível</span>
                     </span>
                   } @else {
-                    <span class="frase-ausencia-simples"
-                      >Nenhum encaminhamento registrado ainda.</span
-                    >
+                    <span class="frase-ausencia-simples">Ainda não encaminhado</span>
                   }
                 </div>
               </div>

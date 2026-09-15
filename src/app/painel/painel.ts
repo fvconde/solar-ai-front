@@ -67,27 +67,12 @@ export class Painel implements OnInit, OnDestroy {
     return 'Corretor';
   });
 
-  readonly temNotaPerfil = computed(
-    () => this.sessao.perfil() === 'supervisor' && !this.sessao.vinculoAtivo(),
-  );
-
-  readonly notaPerfil =
-    'Você supervisiona esta carteira e pode consultar qualquer lead autorizado. Não existe fila própria nesta sessão: sem vínculo de corretor ativo, a Lia não encaminha leads para você.';
-
   readonly rotulosFiltro: Record<string, string> = {
     meus_leads: 'Meus leads',
     minha_fila: 'Minha fila',
     sem_corretor: 'Sem corretor elegível',
     visao_geral: 'Visão geral',
   };
-
-  readonly escopoNota = computed(() => {
-    const f = this.filtroAtivo();
-    if (f === 'meus_leads' || f === 'minha_fila') return 'Somente leads atribuídos a você';
-    if (f === 'sem_corretor') return 'Leads sem corretor atribuído';
-    if (f === 'visao_geral') return 'Todos os leads autorizados nesta sessão';
-    return '';
-  });
 
   readonly textoFilaVazia = computed(() => {
     const f = this.filtroAtivo();
@@ -240,7 +225,7 @@ export class Painel implements OnInit, OnDestroy {
     const encId = this.leadDetalhe()?.encaminhamento?.id;
     if (!encId) return;
 
-    const forcar = !this.resumoAusente();
+    const forcar = this.leadDetalhe()?.resumo !== null && this.leadDetalhe()?.resumo !== undefined;
     this.gerandoResumo.set(true);
 
     this.api.gerarResumo(encId, forcar).subscribe({
@@ -267,7 +252,7 @@ export class Painel implements OnInit, OnDestroy {
   }
 
   formatarNomeLead(nomeExibicao: string | null, referencia: string): string {
-    return nomeExibicao?.trim() ? nomeExibicao : `Lead sem nome - ${referencia}`;
+    return nomeExibicao?.trim() ? nomeExibicao : `Lead sem nome · ${referencia}`;
   }
 
   formatarTempoRelativo(dataIso: string, comCriado = true): string {
@@ -327,14 +312,14 @@ export class Painel implements OnInit, OnDestroy {
   linhaEncaminhamento(detalhe: LeadDetalheResponse): string {
     const enc = detalhe.encaminhamento;
     if (!enc) {
-      return 'A Lia ainda está qualificando esta conversa; nada foi encaminhado.';
+      return 'Ainda não encaminhado';
     }
     if (enc.status === 'aguardando') {
-      return 'A Lia encaminhou este lead, mas nenhum corretor elegível estava disponível no momento.';
+      return 'Sem corretor elegível';
     }
     if (enc.corretor) {
       const tempo = this.formatarTempoRelativo(enc.atribuidoEm, false);
-      return `${enc.corretor.nome} - ${tempo}`;
+      return `${enc.corretor.nome} · ${tempo}`;
     }
     return 'Atribuído';
   }
