@@ -74,7 +74,7 @@ import { SessaoStore } from '../sessao/sessao-store';
 
     .lado-direito {
       display: flex;
-      align-items: center;
+      align-items: baseline;
       gap: 24px;
     }
 
@@ -99,6 +99,7 @@ import { SessaoStore } from '../sessao/sessao-store';
 
     .navegacao {
       display: flex;
+      align-items: baseline;
       gap: 16px;
     }
 
