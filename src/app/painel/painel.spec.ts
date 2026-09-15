@@ -539,52 +539,90 @@ describe('Painel (S-21)', () => {
     );
   });
 
-  it('15. situação do encaminhamento e linha do corretor usam ponto médio e rótulos sem narrar causa', () => {
+  it('15. situação do lead e do encaminhamento nunca exibem o mesmo texto (G1)', () => {
     const fixture = montarComponente();
     const comp = fixture.componentInstance;
 
-    // Caso 1: atribuído com corretor -> "Renata Costa · atribuído há ..."
-    comp.selecionarLead(filaMock.itens[0]);
-    fixture.detectChanges();
-    const reqDet1 = httpMock.expectOne('/painel/leads/l1');
-    reqDet1.flush(detalheMockComConversa);
-    fixture.detectChanges();
+    // Caso 1: Na lista (item com encaminhamento nulo não repete 'Ainda não encaminhado')
+    const html = fixture.nativeElement as HTMLElement;
+    const itens = html.querySelectorAll('.item-lead');
+    itens.forEach((item) => {
+      const linhaLead = item.querySelector('.linha-status-lead')?.textContent?.trim();
+      const linhaEnc = item.querySelector('.linha-status-encaminhamento')?.textContent?.trim();
+      if (linhaEnc) {
+        expect(linhaLead).not.toEqual(linhaEnc);
+      }
+    });
 
-    const html1 = fixture.nativeElement as HTMLElement;
-    expect(html1.querySelector('.linha-corretor')?.textContent).toContain('Renata Costa ·');
-
-    // Caso 2: encaminhamento nulo -> "Ainda não encaminhado"
+    // Caso 2: No detalhe com encaminhamento nulo -> não renderiza linha de encaminhamento
     comp.selecionarLead(filaMock.itens[1]);
     fixture.detectChanges();
     const reqDet2 = httpMock.expectOne('/painel/leads/l3');
     reqDet2.flush({
       ...detalheSemResumoNemAgendamento,
+      leadStatus: 'novo',
       encaminhamento: null,
     });
     fixture.detectChanges();
 
-    const html2 = fixture.nativeElement as HTMLElement;
-    expect(html2.querySelector('.linha-corretor')?.textContent?.trim()).toBe(
-      'Ainda não encaminhado',
-    );
+    const situacao2 = html.querySelector('.secao-situacao');
+    expect(situacao2?.textContent).toContain('Ainda não encaminhado');
+    // Não renderiza rótulo Encaminhamento nem repete 'Ainda não encaminhado'
+    expect(situacao2?.textContent).not.toContain('Encaminhamento');
+    expect(html.querySelector('.linha-corretor')).toBeNull();
 
-    // Caso 3: encaminhamento aguardando -> "Sem corretor elegível"
+    // Caso 3: No detalhe com encaminhamento aguardando -> 'Encaminhado' vs 'Sem corretor elegível'
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
     const reqDet3 = httpMock.expectOne('/painel/leads/l1');
     reqDet3.flush({
       ...detalheMockComConversa,
+      leadStatus: 'encaminhado',
       encaminhamento: { id: 99, status: 'aguardando', corretor: null, atribuidoEm: '' },
     });
     fixture.detectChanges();
 
-    const html3 = fixture.nativeElement as HTMLElement;
-    expect(html3.querySelector('.linha-corretor')?.textContent?.trim()).toBe(
+    const situacao3 = html.querySelector('.secao-situacao');
+    expect(situacao3?.textContent).toContain('Encaminhado');
+    expect(situacao3?.textContent).toContain('Sem corretor elegível');
+    expect(situacao3?.querySelectorAll('.rotulo-estado')[0]?.textContent?.trim()).toBe(
+      'Encaminhado',
+    );
+    expect(situacao3?.querySelectorAll('.rotulo-estado')[1]?.textContent?.trim()).toBe(
       'Sem corretor elegível',
     );
   });
 
-  it('16. link voltar para Meus leads a partir de acesso restrito redefine filtro e recarrega a fila', () => {
+  it('16. "Atribuído" não tem marca de estado nem no detalhe nem na lista (G2)', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    // Na lista:
+    const html = fixture.nativeElement as HTMLElement;
+    const atribuidoLista = html.querySelector('.texto-simples-atribuido');
+    expect(atribuidoLista).toBeTruthy();
+    expect(atribuidoLista?.textContent?.trim()).toBe('Atribuído');
+    expect(atribuidoLista?.querySelector('.marca-estado')).toBeNull();
+    expect(atribuidoLista?.closest('.badge-estado')).toBeNull();
+
+    // No detalhe:
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    reqDet.flush(detalheMockComConversa);
+    fixture.detectChanges();
+
+    const situacao = html.querySelector('.secao-situacao');
+    const atribuidoDetalhe = situacao?.querySelector('.texto-simples-atribuido');
+    expect(atribuidoDetalhe).toBeTruthy();
+    expect(atribuidoDetalhe?.textContent?.trim()).toBe('Atribuído');
+    expect(atribuidoDetalhe?.querySelector('.marca-estado')).toBeNull();
+    expect(atribuidoDetalhe?.closest('.badge-estado')).toBeNull();
+    // A linha do corretor usa ponto médio
+    expect(situacao?.querySelector('.linha-corretor')?.textContent).toContain('Renata Costa ·');
+  });
+
+  it('17. link voltar para Meus leads a partir de acesso restrito redefine filtro e recarrega a fila', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 

@@ -311,16 +311,10 @@ export class Painel implements OnInit, OnDestroy {
 
   linhaEncaminhamento(detalhe: LeadDetalheResponse): string {
     const enc = detalhe.encaminhamento;
-    if (!enc) {
-      return 'Ainda não encaminhado';
+    if (!enc || !enc.corretor) {
+      return '';
     }
-    if (enc.status === 'aguardando') {
-      return 'Sem corretor elegível';
-    }
-    if (enc.corretor) {
-      const tempo = this.formatarTempoRelativo(enc.atribuidoEm, false);
-      return `${enc.corretor.nome} · ${tempo}`;
-    }
-    return 'Atribuído';
+    const tempo = this.formatarTempoRelativo(enc.atribuidoEm, false);
+    return `${enc.corretor.nome} · ${tempo}`;
   }
 }

@@ -158,24 +158,23 @@
                     </span>
                   }
                 </div>
-                <span class="rotulo-campo">Encaminhamento</span>
-                <div class="valor-campo">
-                  @if (detalhe.encaminhamento?.status === 'atribuido') {
-                    <span class="badge-estado">
-                      <span class="marca-estado marca-sucesso"></span>
-                      <span class="rotulo-estado">Atribuído</span>
-                    </span>
-                  } @else if (detalhe.encaminhamento?.status === 'aguardando') {
-                    <span class="badge-estado">
-                      <span class="marca-estado marca-neutro"></span>
-                      <span class="rotulo-estado">Sem corretor elegível</span>
-                    </span>
-                  } @else {
-                    <span class="frase-ausencia-simples">Ainda não encaminhado</span>
-                  }
-                </div>
+                @if (detalhe.encaminhamento) {
+                  <span class="rotulo-campo">Encaminhamento</span>
+                  <div class="valor-campo">
+                    @if (detalhe.encaminhamento.status === 'atribuido') {
+                      <span class="texto-simples-atribuido">Atribuído</span>
+                    } @else if (detalhe.encaminhamento.status === 'aguardando') {
+                      <span class="badge-estado">
+                        <span class="marca-estado marca-neutro"></span>
+                        <span class="rotulo-estado">Sem corretor elegível</span>
+                      </span>
+                    }
+                  </div>
+                }
               </div>
-              <p class="linha-corretor">{{ linhaEncaminhamento(detalhe) }}</p>
+              @if (linhaEncaminhamento(detalhe); as linhaCorretor) {
+                <p class="linha-corretor">{{ linhaCorretor }}</p>
+              }
             </section>
 
             <section class="card-secao secao-contato">
