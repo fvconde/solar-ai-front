@@ -1,5 +1,7 @@
-import { ChangeDetectionStrategy, Component } from '@angular/core';
-import { RouterLink, RouterLinkActive } from '@angular/router';
+import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { filter, map } from 'rxjs';
 
 @Component({
   selector: 'app-cabecalho',
@@ -12,8 +14,8 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
         <span class="identificacao">Lia · assistente de IA</span>
       </div>
       <nav class="navegacao">
-        <a routerLink="/" routerLinkActive="ativo" [routerLinkActiveOptions]="{ exact: true }" class="link-nav">Chat</a>
-        <a routerLink="/painel" routerLinkActive="ativo" class="link-nav">Painel do Corretor</a>
+        <a routerLink="/" class="link-nav" [class.ativo]="chatAtivo()">Chat</a>
+        <a routerLink="/painel" class="link-nav" [class.ativo]="painelAtivo()">Painel do Corretor</a>
       </nav>
     </header>
   `,
@@ -92,4 +94,23 @@ import { RouterLink, RouterLinkActive } from '@angular/router';
     }
   `,
 })
-export class Cabecalho {}
+export class Cabecalho {
+  private readonly router = inject(Router);
+
+  private readonly urlAtual = toSignal(
+    this.router.events.pipe(
+      filter((evento) => evento instanceof NavigationEnd),
+      map(() => this.router.url)
+    ),
+    { initialValue: this.router.url }
+  );
+
+  private readonly rotaAtual = computed(() => this.urlAtual().split('?')[0]);
+
+  readonly painelAtivo = computed(() => {
+    const rota = this.rotaAtual();
+    return rota.startsWith('/painel') || rota.startsWith('/entrar');
+  });
+
+  readonly chatAtivo = computed(() => !this.painelAtivo());
+}

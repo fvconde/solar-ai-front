@@ -1,0 +1,50 @@
+.tela-entrar {
+  --login-texto-primario: #1C1A17;
+  --login-texto-secundario: #43433F;
+  --login-rotulo-mono: #5E5B54;
+  --login-acao: #A2452A;
+  --login-erro: #8A3A22;
+  --login-fundo-shell: #F4F1EC;
+  --login-fundo-card: #FBFAF9;
+  --login-fundo-travado: #ECE6DC;
+  --login-borda: #D3D1CB;
+  --login-desabilitado: #E6E2DA;
+
+  --login-texto-sobre-acao: #FBFAF7;
+  --login-altura-campo: 46px;
+  --login-raio-campo: 8px;
+  --login-altura-botao: 48px;
+  --login-raio-botao: 24px;
+  --login-largura-card: 400px;
+  --login-raio-card: 12px;
+  --login-padding-card: 36px 32px;
+  --login-alvo-toque: 48px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-tema='claro']) .tela-entrar {
+    --login-texto-primario: #F1EEE6;
+    --login-texto-secundario: #A8A49A;
+    --login-rotulo-mono: #A8A49A;
+    --login-acao: #E0855F;
+    --login-erro: #F2734A;
+    --login-fundo-shell: #14130F;
+    --login-fundo-card: #1C1B16;
+    --login-fundo-travado: #24231D;
+    --login-borda: #35342C;
+    --login-desabilitado: #2A2924;
+  }
+}
+
+:root[data-tema='escuro'] .tela-entrar {
+  --login-texto-primario: #F1EEE6;
+  --login-texto-secundario: #A8A49A;
+  --login-rotulo-mono: #A8A49A;
+  --login-acao: #E0855F;
+  --login-erro: #F2734A;
+  --login-fundo-shell: #14130F;
+  --login-fundo-card: #1C1B16;
+  --login-fundo-travado: #24231D;
+  --login-borda: #35342C;
+  --login-desabilitado: #2A2924;
+}
