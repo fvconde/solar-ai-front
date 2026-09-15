@@ -1,9 +1,3 @@
-export interface CorretorIdentificacao {
-  id: string;
-  nome: string;
-  especialidade: string;
-}
-
 export interface LeadPainelItem {
   id: string;
   nome: string | null;

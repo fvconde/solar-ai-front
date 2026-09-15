@@ -1,13 +1,10 @@
 import { CommonModule } from '@angular/common';
-import {
-  ChangeDetectionStrategy,
-  Component,
-  inject,
-  signal,
-} from '@angular/core';
+import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { Router } from '@angular/router';
+import { SessaoStore } from '../sessao/sessao-store';
 import { PainelApi } from './painel-api';
-import { CorretorIdentificacao, LeadPainelItem } from './painel-contrato';
+import { LeadPainelItem } from './painel-contrato';
 
 @Component({
   selector: 'app-painel',
@@ -16,14 +13,12 @@ import { CorretorIdentificacao, LeadPainelItem } from './painel-contrato';
   templateUrl: './painel.html',
   styleUrl: './painel.scss',
 })
-export class Painel {
+export class Painel implements OnInit {
   private readonly api = inject(PainelApi);
+  private readonly sessao = inject(SessaoStore);
+  private readonly router = inject(Router);
 
-  readonly chaveAcesso = signal<string>('');
-  readonly corretores = signal<CorretorIdentificacao[]>([]);
-  readonly corretorAtivo = signal<CorretorIdentificacao | null>(null);
-  readonly carregandoCorretores = signal<boolean>(false);
-  readonly erroAutenticacao = signal<string | null>(null);
+  readonly corretorAtivo = this.sessao.corretor;
 
   readonly leads = signal<LeadPainelItem[]>([]);
   readonly carregandoLeads = signal<boolean>(false);
@@ -39,43 +34,8 @@ export class Painel {
     { rotulo: 'Investimento', valor: 'investimento' },
   ];
 
-  autenticarChave(): void {
-    const chave = this.chaveAcesso().trim();
-    if (!chave) {
-      this.erroAutenticacao.set('Informe a chave de acesso da equipe / privacidade.');
-      return;
-    }
-
-    this.carregandoCorretores.set(true);
-    this.erroAutenticacao.set(null);
-
-    this.api.listarCorretores(chave).subscribe({
-      next: (lista) => {
-        this.corretores.set(lista);
-        this.carregandoCorretores.set(false);
-      },
-      error: (err) => {
-        this.carregandoCorretores.set(false);
-        if (err?.status === 401 || err?.status === 403) {
-          this.erroAutenticacao.set('Chave de acesso inválida ou não autorizada.');
-        } else if (err?.status === 503) {
-          this.erroAutenticacao.set('Chave de segurança não configurada no servidor (falha fechada).');
-        } else {
-          this.erroAutenticacao.set('Não foi possível validar o acesso ao painel.');
-        }
-      },
-    });
-  }
-
-  identificarCorretor(corretor: CorretorIdentificacao): void {
-    this.corretorAtivo.set(corretor);
+  ngOnInit(): void {
     this.carregarLeads();
-  }
-
-  deslogarCorretor(): void {
-    this.corretorAtivo.set(null);
-    this.leads.set([]);
-    this.erroLeads.set(null);
   }
 
   alternarFiltroMeusLeads(): void {
@@ -89,37 +49,27 @@ export class Painel {
   }
 
   carregarLeads(): void {
-    const corretor = this.corretorAtivo();
-    const chave = this.chaveAcesso().trim();
-    if (!corretor || !chave) {
-      this.leads.set([]);
-      return;
-    }
-
     this.carregandoLeads.set(true);
     this.erroLeads.set(null);
 
-    this.api
-      .listarLeads(
-        chave,
-        corretor.id,
-        this.filtroIntencao() || null,
-        this.filtroMeusLeads()
-      )
-      .subscribe({
-        next: (resp) => {
-          this.leads.set(resp.leads);
-          this.carregandoLeads.set(false);
-        },
-        error: (err) => {
-          this.carregandoLeads.set(false);
-          this.erroLeads.set(
-            err?.status === 401 || err?.status === 403
-              ? 'Acesso não autorizado. Identifique-se novamente.'
-              : 'Não foi possível carregar a fila de leads.'
-          );
-        },
-      });
+    this.api.listarLeads(this.filtroIntencao() || null, this.filtroMeusLeads()).subscribe({
+      next: (resp) => {
+        this.leads.set(resp.leads);
+        this.carregandoLeads.set(false);
+      },
+      error: (err) => {
+        this.carregandoLeads.set(false);
+        this.leads.set([]);
+
+        if (err?.status === 401) {
+          this.sessao.limpar();
+          this.router.navigate(['/entrar']);
+          return;
+        }
+
+        this.erroLeads.set('Não foi possível carregar a fila de leads.');
+      },
+    });
   }
 
   formatarData(dataIso: string): string {
