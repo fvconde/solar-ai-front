@@ -4,7 +4,7 @@ import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testin
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { SessaoStore } from '../sessao/sessao-store';
 import { Entrar } from './entrar';
-import { CorretorSessao } from './entrar-contrato';
+import { CorretorSessao, SessaoResposta } from './entrar-contrato';
 
 describe('Entrar', () => {
   let httpMock: HttpTestingController;
@@ -83,9 +83,11 @@ describe('Entrar', () => {
 
       const html = fixture.nativeElement as HTMLElement;
       expect(texto(fixture)).toContain('Que bom ver você de novo');
-      expect(texto(fixture)).toContain('Encontramos seu cadastro. Digite sua senha para entrar na fila.');
+      expect(texto(fixture)).toContain(
+        'Encontramos seu cadastro. Digite sua senha para entrar na fila.',
+      );
       expect(html.querySelector('.campo-travado')?.textContent).toContain(
-        'renata.costa@solar.com.br'
+        'renata.costa@solar.com.br',
       );
       expect(html.querySelector('#campo-senha')).toBeTruthy();
       expect(texto(fixture)).toContain('Esqueci minha senha');
@@ -129,6 +131,43 @@ describe('Entrar', () => {
       expect(navegou).toHaveBeenCalledWith(['/painel']);
     });
 
+    it('login de supervisor repassa a resposta completa e preserva perfil e filtros na SessaoStore', () => {
+      const fixture = TestBed.createComponent(Entrar);
+      fixture.detectChanges();
+      irParaSenha(fixture, 'supervisor@solar.com.br');
+
+      const router = TestBed.inject(Router);
+      const navegou = spyOn(router, 'navigate');
+
+      fixture.componentInstance.senha.set('senha-supervisor-123');
+      fixture.componentInstance.entrar();
+
+      const req = httpMock.expectOne('/painel/sessoes');
+      const respostaSupervisor: SessaoResposta = {
+        corretor: {
+          id: '8a9b0c1d-0000-0000-0000-000000000099',
+          nome: 'Carlos Supervisor',
+          especialidade: 'geral',
+        },
+        perfil: 'supervisor',
+        corretorId: null,
+        vinculoAtivo: false,
+        filtrosPermitidos: ['todos', 'sem_corretor'],
+        filtroInicial: 'todos',
+      };
+      req.flush(respostaSupervisor);
+      fixture.detectChanges();
+
+      const sessaoStore = TestBed.inject(SessaoStore);
+      expect(sessaoStore.corretor()).toEqual(respostaSupervisor.corretor);
+      expect(sessaoStore.perfil()).toBe('supervisor');
+      expect(sessaoStore.corretorId()).toBeNull();
+      expect(sessaoStore.vinculoAtivo()).toBeFalse();
+      expect(sessaoStore.filtrosPermitidos()).toEqual(['todos', 'sem_corretor']);
+      expect(sessaoStore.filtroInicial()).toBe('todos');
+      expect(navegou).toHaveBeenCalledWith(['/painel']);
+    });
+
     it('contagem de tentativas só aparece a partir da segunda falha', () => {
       const fixture = TestBed.createComponent(Entrar);
       fixture.detectChanges();
@@ -149,7 +188,7 @@ describe('Entrar', () => {
         .flush({ tentativasRestantes: 2 }, { status: 401, statusText: 'Unauthorized' });
       fixture.detectChanges();
       expect(texto(fixture)).toContain(
-        'Senha incorreta. Restam 2 tentativas antes do bloqueio temporário.'
+        'Senha incorreta. Restam 2 tentativas antes do bloqueio temporário.',
       );
     });
 
@@ -166,7 +205,7 @@ describe('Entrar', () => {
       fixture.detectChanges();
 
       expect(texto(fixture)).toContain(
-        'Muitas tentativas incorretas. Formulário bloqueado por 30 segundos.'
+        'Muitas tentativas incorretas. Formulário bloqueado por 30 segundos.',
       );
 
       tick(6000);
@@ -176,7 +215,7 @@ describe('Entrar', () => {
       expect(texto(fixture)).toContain('Aguarde 0:24');
       expect(
         (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('#campo-senha')
-          ?.disabled
+          ?.disabled,
       ).toBeTrue();
 
       tick(24000);
@@ -197,8 +236,8 @@ describe('Entrar', () => {
       expect(texto(fixture)).toContain('← Voltar para o login');
       expect(
         (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-          '#campo-email-recuperacao'
-        )?.value
+          '#campo-email-recuperacao',
+        )?.value,
       ).toBe('renata.costa@solar.com.br');
 
       fixture.componentInstance.enviarLink();
@@ -338,8 +377,8 @@ describe('Entrar', () => {
       expect(texto(fixture)).toContain('Redefinir senha');
       expect(
         (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-          '#campo-email-recuperacao'
-        )?.value
+          '#campo-email-recuperacao',
+        )?.value,
       ).toBe('');
     });
   });
