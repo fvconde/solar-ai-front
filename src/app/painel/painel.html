@@ -1,15 +1,4 @@
 <div class="painel-shell">
-  <header class="barra-superior">
-    <div class="bloco-marca">
-      <span class="marca-solar">SOLAR</span>
-      <span class="titulo-area">Painel do Corretor</span>
-    </div>
-    <div class="bloco-usuario">
-      <span class="nome-usuario">{{ usuarioNome() }}</span>
-      <span class="perfil-usuario">{{ perfilRotulo() }}</span>
-    </div>
-  </header>
-
   @if (acessoRestrito()) {
     <main class="bloco-acesso-restrito">
       <div class="cartao-restrito">

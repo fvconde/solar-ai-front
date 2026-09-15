@@ -2,6 +2,7 @@ import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/c
 import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
 import { filter, map } from 'rxjs';
+import { SessaoStore } from '../sessao/sessao-store';
 
 @Component({
   selector: 'app-cabecalho',
@@ -9,14 +10,32 @@ import { filter, map } from 'rxjs';
   imports: [RouterLink, RouterLinkActive],
   template: `
     <header>
-      <div class="lado-esquerdo">
-        <a routerLink="/" class="marca-link"><span class="marca">SOLAR</span></a>
-        <span class="identificacao">Lia · assistente de IA</span>
-      </div>
-      <nav class="navegacao">
-        <a routerLink="/" class="link-nav" [class.ativo]="chatAtivo()">Chat</a>
-        <a routerLink="/painel" class="link-nav" [class.ativo]="painelAtivo()">Painel do Corretor</a>
-      </nav>
+      @if (painelComSessao()) {
+        <div class="lado-esquerdo">
+          <a routerLink="/" class="marca-link"><span class="marca">SOLAR</span></a>
+          <span class="identificacao">Painel</span>
+        </div>
+        <div class="lado-direito">
+          <nav class="navegacao">
+            <a routerLink="/" class="link-nav">Chat</a>
+          </nav>
+          <div class="bloco-usuario">
+            <span class="nome-usuario">{{ usuarioNome() }}</span>
+            <span class="perfil-usuario">{{ perfilRotulo() }}</span>
+          </div>
+        </div>
+      } @else {
+        <div class="lado-esquerdo">
+          <a routerLink="/" class="marca-link"><span class="marca">SOLAR</span></a>
+          <span class="identificacao">Lia · assistente de IA</span>
+        </div>
+        <nav class="navegacao">
+          <a routerLink="/" class="link-nav" [class.ativo]="chatAtivo()">Chat</a>
+          <a routerLink="/painel" class="link-nav" [class.ativo]="painelAtivo()"
+            >Painel do Corretor</a
+          >
+        </nav>
+      }
     </header>
   `,
   styles: `
@@ -50,6 +69,31 @@ import { filter, map } from 'rxjs';
     .identificacao {
       font-size: 13px;
       line-height: 1.3;
+      color: var(--texto-secundario);
+    }
+
+    .lado-direito {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .bloco-usuario {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+    }
+
+    .nome-usuario {
+      font-size: 15px;
+      font-weight: 500;
+      color: var(--texto-primario);
+    }
+
+    .perfil-usuario {
+      font-size: 12.5px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
       color: var(--texto-secundario);
     }
 
@@ -91,18 +135,25 @@ import { filter, map } from 'rxjs';
       .navegacao {
         gap: 12px;
       }
+      .lado-direito {
+        width: 100%;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 12px;
+      }
     }
   `,
 })
 export class Cabecalho {
   private readonly router = inject(Router);
+  private readonly sessao = inject(SessaoStore);
 
   private readonly urlAtual = toSignal(
     this.router.events.pipe(
       filter((evento) => evento instanceof NavigationEnd),
-      map(() => this.router.url)
+      map(() => this.router.url),
     ),
-    { initialValue: this.router.url }
+    { initialValue: this.router.url },
   );
 
   private readonly rotaAtual = computed(() => this.urlAtual().split('?')[0]);
@@ -113,4 +164,17 @@ export class Cabecalho {
   });
 
   readonly chatAtivo = computed(() => !this.painelAtivo());
+
+  readonly sessaoAtiva = computed(() => this.sessao.corretor() !== null);
+  readonly painelComSessao = computed(() => this.painelAtivo() && this.sessaoAtiva());
+  readonly usuarioNome = computed(() => this.sessao.corretor()?.nome ?? '');
+  readonly perfilRotulo = computed(() => {
+    const p = this.sessao.perfil();
+    if (p === 'supervisor') {
+      return this.sessao.vinculoAtivo()
+        ? 'Supervisor · carteira própria'
+        : 'Supervisor · sem carteira';
+    }
+    return 'Corretor';
+  });
 }

@@ -1,6 +1,9 @@
+import { provideHttpClient } from '@angular/common/http';
+import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+import { SessaoStore } from '../sessao/sessao-store';
 import { Cabecalho } from './cabecalho';
 
 @Component({ template: '' })
@@ -13,6 +16,8 @@ describe('Cabecalho', () => {
     await TestBed.configureTestingModule({
       imports: [Cabecalho],
       providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
         provideRouter([
           { path: '', component: TelaFalsa },
           { path: 'entrar', component: TelaFalsa },
@@ -23,6 +28,10 @@ describe('Cabecalho', () => {
     }).compileComponents();
 
     router = TestBed.inject(Router);
+  });
+
+  afterEach(() => {
+    TestBed.inject(SessaoStore).limpar();
   });
 
   async function montarEm(url: string) {
@@ -36,7 +45,7 @@ describe('Cabecalho', () => {
     const html = fixture.nativeElement as HTMLElement;
     return (
       Array.from(html.querySelectorAll<HTMLElement>('.link-nav')).find((a) =>
-        a.textContent?.includes('Painel do Corretor')
+        a.textContent?.includes('Painel do Corretor'),
       ) ?? null
     );
   }
@@ -45,7 +54,7 @@ describe('Cabecalho', () => {
     const html = fixture.nativeElement as HTMLElement;
     return (
       Array.from(html.querySelectorAll<HTMLElement>('.link-nav')).find(
-        (a) => a.textContent?.trim() === 'Chat'
+        (a) => a.textContent?.trim() === 'Chat',
       ) ?? null
     );
   }
@@ -88,9 +97,47 @@ describe('Cabecalho', () => {
     for (const rota of ['/', '/privacidade', '/entrar', '/entrar?token=abc', '/painel']) {
       const fixture = await montarEm(rota);
       const ativos = (fixture.nativeElement as HTMLElement).querySelectorAll('.link-nav.ativo');
-      expect(ativos.length)
-        .withContext(`rota ${rota}`)
-        .toBe(1);
+      expect(ativos.length).withContext(`rota ${rota}`).toBe(1);
     }
+  });
+
+  it('no painel com sessão ativa, exibe cabeçalho unificado com Painel, link para Chat e dados do usuário', async () => {
+    const sessao = TestBed.inject(SessaoStore);
+    sessao.definir({
+      corretor: {
+        id: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
+        nome: 'Renata Costa',
+        especialidade: 'moradia',
+      },
+      perfil: 'corretor',
+    });
+
+    const fixture = await montarEm('/painel');
+    const html = fixture.nativeElement as HTMLElement;
+
+    expect(html.querySelector('.identificacao')?.textContent).toBe('Painel');
+    expect(linkChat(fixture)).toBeTruthy();
+    expect(linkPainel(fixture)).toBeNull();
+    expect(html.querySelector('.nome-usuario')?.textContent).toBe('Renata Costa');
+    expect(html.querySelector('.perfil-usuario')?.textContent).toBe('Corretor');
+  });
+
+  it('no painel com sessão de supervisor sem carteira, exibe perfil com rótulo correto', async () => {
+    const sessao = TestBed.inject(SessaoStore);
+    sessao.definir({
+      corretor: {
+        id: '3f6b9c21-4d0a-4c7e-9a11-000000000099',
+        nome: 'Carlos Supervisor',
+        especialidade: 'geral',
+      },
+      perfil: 'supervisor',
+      vinculoAtivo: false,
+    });
+
+    const fixture = await montarEm('/painel');
+    const html = fixture.nativeElement as HTMLElement;
+
+    expect(html.querySelector('.nome-usuario')?.textContent).toBe('Carlos Supervisor');
+    expect(html.querySelector('.perfil-usuario')?.textContent).toBe('Supervisor · sem carteira');
   });
 });
