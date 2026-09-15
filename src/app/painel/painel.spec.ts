@@ -5,66 +5,132 @@ import { provideRouter, Router } from '@angular/router';
 import { CorretorSessao } from '../entrar/entrar-contrato';
 import { SessaoStore } from '../sessao/sessao-store';
 import { Painel } from './painel';
-import { FilaLeadsResponse } from './painel-contrato';
+import { FilaLeadsResponse, LeadDetalheResponse } from './painel-contrato';
 
-describe('Painel', () => {
+describe('Painel (S-21)', () => {
   let httpMock: HttpTestingController;
   let sessao: SessaoStore;
+  let router: Router;
 
-  const corretorLogado: CorretorSessao = {
-    id: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
-    nome: 'Helena Braga',
+  const corretorComum: CorretorSessao = {
+    id: 'c-201',
+    nome: 'Diego Marques',
     especialidade: 'moradia',
   };
 
-  const filaLeadsMock: FilaLeadsResponse = {
-    total: 4,
-    leads: [
+  const filaMock: FilaLeadsResponse = {
+    total: 2,
+    itens: [
       {
-        id: '0191e4b8-0001-7000-8000-000000000001',
-        nome: 'Lead Score 100',
-        intencao: 'compra',
-        score: 100,
-        ultimaInteracao: '2026-09-10T10:00:00Z',
-        status: 'encaminhado',
-        corretorId: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
-        corretorNome: 'Helena Braga',
-        regiao: 'Pinheiros',
+        id: 'l1',
+        nomeExibicao: 'Marina Sales',
+        referencia: '1001',
+        pedidoResumo: 'Apartamento para alugar · 2 quartos · Pinheiros',
+        criadoEm: new Date(Date.now() - 26 * 60 * 1000).toISOString(),
+        qualificacao: 90,
+        leadStatus: 'encaminhado',
+        encaminhamentoStatus: 'atribuido',
+        corretor: { id: 'c-201', nome: 'Diego Marques', iniciais: 'DM' },
       },
       {
-        id: '0191e4b8-0002-7000-8000-000000000002',
-        nome: 'Lead Score 80',
-        intencao: 'aluguel',
-        score: 80,
-        ultimaInteracao: '2026-09-10T09:30:00Z',
-        status: 'encaminhado',
-        corretorId: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
-        corretorNome: 'Helena Braga',
-        regiao: 'Vila Mariana',
-      },
-      {
-        id: '0191e4b8-0003-7000-8000-000000000003',
-        nome: 'Lead Score 70',
-        intencao: 'investimento',
-        score: 70,
-        ultimaInteracao: '2026-09-10T09:00:00Z',
-        status: 'encaminhado',
-        corretorId: '3f6b9c21-4d0a-4c7e-9a11-000000000002',
-        corretorNome: 'Rafael Nunes',
-        regiao: 'Moema',
-      },
-      {
-        id: '0191e4b8-0004-7000-8000-000000000004',
-        nome: 'Lead Score 45',
-        intencao: 'compra',
-        score: 45,
-        ultimaInteracao: '2026-09-10T08:30:00Z',
-        status: 'novo',
-        corretorId: null,
-        corretorNome: null,
-        regiao: 'Butantã',
+        id: 'l3',
+        nomeExibicao: null,
+        referencia: '4821',
+        pedidoResumo: 'Apartamento para alugar · 2 quartos · Vila Madalena',
+        criadoEm: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+        qualificacao: 50,
+        leadStatus: 'novo',
+        encaminhamentoStatus: null,
+        corretor: null,
       },
     ],
+  };
+
+  const detalheMockComConversa: LeadDetalheResponse = {
+    id: 'l1',
+    nomeExibicao: 'Marina Sales',
+    referencia: '1001',
+    pedidoResumo: 'Apartamento para alugar · 2 quartos · Pinheiros',
+    criadoEm: '2026-09-15T15:00:00Z',
+    leadStatus: 'encaminhado',
+    contato: {
+      telefone: '(11) 98765-4321',
+      email: 'marina.sales@exemplo.com.br',
+    },
+    qualificacao: {
+      valor: 90,
+      fatores: [
+        { codigo: 'finalidade', rotulo: 'Finalidade da busca', pontos: 15, preenchido: true },
+        { codigo: 'bairro', rotulo: 'Bairro dentro da busca', pontos: 20, preenchido: true },
+        { codigo: 'quartos', rotulo: 'Número de quartos', pontos: 15, preenchido: true },
+        { codigo: 'faixa', rotulo: 'Faixa de aluguel informada', pontos: 20, preenchido: true },
+        { codigo: 'prazo', rotulo: 'Prazo de mudança', pontos: 10, preenchido: false },
+        {
+          codigo: 'contato',
+          rotulo: 'Contato confirmado para o corretor',
+          pontos: 20,
+          preenchido: true,
+        },
+      ],
+    },
+    resumo: {
+      perfil: 'Procura apartamento de dois quartos em Pinheiros.',
+      orcamento: 'Até R$ 3.600.',
+      imoveis: 'Perto do metrô e da Faria Lima.',
+      objecoes: 'Não aceita imóvel sem vaga.',
+      proximoPasso: 'Agendar visita presencial.',
+    },
+    encaminhamento: {
+      id: 42,
+      status: 'atribuido',
+      corretor: { id: 'c-201', nome: 'Renata Costa', iniciais: 'RC' },
+      atribuidoEm: new Date(Date.now() - 12 * 60 * 1000).toISOString(),
+    },
+    agendamento: {
+      dataHora: '2026-09-18T15:30:00Z',
+      status: 'confirmado',
+    },
+    imoveisSugeridos: [
+      {
+        id: 'im-1',
+        tipo: 'Apartamento',
+        bairro: 'Pinheiros',
+        quartos: 2,
+        metragem: 68,
+        precoVenda: null,
+        precoAluguel: 3400,
+        motivo: 'Dois quartos ao lado da estação Fradique Coutinho.',
+      },
+    ],
+    transcricao: [
+      {
+        papel: 'lead',
+        texto: 'Olá, gostaria de ver opções em Pinheiros.',
+        em: '2026-09-15T15:00:00Z',
+      },
+      {
+        papel: 'lia',
+        texto: 'Olá! Posso te ajudar. Quantos quartos procura?',
+        em: '2026-09-15T15:01:00Z',
+      },
+      { papel: 'lead', texto: 'Preciso de 2 quartos com vaga.', em: '2026-09-15T15:02:00Z' },
+      { papel: 'lia', texto: 'Qual sua faixa de valor para aluguel?', em: '2026-09-15T15:03:00Z' },
+      { papel: 'lead', texto: 'Até 3600 com condomínio.', em: '2026-09-15T15:04:00Z' },
+      {
+        papel: 'lia',
+        texto: 'Perfeito! Tenho ótimas opções para te apresentar.',
+        em: '2026-09-15T15:05:00Z',
+      },
+    ],
+  };
+
+  const detalheSemResumoNemAgendamento: LeadDetalheResponse = {
+    ...detalheMockComConversa,
+    id: 'l2',
+    nomeExibicao: 'Cláudia Menezes',
+    resumo: null,
+    agendamento: null,
+    qualificacao: { valor: null, fatores: detalheMockComConversa.qualificacao.fatores },
   };
 
   beforeEach(async () => {
@@ -75,122 +141,354 @@ describe('Painel', () => {
 
     httpMock = TestBed.inject(HttpTestingController);
     sessao = TestBed.inject(SessaoStore);
-    sessao.definir(corretorLogado);
+    router = TestBed.inject(Router);
+
+    sessao.definir({
+      corretor: corretorComum,
+      perfil: 'corretor',
+      corretorId: 'c-201',
+      vinculoAtivo: true,
+      filtrosPermitidos: ['meus_leads'],
+      filtroInicial: 'meus_leads',
+    });
   });
 
   afterEach(() => {
     httpMock.verify();
   });
 
-  function montarComFila(fila: FilaLeadsResponse = filaLeadsMock) {
-    const fixture = TestBed.createComponent(Painel);
-    fixture.detectChanges();
-    httpMock.expectOne((req) => req.url === '/painel/leads').flush(fila);
-    fixture.detectChanges();
-    return fixture;
-  }
-
-  it('carrega a fila direto da sessão, sem pedir chave nem mostrar grade de corretores', () => {
-    const fixture = montarComFila();
-    const html = fixture.nativeElement as HTMLElement;
-
-    expect(html.querySelector('.cartao-identificacao')).toBeNull();
-    expect(html.querySelector('.input-chave')).toBeNull();
-    expect(html.querySelector('.grade-corretores')).toBeNull();
-    expect(html.querySelector('.tabela-leads')).toBeTruthy();
-    expect(html.querySelector('.nome-ativo')?.textContent).toContain('Helena Braga');
-  });
-
-  it('não envia X-Chave-Privacidade nem X-Corretor-Id e usa credenciais do cookie', () => {
+  function montarComponente(fila: FilaLeadsResponse = filaMock) {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
     const req = httpMock.expectOne((r) => r.url === '/painel/leads');
-    expect(req.request.headers.has('X-Chave-Privacidade')).toBeFalse();
-    expect(req.request.headers.has('X-Corretor-Id')).toBeFalse();
-    expect(req.request.headers.has('X-Admin-Key')).toBeFalse();
-    expect(req.request.headers.has('Authorization')).toBeFalse();
-    expect(req.request.withCredentials).toBeTrue();
-    req.flush(filaLeadsMock);
-  });
+    req.flush(fila);
+    fixture.detectChanges();
 
-  it('nunca chama o endpoint removido /painel/corretores', () => {
-    montarComFila();
-    expect(httpMock.match('/painel/corretores').length).toBe(0);
-  });
+    return fixture;
+  }
 
-  it('ordenação coloca score 100 acima do 45', () => {
-    const fixture = montarComFila();
+  it('1. transcrição exibe os turnos na ordem cronológica certa', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    reqDet.flush(detalheMockComConversa);
+    fixture.detectChanges();
+
     const html = fixture.nativeElement as HTMLElement;
-    const scores = Array.from(html.querySelectorAll('.badge-score')).map((el) =>
-      el.textContent?.trim()
+    const liaMensagens = html.querySelectorAll('app-mensagem-lia');
+    const pessoaMensagens = html.querySelectorAll('app-mensagem-pessoa');
+
+    expect(liaMensagens.length).toBe(3);
+    expect(pessoaMensagens.length).toBe(3);
+
+    const falas = Array.from(html.querySelectorAll('.fala, .bolha')).map((el) =>
+      el.textContent?.trim(),
     );
-
-    expect(scores[0]).toBe('100');
-    expect(scores[3]).toBe('45');
+    expect(falas.length).toBe(6);
+    expect(falas[0]).toBe('Olá, gostaria de ver opções em Pinheiros.');
+    expect(falas[1]).toBe('Olá! Posso te ajudar. Quantos quartos procura?');
+    expect(falas[4]).toBe('Até 3600 com condomínio.');
+    expect(falas[5]).toBe('Perfeito! Tenho ótimas opções para te apresentar.');
   });
 
-  it('tabela não exibe colunas de contato nem telefone nem email (LGPD)', () => {
-    const fixture = montarComFila();
-    const html = fixture.nativeElement as HTMLElement;
-    const headers = Array.from(html.querySelectorAll('th')).map((th) => th.textContent?.trim());
+  it('2. seção de agendamento vazia permanece presente na interface', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
 
-    expect(headers).not.toContain('Contato');
-    expect(headers).not.toContain('Telefone');
-    expect(headers).not.toContain('Email');
-    expect(html.querySelector('.celula-contato')).toBeNull();
-  });
-
-  it('lead sem corretor aparece marcado e não escondido', () => {
-    const fixture = montarComFila();
-    const html = fixture.nativeElement as HTMLElement;
-    const semCorretor = html.querySelector('.badge-sem-corretor');
-
-    expect(semCorretor).toBeTruthy();
-    expect(semCorretor?.textContent).toContain('Sem corretor');
-  });
-
-  it('filtro meus leads refaz a chamada sem cabeçalho de identidade', () => {
-    const fixture = montarComFila();
-    expect(fixture.componentInstance.leads().length).toBe(4);
-
-    fixture.componentInstance.alternarFiltroMeusLeads();
+    comp.selecionarLead(filaMock.itens[1]);
     fixture.detectChanges();
 
-    const reqMeus = httpMock.expectOne((req) => req.url === '/painel/leads');
-    expect(reqMeus.request.headers.has('X-Corretor-Id')).toBeFalse();
-    expect(reqMeus.request.params.get('meusLeads')).toBe('true');
-
-    reqMeus.flush({ total: 2, leads: filaLeadsMock.leads.slice(0, 2) });
+    const reqDet = httpMock.expectOne('/painel/leads/l3');
+    reqDet.flush(detalheSemResumoNemAgendamento);
     fixture.detectChanges();
 
-    expect(fixture.componentInstance.leads().length).toBe(2);
-    expect((fixture.nativeElement as HTMLElement).querySelectorAll('.linha-lead').length).toBe(2);
+    const html = fixture.nativeElement as HTMLElement;
+    const secaoAgendamento = html.querySelector('.secao-agendamento');
+    expect(secaoAgendamento).toBeTruthy();
+    expect(secaoAgendamento?.textContent).toContain('Nenhum agendamento confirmado.');
   });
 
-  it('fila vazia mostra estado vazio e não tabela em branco', () => {
-    const fixture = montarComFila({ total: 0, leads: [] });
+  it('3. resumo nulo exibe frase de ausência e ação "Gerar de novo" chamando sem forcar', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[1]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l3');
+    reqDet.flush(detalheSemResumoNemAgendamento);
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const secaoResumo = html.querySelector('.secao-resumo');
+    expect(secaoResumo).toBeTruthy();
+    expect(secaoResumo?.textContent).toContain('Resumo ainda não disponível.');
+
+    const botaoGerar = html.querySelector('.botao-gerar-resumo') as HTMLButtonElement;
+    expect(botaoGerar).toBeTruthy();
+    expect(botaoGerar.textContent).toContain('Gerar de novo');
+
+    botaoGerar.click();
+    fixture.detectChanges();
+
+    const reqPost = httpMock.expectOne((r) => r.url === '/encaminhamentos/42/resumo');
+    expect(reqPost.request.method).toBe('POST');
+    expect(reqPost.request.params.has('forcar')).toBeFalse();
+    reqPost.flush({
+      perfil: 'Perfil gerado agora',
+      orcamento: null,
+      imoveis: null,
+      objecoes: null,
+      proximoPasso: null,
+    });
+    fixture.detectChanges();
+
+    expect(html.querySelector('.secao-resumo')?.textContent).toContain('Perfil gerado agora');
+  });
+
+  it('resumo presente chama "Gerar de novo" com forcar=true', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    reqDet.flush(detalheMockComConversa);
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const botaoGerar = html.querySelector('.botao-gerar-resumo') as HTMLButtonElement;
+    expect(botaoGerar).toBeTruthy();
+
+    botaoGerar.click();
+    fixture.detectChanges();
+
+    const reqPost = httpMock.expectOne((r) => r.url === '/encaminhamentos/42/resumo');
+    expect(reqPost.request.method).toBe('POST');
+    expect(reqPost.request.params.get('forcar')).toBe('true');
+    reqPost.flush({
+      perfil: 'Perfil atualizado',
+      orcamento: 'Novo orçamento',
+      imoveis: null,
+      objecoes: null,
+      proximoPasso: null,
+    });
+    fixture.detectChanges();
+
+    expect(html.querySelector('.secao-resumo')?.textContent).toContain('Perfil atualizado');
+  });
+
+  it('4. nenhum POST de resumo dispara em render', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    reqDet.flush(detalheMockComConversa);
+    fixture.detectChanges();
+
+    const posts = httpMock.match((r) => r.method === 'POST' && r.url.includes('/resumo'));
+    expect(posts.length).toBe(0);
+  });
+
+  it('5. filtros são derivados exclusivamente de filtrosPermitidos', () => {
+    sessao.definir({
+      corretor: { id: 's-1', nome: 'Helena Vasques', especialidade: 'moradia' },
+      perfil: 'supervisor',
+      corretorId: 'c-201',
+      vinculoAtivo: true,
+      filtrosPermitidos: ['minha_fila', 'sem_corretor', 'visao_geral'],
+      filtroInicial: 'minha_fila',
+    });
+
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    const req = httpMock.expectOne((r) => r.url === '/painel/leads');
+    expect(req.request.params.get('filtro')).toBe('minha_fila');
+    req.flush(filaMock);
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const botoes = Array.from(html.querySelectorAll('.botao-filtro')).map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(botoes).toEqual(['Minha fila', 'Sem corretor elegível', 'Visão geral']);
+  });
+
+  it('6. supervisor sem vínculo não renderiza "Minha fila" de forma alguma', () => {
+    sessao.definir({
+      corretor: { id: 's-2', nome: 'Marcelo Tavares', especialidade: 'geral' },
+      perfil: 'supervisor',
+      corretorId: null,
+      vinculoAtivo: false,
+      filtrosPermitidos: ['sem_corretor', 'visao_geral'],
+      filtroInicial: 'sem_corretor',
+    });
+
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    const req = httpMock.expectOne((r) => r.url === '/painel/leads');
+    expect(req.request.params.get('filtro')).toBe('sem_corretor');
+    req.flush(filaMock);
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const textoTodo = html.textContent || '';
+    expect(textoTodo).not.toContain('Minha fila');
+
+    const botoes = Array.from(html.querySelectorAll('.botao-filtro')).map((b) =>
+      b.textContent?.trim(),
+    );
+    expect(botoes).toEqual(['Sem corretor elegível', 'Visão geral']);
+    expect(html.querySelector('.banner-nota-perfil')).toBeTruthy();
+  });
+
+  it('7. estado de acesso restrito bloqueia antes de chamada de dados ou em 403', () => {
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    const req = httpMock.expectOne((r) => r.url === '/painel/leads');
+    req.flush(
+      { erro: 'perfil_insuficiente', perfilExigido: 'supervisor' },
+      { status: 403, statusText: 'Forbidden' },
+    );
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    expect(html.querySelector('.bloco-acesso-restrito')).toBeTruthy();
+    expect(html.querySelector('.titulo-restrito')?.textContent).toContain(
+      'Esta área exige perfil supervisor',
+    );
+    expect(html.querySelector('.frase-restrito')?.textContent).toContain(
+      'Sua sessão não tem essa autorização.',
+    );
+    expect(html.querySelector('.link-voltar-meus')).toBeTruthy();
+    expect(html.querySelector('.lista-leads')).toBeNull();
+  });
+
+  it('8. telefone e e-mail aparecem em texto claro e sem máscara', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    reqDet.flush(detalheMockComConversa);
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const contatos = Array.from(html.querySelectorAll('.valor-contato')).map((c) =>
+      c.textContent?.trim(),
+    );
+    expect(contatos).toContain('(11) 98765-4321');
+    expect(contatos).toContain('marina.sales@exemplo.com.br');
+  });
+
+  it('9. lead fora do escopo responde 404 e exibe mensagem sem revelar existência', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead({ ...filaMock.itens[0], id: 'l999' });
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l999');
+    reqDet.flush({ erro: 'lead_nao_encontrado' }, { status: 404, statusText: 'Not Found' });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    expect(html.querySelector('.coluna-detalhe .estado-feedback.erro')?.textContent).toContain(
+      'Lead não encontrado.',
+    );
+  });
+
+  it('10. lead sem nome é formatado como "Lead sem nome - {referencia}"', () => {
+    const fixture = montarComponente();
     const html = fixture.nativeElement as HTMLElement;
 
-    expect(html.querySelector('.estado-vazio')).toBeTruthy();
-    expect(html.querySelector('.estado-vazio')?.textContent).toContain('Nenhum lead na fila');
-    expect(html.querySelector('.tabela-leads')).toBeNull();
+    const nomes = Array.from(html.querySelectorAll('.nome-lead')).map((n) => n.textContent?.trim());
+    expect(nomes).toContain('Lead sem nome - 4821');
   });
 
-  it('401 na fila limpa a sessão em memória e volta para o login', () => {
-    const router = TestBed.inject(Router);
+  it('11. modal de qualificação abre e exibe fatores e pesos', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    reqDet.flush(detalheMockComConversa);
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const botaoModal = html.querySelector('.botao-link-qualificacao') as HTMLButtonElement;
+    expect(botaoModal).toBeTruthy();
+
+    botaoModal.click();
+    fixture.detectChanges();
+
+    const modal = html.querySelector('.modal-conteudo');
+    expect(modal).toBeTruthy();
+    expect(modal?.textContent).toContain('Como a qualificação é calculada');
+    expect(modal?.textContent).toContain('Finalidade da busca');
+    expect(modal?.textContent).toContain('+15');
+    expect(modal?.textContent).toContain('Informado');
+
+    const botaoFechar = html.querySelector('.botao-fechar-modal') as HTMLButtonElement;
+    botaoFechar.click();
+    fixture.detectChanges();
+
+    expect(html.querySelector('.modal-conteudo')).toBeNull();
+  });
+
+  it('12. 401 na fila limpa a sessão e redireciona para /entrar', () => {
     const navegou = spyOn(router, 'navigate');
 
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
     httpMock
-      .expectOne((req) => req.url === '/painel/leads')
+      .expectOne((r) => r.url === '/painel/leads')
       .flush('Sessão inválida', { status: 401, statusText: 'Unauthorized' });
     fixture.detectChanges();
 
     expect(sessao.corretor()).toBeNull();
     expect(navegou).toHaveBeenCalledWith(['/entrar']);
-    expect(fixture.componentInstance.leads().length).toBe(0);
+  });
+
+  it('13. frases de vazio exibem texto literal com acentuação correta para cada filtro', () => {
+    // meus_leads
+    const f1 = montarComponente({ total: 0, itens: [] });
+    expect(f1.nativeElement.querySelector('.fila-vazia')?.textContent).toContain(
+      'Você não tem leads atribuídos agora. Quando a Lia encaminhar um lead para você, ele aparece aqui.',
+    );
+
+    // supervisor sem_corretor
+    sessao.definir({
+      corretor: { id: 's-1', nome: 'Helena', especialidade: 'geral' },
+      perfil: 'supervisor',
+      corretorId: null,
+      vinculoAtivo: false,
+      filtrosPermitidos: ['sem_corretor', 'visao_geral'],
+      filtroInicial: 'sem_corretor',
+    });
+    const f2 = TestBed.createComponent(Painel);
+    f2.detectChanges();
+    httpMock.expectOne((r) => r.url === '/painel/leads').flush({ total: 0, itens: [] });
+    f2.detectChanges();
+    expect(f2.nativeElement.querySelector('.fila-vazia')?.textContent).toContain(
+      'Nenhum lead sem corretor elegível agora.',
+    );
   });
 });
