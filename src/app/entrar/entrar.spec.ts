@@ -39,7 +39,7 @@ describe('Entrar', () => {
   function irParaSenha(fixture: ComponentFixture<Entrar>, email = 'renata.costa@solar.com.br') {
     fixture.componentInstance.email.set(email);
     fixture.componentInstance.continuarComEmail();
-    httpMock.expectOne('/painel/identificacao').flush({ cadastrado: true });
+    httpMock.expectOne('/api/painel/identificacao').flush({ cadastrado: true });
     fixture.detectChanges();
   }
 
@@ -61,7 +61,7 @@ describe('Entrar', () => {
       expect(html.querySelector('#campo-email')).toBeTruthy();
       expect(html.querySelector('#campo-senha')).toBeNull();
       expect(html.querySelector<HTMLButtonElement>('.botao-primario')?.disabled).toBeTrue();
-      httpMock.expectNone('/painel/identificacao');
+      httpMock.expectNone('/api/painel/identificacao');
     });
 
     it('e-mail mal formatado mostra a mensagem do handoff sem chamar a API', () => {
@@ -73,7 +73,7 @@ describe('Entrar', () => {
       fixture.detectChanges();
 
       expect(texto(fixture)).toContain('Verifique o formato do e-mail.');
-      httpMock.expectNone('/painel/identificacao');
+      httpMock.expectNone('/api/painel/identificacao');
     });
 
     it('Tela 2 aparece para e-mail cadastrado, com e-mail travado e link Trocar', () => {
@@ -99,7 +99,7 @@ describe('Entrar', () => {
 
       fixture.componentInstance.email.set('diego.freitas@imoveis.com');
       fixture.componentInstance.continuarComEmail();
-      httpMock.expectOne('/painel/identificacao').flush({ cadastrado: false });
+      httpMock.expectOne('/api/painel/identificacao').flush({ cadastrado: false });
       fixture.detectChanges();
 
       expect(texto(fixture)).toContain('Não encontramos esse e-mail');
@@ -119,7 +119,7 @@ describe('Entrar', () => {
       fixture.componentInstance.senha.set('senha-correta-123');
       fixture.componentInstance.entrar();
 
-      const req = httpMock.expectOne('/painel/sessoes');
+      const req = httpMock.expectOne('/api/painel/sessoes');
       expect(req.request.method).toBe('POST');
       expect(req.request.withCredentials).toBeTrue();
       expect(req.request.headers.has('X-Chave-Privacidade')).toBeFalse();
@@ -142,7 +142,7 @@ describe('Entrar', () => {
       fixture.componentInstance.senha.set('senha-supervisor-123');
       fixture.componentInstance.entrar();
 
-      const req = httpMock.expectOne('/painel/sessoes');
+      const req = httpMock.expectOne('/api/painel/sessoes');
       const respostaSupervisor: SessaoResposta = {
         corretor: {
           id: '8a9b0c1d-0000-0000-0000-000000000099',
@@ -176,7 +176,7 @@ describe('Entrar', () => {
       fixture.componentInstance.senha.set('errada');
       fixture.componentInstance.entrar();
       httpMock
-        .expectOne('/painel/sessoes')
+        .expectOne('/api/painel/sessoes')
         .flush({ tentativasRestantes: 4 }, { status: 401, statusText: 'Unauthorized' });
       fixture.detectChanges();
       expect(texto(fixture)).not.toContain('Restam');
@@ -184,7 +184,7 @@ describe('Entrar', () => {
       fixture.componentInstance.senha.set('errada de novo');
       fixture.componentInstance.entrar();
       httpMock
-        .expectOne('/painel/sessoes')
+        .expectOne('/api/painel/sessoes')
         .flush({ tentativasRestantes: 2 }, { status: 401, statusText: 'Unauthorized' });
       fixture.detectChanges();
       expect(texto(fixture)).toContain(
@@ -200,7 +200,7 @@ describe('Entrar', () => {
       fixture.componentInstance.senha.set('quinta tentativa');
       fixture.componentInstance.entrar();
       httpMock
-        .expectOne('/painel/sessoes')
+        .expectOne('/api/painel/sessoes')
         .flush({ bloqueadoPorSegundos: 30 }, { status: 423, statusText: 'Locked' });
       fixture.detectChanges();
 
@@ -241,7 +241,7 @@ describe('Entrar', () => {
       ).toBe('renata.costa@solar.com.br');
 
       fixture.componentInstance.enviarLink();
-      const req = httpMock.expectOne('/painel/senha/recuperacoes');
+      const req = httpMock.expectOne('/api/painel/senha/recuperacoes');
       expect(req.request.method).toBe('POST');
       req.flush(null, { status: 202, statusText: 'Accepted' });
       fixture.detectChanges();
@@ -259,7 +259,7 @@ describe('Entrar', () => {
       fixture.componentInstance.irParaRecuperacao();
       fixture.componentInstance.enviarLink();
       httpMock
-        .expectOne('/painel/senha/recuperacoes')
+        .expectOne('/api/painel/senha/recuperacoes')
         .flush('nao encontrado', { status: 404, statusText: 'Not Found' });
       fixture.detectChanges();
 
@@ -275,7 +275,7 @@ describe('Entrar', () => {
       fixture.componentInstance.irParaRecuperacao();
       fixture.componentInstance.enviarLink();
       httpMock
-        .expectOne('/painel/senha/recuperacoes')
+        .expectOne('/api/painel/senha/recuperacoes')
         .flush(null, { status: 429, statusText: 'Too Many Requests' });
       fixture.detectChanges();
 
@@ -293,7 +293,7 @@ describe('Entrar', () => {
       fixture.detectChanges();
 
       httpMock
-        .expectOne('/painel/senha/recuperacoes/token-valido-123')
+        .expectOne('/api/painel/senha/recuperacoes/token-valido-123')
         .flush({ email: 'renata.costa@solar.com.br' });
       fixture.detectChanges();
 
@@ -308,7 +308,7 @@ describe('Entrar', () => {
       fixture.detectChanges();
       fixture.componentInstance.salvarSenha();
 
-      const req = httpMock.expectOne('/painel/senha');
+      const req = httpMock.expectOne('/api/painel/senha');
       expect(req.request.body).toEqual({
         token: 'token-valido-123',
         novaSenha: 'senha-nova-forte',
@@ -326,7 +326,7 @@ describe('Entrar', () => {
       const fixture = TestBed.createComponent(Entrar);
       fixture.detectChanges();
       httpMock
-        .expectOne('/painel/senha/recuperacoes/token-valido-123')
+        .expectOne('/api/painel/senha/recuperacoes/token-valido-123')
         .flush({ email: 'renata.costa@solar.com.br' });
       fixture.detectChanges();
 
@@ -340,7 +340,7 @@ describe('Entrar', () => {
       expect(html.querySelector('#campo-nova-senha')?.classList).not.toContain('com-erro');
       expect(html.querySelector<HTMLButtonElement>('.botao-primario')?.disabled).toBeTrue();
 
-      httpMock.expectNone('/painel/senha');
+      httpMock.expectNone('/api/painel/senha');
     });
 
     it('Tela 6b substitui o formulário quando o link expirou ou já foi usado', async () => {
@@ -350,7 +350,7 @@ describe('Entrar', () => {
       fixture.detectChanges();
 
       httpMock
-        .expectOne('/painel/senha/recuperacoes/token-queimado')
+        .expectOne('/api/painel/senha/recuperacoes/token-queimado')
         .flush('expirado', { status: 410, statusText: 'Gone' });
       fixture.detectChanges();
 
@@ -367,7 +367,7 @@ describe('Entrar', () => {
       const fixture = TestBed.createComponent(Entrar);
       fixture.detectChanges();
       httpMock
-        .expectOne('/painel/senha/recuperacoes/token-queimado')
+        .expectOne('/api/painel/senha/recuperacoes/token-queimado')
         .flush('expirado', { status: 410, statusText: 'Gone' });
       fixture.detectChanges();
 

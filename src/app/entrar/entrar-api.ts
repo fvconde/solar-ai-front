@@ -14,7 +14,7 @@ export class EntrarApi {
 
   identificar(email: string): Observable<IdentificacaoResposta> {
     return this.http.post<IdentificacaoResposta>(
-      '/painel/identificacao',
+      '/api/painel/identificacao',
       { email },
       { withCredentials: true }
     );
@@ -22,19 +22,19 @@ export class EntrarApi {
 
   criarSessao(email: string, senha: string): Observable<SessaoResposta> {
     return this.http.post<SessaoResposta>(
-      '/painel/sessoes',
+      '/api/painel/sessoes',
       { email, senha },
       { withCredentials: true }
     );
   }
 
   obterSessao(): Observable<SessaoResposta> {
-    return this.http.get<SessaoResposta>('/painel/sessao', { withCredentials: true });
+    return this.http.get<SessaoResposta>('/api/painel/sessao', { withCredentials: true });
   }
 
   pedirRecuperacao(email: string): Observable<void> {
     return this.http.post<void>(
-      '/painel/senha/recuperacoes',
+      '/api/painel/senha/recuperacoes',
       { email },
       { withCredentials: true }
     );
@@ -42,14 +42,14 @@ export class EntrarApi {
 
   validarRecuperacao(token: string): Observable<RecuperacaoResposta> {
     return this.http.get<RecuperacaoResposta>(
-      `/painel/senha/recuperacoes/${encodeURIComponent(token)}`,
+      `/api/painel/senha/recuperacoes/${encodeURIComponent(token)}`,
       { withCredentials: true }
     );
   }
 
   salvarSenha(token: string, novaSenha: string): Observable<SessaoResposta> {
     return this.http.post<SessaoResposta>(
-      '/painel/senha',
+      '/api/painel/senha',
       { token, novaSenha },
       { withCredentials: true }
     );
