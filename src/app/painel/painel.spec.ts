@@ -161,7 +161,7 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
-    const req = httpMock.expectOne((r) => r.url === '/painel/leads');
+    const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     req.flush(fila);
     fixture.detectChanges();
 
@@ -175,7 +175,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
     reqDet.flush(detalheMockComConversa);
     fixture.detectChanges();
 
@@ -203,7 +203,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[1]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l3');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l3');
     reqDet.flush(detalheSemResumoNemAgendamento);
     fixture.detectChanges();
 
@@ -220,7 +220,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[1]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l3');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l3');
     reqDet.flush(detalheSemResumoNemAgendamento);
     fixture.detectChanges();
 
@@ -258,7 +258,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
     reqDet.flush(detalheMockComConversa);
     fixture.detectChanges();
 
@@ -291,7 +291,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
     reqDet.flush(detalheMockComConversa);
     fixture.detectChanges();
 
@@ -312,7 +312,7 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
-    const req = httpMock.expectOne((r) => r.url === '/painel/leads');
+    const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     expect(req.request.params.get('filtro')).toBe('minha_fila');
     req.flush(filaMock);
     fixture.detectChanges();
@@ -337,7 +337,7 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
-    const req = httpMock.expectOne((r) => r.url === '/painel/leads');
+    const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     expect(req.request.params.get('filtro')).toBe('sem_corretor');
     req.flush(filaMock);
     fixture.detectChanges();
@@ -356,7 +356,7 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
-    const req = httpMock.expectOne((r) => r.url === '/painel/leads');
+    const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     req.flush(
       { erro: 'perfil_insuficiente', perfilExigido: 'supervisor' },
       { status: 403, statusText: 'Forbidden' },
@@ -382,7 +382,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
     reqDet.flush(detalheMockComConversa);
     fixture.detectChanges();
 
@@ -401,7 +401,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead({ ...filaMock.itens[0], id: 'l999' });
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l999');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l999');
     reqDet.flush({ erro: 'lead_nao_encontrado' }, { status: 404, statusText: 'Not Found' });
     fixture.detectChanges();
 
@@ -426,7 +426,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
     reqDet.flush(detalheMockComConversa);
     fixture.detectChanges();
 
@@ -458,7 +458,7 @@ describe('Painel (S-21)', () => {
     fixture.detectChanges();
 
     httpMock
-      .expectOne((r) => r.url === '/painel/leads')
+      .expectOne((r) => r.url === '/api/painel/leads')
       .flush('Sessão inválida', { status: 401, statusText: 'Unauthorized' });
     fixture.detectChanges();
 
@@ -484,7 +484,7 @@ describe('Painel (S-21)', () => {
     });
     const f2 = TestBed.createComponent(Painel);
     f2.detectChanges();
-    httpMock.expectOne((r) => r.url === '/painel/leads').flush({ total: 0, itens: [] });
+    httpMock.expectOne((r) => r.url === '/api/painel/leads').flush({ total: 0, itens: [] });
     f2.detectChanges();
     expect(f2.nativeElement.querySelector('.fila-vazia')?.textContent).toContain(
       'Nenhum lead sem corretor elegível agora.',
@@ -498,7 +498,7 @@ describe('Painel (S-21)', () => {
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
 
-    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
     reqDet.flush({
       ...detalheMockComConversa,
       resumo: {
@@ -557,7 +557,7 @@ describe('Painel (S-21)', () => {
     // Caso 2: No detalhe com encaminhamento nulo -> não renderiza linha de encaminhamento
     comp.selecionarLead(filaMock.itens[1]);
     fixture.detectChanges();
-    const reqDet2 = httpMock.expectOne('/painel/leads/l3');
+    const reqDet2 = httpMock.expectOne('/api/painel/leads/l3');
     reqDet2.flush({
       ...detalheSemResumoNemAgendamento,
       leadStatus: 'novo',
@@ -574,7 +574,7 @@ describe('Painel (S-21)', () => {
     // Caso 3: No detalhe com encaminhamento aguardando -> 'Encaminhado' vs 'Sem corretor elegível'
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
-    const reqDet3 = httpMock.expectOne('/painel/leads/l1');
+    const reqDet3 = httpMock.expectOne('/api/painel/leads/l1');
     reqDet3.flush({
       ...detalheMockComConversa,
       leadStatus: 'encaminhado',
@@ -608,7 +608,7 @@ describe('Painel (S-21)', () => {
     // No detalhe:
     comp.selecionarLead(filaMock.itens[0]);
     fixture.detectChanges();
-    const reqDet = httpMock.expectOne('/painel/leads/l1');
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
     reqDet.flush(detalheMockComConversa);
     fixture.detectChanges();
 
@@ -626,7 +626,7 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
-    const req403 = httpMock.expectOne((r) => r.url === '/painel/leads');
+    const req403 = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     req403.flush({ erro: 'perfil_insuficiente' }, { status: 403, statusText: 'Forbidden' });
     fixture.detectChanges();
 
@@ -637,7 +637,7 @@ describe('Painel (S-21)', () => {
     linkVoltar.click();
     fixture.detectChanges();
 
-    const reqReload = httpMock.expectOne((r) => r.url === '/painel/leads');
+    const reqReload = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     expect(reqReload.request.params.get('filtro')).toBe('meus_leads');
     reqReload.flush(filaMock);
     fixture.detectChanges();
