@@ -1,0 +1,234 @@
+<section class="tela-entrar">
+  <div class="cartao">
+    @switch (tela()) {
+      @case ('email') {
+        <h1 class="titulo">Entre ou cadastre-se</h1>
+        <p class="apoio">
+          Você vai poder aproveitar uma lista de possíveis leads já qualificados pela Lia para
+          atender.
+        </p>
+
+        <label class="rotulo" for="campo-email">E-mail</label>
+        <input
+          id="campo-email"
+          class="campo"
+          type="email"
+          name="email"
+          autocomplete="username"
+          placeholder="Endereço de e-mail"
+          [class.com-erro]="erroEmail()"
+          [ngModel]="email()"
+          (ngModelChange)="email.set($event)"
+          (keyup.enter)="continuarComEmail()"
+        />
+        @if (erroEmail()) {
+          <p class="erro">{{ erroEmail() }}</p>
+        }
+
+        <button
+          class="botao-primario"
+          type="button"
+          [disabled]="!email().trim() || enviando()"
+          (click)="continuarComEmail()"
+        >
+          @if (enviando()) {
+            <span class="verificando" aria-label="Verificando"></span>
+          } @else {
+            Continuar
+          }
+        </button>
+      }
+
+      @case ('senha') {
+        <h1 class="titulo">Que bom ver você de novo</h1>
+        <p class="apoio">Encontramos seu cadastro. Digite sua senha para entrar na fila.</p>
+
+        <div class="linha-rotulo">
+          <span class="rotulo">E-mail</span>
+          <button class="link-mono" type="button" (click)="trocarEmail()">Trocar</button>
+        </div>
+        <p class="campo-travado">{{ email() }}</p>
+
+        <label class="rotulo" for="campo-senha">Senha</label>
+        <input
+          id="campo-senha"
+          class="campo"
+          type="password"
+          name="senha"
+          autocomplete="current-password"
+          placeholder="Digite sua senha"
+          [class.com-erro]="erroSenha()"
+          [disabled]="bloqueado()"
+          [ngModel]="senha()"
+          (ngModelChange)="senha.set($event)"
+          (keyup.enter)="entrar()"
+        />
+
+        @if (bloqueado()) {
+          <p class="campo-bloqueado">Bloqueado temporariamente</p>
+          @if (segundosBloqueado() === segundosDeBloqueio) {
+            <p class="erro">{{ erroSenha() }}</p>
+          } @else {
+            <p class="erro">Aguarde {{ contagemRegressiva() }}</p>
+          }
+        } @else if (erroSenha()) {
+          <p class="erro">{{ erroSenha() }}</p>
+        }
+
+        <button
+          class="botao-primario"
+          type="button"
+          [disabled]="!senha() || bloqueado() || enviando()"
+          (click)="entrar()"
+        >
+          @if (enviando()) {
+            <span class="verificando" aria-label="Verificando"></span>
+          } @else {
+            Entrar
+          }
+        </button>
+
+        <button class="link-mono link-rota" type="button" (click)="irParaRecuperacao()">
+          Esqueci minha senha
+        </button>
+      }
+
+      @case ('nao-encontrado') {
+        <div class="linha-rotulo">
+          <span class="rotulo">E-mail</span>
+          <button class="link-mono" type="button" (click)="trocarEmail()">Trocar</button>
+        </div>
+        <p class="campo-travado">{{ email() }}</p>
+
+        <h1 class="titulo">Não encontramos esse e-mail</h1>
+        <p class="apoio">
+          Não identificamos esse e-mail no cadastro de corretores da Solar. Um dos nossos
+          especialistas vai entrar em contato por e-mail para dar sequência.
+        </p>
+
+        <button class="botao-secundario" type="button" (click)="trocarEmail()">
+          Tentar outro e-mail
+        </button>
+      }
+
+      @case ('recuperar') {
+        <button class="link-mono link-voltar" type="button" (click)="voltarParaLogin()">
+          ← Voltar para o login
+        </button>
+
+        <h1 class="titulo">Redefinir senha</h1>
+        <p class="apoio">Informe seu e-mail. Enviaremos um link para você criar uma nova senha.</p>
+
+        <label class="rotulo" for="campo-email-recuperacao">E-mail</label>
+        <input
+          id="campo-email-recuperacao"
+          class="campo campo-preenchido"
+          type="email"
+          name="email"
+          autocomplete="username"
+          placeholder="Endereço de e-mail"
+          [class.com-erro]="erroEmail()"
+          [ngModel]="email()"
+          (ngModelChange)="email.set($event)"
+          (keyup.enter)="enviarLink()"
+        />
+        @if (erroEmail()) {
+          <p class="erro">{{ erroEmail() }}</p>
+        }
+
+        <button
+          class="botao-primario"
+          type="button"
+          [disabled]="!email().trim() || enviando()"
+          (click)="enviarLink()"
+        >
+          @if (enviando()) {
+            <span class="verificando" aria-label="Verificando"></span>
+          } @else {
+            Enviar link
+          }
+        </button>
+      }
+
+      @case ('link-enviado') {
+        <h1 class="titulo">Verifique seu e-mail</h1>
+        <p class="apoio">
+          Enviamos um link de redefinição para {{ email() }}. O link expira em 30 minutos.
+        </p>
+
+        <button
+          class="botao-secundario"
+          type="button"
+          [disabled]="enviando()"
+          (click)="reenviarLink()"
+        >
+          Reenviar e-mail
+        </button>
+      }
+
+      @case ('nova-senha') {
+        <h1 class="titulo">Crie uma nova senha</h1>
+        <p class="apoio">
+          Escolha uma nova senha para {{ email() }}. Ao salvar, você entra direto no painel do
+          corretor.
+        </p>
+
+        <label class="rotulo" for="campo-nova-senha">Nova senha</label>
+        <input
+          id="campo-nova-senha"
+          class="campo"
+          type="password"
+          name="novaSenha"
+          autocomplete="new-password"
+          placeholder="Mínimo 8 caracteres"
+          [ngModel]="novaSenha()"
+          (ngModelChange)="novaSenha.set($event)"
+        />
+
+        <label class="rotulo" for="campo-confirmacao">Confirmar nova senha</label>
+        <input
+          id="campo-confirmacao"
+          class="campo"
+          type="password"
+          name="confirmacaoSenha"
+          autocomplete="new-password"
+          placeholder="Repita a nova senha"
+          [class.com-erro]="confirmacaoDivergente()"
+          [ngModel]="confirmacaoSenha()"
+          (ngModelChange)="confirmacaoSenha.set($event)"
+        />
+        @if (confirmacaoDivergente()) {
+          <p class="erro">As senhas não coincidem.</p>
+        }
+        @if (erroNovaSenha()) {
+          <p class="erro">{{ erroNovaSenha() }}</p>
+        }
+
+        <button
+          class="botao-primario"
+          type="button"
+          [disabled]="!podeSalvarSenha() || enviando()"
+          (click)="salvarSenha()"
+        >
+          @if (enviando()) {
+            <span class="verificando" aria-label="Verificando"></span>
+          } @else {
+            Salvar e entrar
+          }
+        </button>
+      }
+
+      @case ('link-invalido') {
+        <h1 class="titulo">Este link não é mais válido</h1>
+        <p class="apoio">
+          Links de redefinição expiram em 30 minutos ou deixam de funcionar depois do primeiro uso.
+          Peça um novo link para continuar.
+        </p>
+
+        <button class="botao-primario" type="button" (click)="pedirNovoLink()">
+          Pedir novo link
+        </button>
+      }
+    }
+  </div>
+</section>

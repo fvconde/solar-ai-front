@@ -1,0 +1,352 @@
+<div class="painel-shell">
+  @if (acessoRestrito()) {
+    <main class="bloco-acesso-restrito">
+      <div class="cartao-restrito">
+        <span class="badge-estado">
+          <span class="marca-estado marca-neutro"></span>
+          <span class="rotulo-estado">Acesso restrito</span>
+        </span>
+        <h2 class="titulo-restrito">Esta área exige perfil supervisor</h2>
+        <p class="frase-restrito">
+          Sua sessão não tem essa autorização. Peça ao seu gestor para liberar o perfil de
+          supervisor, se for necessário para o seu trabalho.
+        </p>
+        <button type="button" class="link-voltar-meus" (click)="voltarParaMeusLeads()">
+          Voltar para Meus leads
+        </button>
+      </div>
+    </main>
+  } @else {
+    <div class="barra-fila">
+      <div class="grupo-esquerda-fila">
+        <span class="titulo-fila">Fila de leads</span>
+        @if (filtroFixo()) {
+          <span class="badge-filtro-fixo">Meus leads</span>
+        }
+        @if (temSeletor()) {
+          <nav class="seletor-filtros" aria-label="Filtros da fila">
+            @for (f of filtrosPermitidos(); track f) {
+              <button
+                type="button"
+                class="botao-filtro"
+                [class.ativo]="filtroAtivo() === f"
+                (click)="selecionarFiltro(f)"
+              >
+                {{ rotulosFiltro[f] }}
+              </button>
+            }
+          </nav>
+        }
+      </div>
+    </div>
+
+    <main class="corpo-painel" [class.detalhe-aberto]="!!leadSelecionadoId()">
+      <section class="coluna-fila" aria-label="Lista de leads">
+        @if (carregandoLeads()) {
+          <div class="estado-feedback">Carregando fila de leads...</div>
+        } @else if (erroLeads()) {
+          <div class="estado-feedback erro">
+            <p>{{ erroLeads() }}</p>
+            <button type="button" class="botao-repetir" (click)="carregarLeads()">
+              Tentar novamente
+            </button>
+          </div>
+        } @else if (leads().length === 0) {
+          <div class="fila-vazia">
+            <p>{{ textoFilaVazia() }}</p>
+          </div>
+        } @else {
+          <div class="lista-leads">
+            @for (lead of leads(); track lead.id) {
+              <article
+                class="item-lead"
+                [class.selecionado]="lead.id === leadSelecionadoId()"
+                (click)="selecionarLead(lead)"
+                tabindex="0"
+                (keydown.enter)="selecionarLead(lead)"
+              >
+                <div class="info-lead">
+                  <h2 class="nome-lead">
+                    {{ formatarNomeLead(lead.nomeExibicao, lead.referencia) }}
+                  </h2>
+                  <p class="pedido-lead">{{ lead.pedidoResumo }}</p>
+                  <p class="tempo-lead">{{ formatarTempoRelativo(lead.criadoEm) }}</p>
+                </div>
+                <div class="status-duas-linhas">
+                  <div class="linha-status-lead">
+                    @if (lead.leadStatus === 'encaminhado') {
+                      <span class="badge-estado">
+                        <span class="marca-estado marca-sucesso"></span>
+                        <span class="rotulo-estado">Encaminhado</span>
+                      </span>
+                    } @else {
+                      <span class="badge-estado">
+                        <span class="marca-estado marca-neutro"></span>
+                        <span class="rotulo-estado">Ainda não encaminhado</span>
+                      </span>
+                    }
+                  </div>
+                  <div class="linha-status-encaminhamento">
+                    @if (lead.encaminhamentoStatus === 'atribuido') {
+                      <span class="texto-simples-atribuido">Atribuído</span>
+                    } @else if (lead.encaminhamentoStatus === 'aguardando') {
+                      <span class="badge-estado">
+                        <span class="marca-estado marca-neutro"></span>
+                        <span class="rotulo-estado">Sem corretor elegível</span>
+                      </span>
+                    }
+                  </div>
+                </div>
+              </article>
+            }
+          </div>
+        }
+      </section>
+
+      <section class="coluna-detalhe" aria-label="Detalhe do lead selecionado">
+        <button type="button" class="botao-voltar-fila" (click)="voltarParaFila()">
+          Voltar para a fila
+        </button>
+
+        @if (!leadSelecionadoId()) {
+          <div class="sem-selecao">
+            <p>
+              Selecione um lead na fila para ver a qualificação, o resumo da Lia e o agendamento.
+            </p>
+          </div>
+        } @else if (carregandoDetalhe()) {
+          <div class="estado-feedback">Carregando detalhe do lead...</div>
+        } @else if (erroDetalhe()) {
+          <div class="estado-feedback erro">
+            <p>{{ erroDetalhe() }}</p>
+          </div>
+        } @else if (leadDetalhe(); as detalhe) {
+          <div class="conteudo-detalhe">
+            <header class="cabecalho-detalhe">
+              <span class="rotulo-secao">Detalhe do lead</span>
+              <h1 class="nome-detalhe">
+                {{ formatarNomeLead(detalhe.nomeExibicao, detalhe.referencia) }}
+              </h1>
+              <p class="pedido-detalhe">{{ detalhe.pedidoResumo }}</p>
+            </header>
+
+            <section class="card-secao secao-situacao">
+              <span class="rotulo-secao">Situação</span>
+              <div class="grade-situacao">
+                <span class="rotulo-campo">Status do lead</span>
+                <div class="valor-campo">
+                  @if (detalhe.leadStatus === 'encaminhado') {
+                    <span class="badge-estado">
+                      <span class="marca-estado marca-sucesso"></span>
+                      <span class="rotulo-estado">Encaminhado</span>
+                    </span>
+                  } @else {
+                    <span class="badge-estado">
+                      <span class="marca-estado marca-neutro"></span>
+                      <span class="rotulo-estado">Ainda não encaminhado</span>
+                    </span>
+                  }
+                </div>
+                @if (detalhe.encaminhamento) {
+                  <span class="rotulo-campo">Encaminhamento</span>
+                  <div class="valor-campo">
+                    @if (detalhe.encaminhamento.status === 'atribuido') {
+                      <span class="texto-simples-atribuido">Atribuído</span>
+                    } @else if (detalhe.encaminhamento.status === 'aguardando') {
+                      <span class="badge-estado">
+                        <span class="marca-estado marca-neutro"></span>
+                        <span class="rotulo-estado">Sem corretor elegível</span>
+                      </span>
+                    }
+                  </div>
+                }
+              </div>
+              @if (linhaEncaminhamento(detalhe); as linhaCorretor) {
+                <p class="linha-corretor">{{ linhaCorretor }}</p>
+              }
+            </section>
+
+            <section class="card-secao secao-contato">
+              <span class="rotulo-secao">Contato</span>
+              <div class="grade-contato">
+                <span class="rotulo-campo">Telefone</span>
+                <span class="valor-contato">{{
+                  detalhe.contato.telefone || 'Telefone não informado.'
+                }}</span>
+                <span class="rotulo-campo">E-mail</span>
+                <span class="valor-contato">{{
+                  detalhe.contato.email || 'E-mail não informado.'
+                }}</span>
+              </div>
+            </section>
+
+            <section class="card-secao secao-qualificacao">
+              <span class="rotulo-secao">Qualificação</span>
+              @if (
+                detalhe.qualificacao.valor !== null && detalhe.qualificacao.valor !== undefined
+              ) {
+                <div class="linha-score">
+                  <span class="numero-score">{{ detalhe.qualificacao.valor }}</span>
+                  <span class="sufixo-score">de 100 · completude das informações</span>
+                </div>
+              } @else {
+                <p class="frase-ausencia">Qualificação ainda não disponível.</p>
+              }
+              <button
+                type="button"
+                class="botao-link-qualificacao"
+                (click)="abrirModalQualificacao()"
+              >
+                Como a qualificação é calculada
+              </button>
+            </section>
+
+            <section class="card-secao secao-resumo">
+              <span class="rotulo-secao">Resumo da Lia</span>
+              @if (resumoAusente()) {
+                <p class="frase-ausencia">Resumo ainda não disponível.</p>
+              } @else {
+                @if (detalhe.resumo?.perfil; as perfil) {
+                  <div class="subsecao-resumo">
+                    <span class="subtitulo-resumo">Perfil</span>
+                    <p class="texto-resumo">{{ perfil }}</p>
+                  </div>
+                }
+                @if (detalhe.resumo?.orcamento; as orcamento) {
+                  <div class="subsecao-resumo">
+                    <span class="subtitulo-resumo">Orçamento</span>
+                    <p class="texto-resumo">{{ orcamento }}</p>
+                  </div>
+                }
+                @if (detalhe.resumo?.imoveis; as imoveis) {
+                  <div class="subsecao-resumo">
+                    <span class="subtitulo-resumo">Imóveis</span>
+                    <p class="texto-resumo">{{ imoveis }}</p>
+                  </div>
+                }
+                @if (detalhe.resumo?.objecoes; as objecoes) {
+                  <div class="subsecao-resumo">
+                    <span class="subtitulo-resumo">Objeções</span>
+                    <p class="texto-resumo">{{ objecoes }}</p>
+                  </div>
+                }
+                @if (detalhe.resumo?.proximoPasso; as proximoPasso) {
+                  <div class="subsecao-resumo">
+                    <span class="subtitulo-resumo">Próximo passo</span>
+                    <p class="texto-resumo">{{ proximoPasso }}</p>
+                  </div>
+                }
+              }
+              <button
+                type="button"
+                class="botao-gerar-resumo"
+                [disabled]="gerandoResumo() || !detalhe.encaminhamento?.id"
+                (click)="gerarResumoDeNovo()"
+              >
+                {{ gerandoResumo() ? 'Gerando resumo...' : 'Gerar de novo' }}
+              </button>
+            </section>
+
+            @if (detalhe.imoveisSugeridos && detalhe.imoveisSugeridos.length > 0) {
+              <section class="card-secao secao-imoveis">
+                <span class="rotulo-secao">Imóveis sugeridos</span>
+                <div class="pilha-imoveis">
+                  @for (imovel of detalhe.imoveisSugeridos; track imovel.id) {
+                    <app-card-imovel [imovel]="imovel" />
+                  }
+                </div>
+              </section>
+            }
+
+            <section class="card-secao secao-agendamento">
+              <span class="rotulo-secao">Agendamento</span>
+              @if (detalhe.agendamento && detalhe.agendamento.status === 'confirmado') {
+                <div class="linha-agendamento">
+                  <span class="badge-estado">
+                    <span class="marca-estado marca-sucesso"></span>
+                    <span class="rotulo-estado">Confirmado</span>
+                  </span>
+                  <span class="data-agendamento">{{
+                    formatarDataHora(detalhe.agendamento.dataHora)
+                  }}</span>
+                </div>
+              } @else {
+                <p class="frase-ausencia">Nenhum agendamento confirmado.</p>
+              }
+            </section>
+
+            <section class="card-secao secao-transcricao">
+              <span class="rotulo-secao">Transcrição da conversa</span>
+              @if (detalhe.transcricao && detalhe.transcricao.length > 0) {
+                <div class="pilha-transcricao">
+                  @for (turno of detalhe.transcricao; track $index) {
+                    @if (turno.papel === 'lia') {
+                      <app-mensagem-lia [texto]="turno.texto" [hora]="formatarHora(turno.em)" />
+                    } @else {
+                      <app-mensagem-pessoa [texto]="turno.texto" [hora]="formatarHora(turno.em)" />
+                    }
+                  }
+                </div>
+              } @else {
+                <p class="frase-ausencia">Nenhuma mensagem registrada na conversa.</p>
+              }
+            </section>
+          </div>
+        }
+      </section>
+    </main>
+  }
+
+  @if (modalQualificacaoAberto()) {
+    <div class="modal-backdrop" (click)="fecharModalQualificacao()">
+      <div
+        class="modal-conteudo"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="titulo-modal-qual"
+        (click)="$event.stopPropagation()"
+      >
+        <div class="modal-cabecalho">
+          <span class="rotulo-secao">Qualificação</span>
+          <h2 id="titulo-modal-qual" class="modal-titulo">Como a qualificação é calculada</h2>
+          <p class="modal-descricao">
+            A qualificação mede a completude das informações que a Lia conseguiu levantar na
+            conversa — não a chance de fechamento e não a prioridade do lead. Cada fator vale um
+            peso fixo; a pontuação é a soma dos fatores já informados.
+          </p>
+        </div>
+
+        <div class="modal-tabela">
+          <div class="tabela-cabecalho">
+            <span>Fator</span>
+            <span>Peso</span>
+            <span>Neste lead</span>
+          </div>
+          @for (f of leadDetalhe()?.qualificacao?.fatores ?? []; track f.codigo) {
+            <div class="tabela-linha">
+              <span class="fator-rotulo">{{ f.rotulo }}</span>
+              <span class="fator-peso">+{{ f.pontos }}</span>
+              <span class="fator-estado">{{ f.preenchido ? 'Informado' : 'Não informado' }}</span>
+            </div>
+          }
+        </div>
+
+        <p class="modal-total">
+          @if (
+            leadDetalhe()?.qualificacao?.valor === null ||
+            leadDetalhe()?.qualificacao?.valor === undefined
+          ) {
+            Sem nenhum fator informado, a pontuação não é exibida: a tela mostra "Qualificação ainda
+            não disponível." em lugar de zero.
+          } @else {
+            Soma dos fatores informados neste lead: {{ totalPontosQualificacao() }} de 100.
+          }
+        </p>
+
+        <button type="button" class="botao-fechar-modal" (click)="fecharModalQualificacao()">
+          Fechar
+        </button>
+      </div>
+    </div>
+  }
+</div>

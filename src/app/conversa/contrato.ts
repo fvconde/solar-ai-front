@@ -30,6 +30,18 @@ export interface ImovelSugerido {
   motivo: string;
 }
 
+export interface SlotOferecido {
+  id: number;
+  inicio: string;
+  fim: string;
+}
+
+export interface AgendamentoDaConversa {
+  estado: 'confirmado' | 'indisponivel';
+  horario: SlotOferecido | null;
+  alternativas: SlotOferecido[];
+}
+
 export interface MensagemHistorico {
   papel: Papel;
   texto: string;
@@ -48,6 +60,8 @@ export interface MensagemDaConversa {
   proximaAcao: ProximaAcao | null;
   /** Nome do corretor atribuido, nas falas que fecharam em handoff. */
   corretor: string | null;
+  agendamento: AgendamentoDaConversa | null;
+  imoveisSugeridos?: ImovelSugerido[] | null;
 }
 
 export interface ContatoRequest {
@@ -64,6 +78,17 @@ export interface NovaMensagemRequest {
   texto: string;
 }
 
+export interface ConsentimentoRequest {
+  versaoAvisoPrivacidade: string;
+}
+
+export interface ConsentimentoResponse {
+  conversaId: string;
+  leadId: string;
+  consentimentoEm: string;
+  versaoAvisoPrivacidade: string;
+}
+
 export interface MensagemResponse {
   conversaId: string;
   resposta: string;
@@ -73,6 +98,7 @@ export interface MensagemResponse {
   imoveisSugeridos: ImovelSugerido[];
   corretor: string | null;
   contatoPendente: boolean;
+  agendamento: AgendamentoDaConversa | null;
 }
 
 export interface ConversaResponse {
@@ -80,7 +106,11 @@ export interface ConversaResponse {
   perfilLead: PerfilLead;
   mensagens: MensagemDaConversa[];
   contatoPendente: boolean;
+  consentimentoEm: string | null;
+  versaoAvisoPrivacidade: string | null;
 }
+
+export const VERSAO_AVISO_PRIVACIDADE = '2026-09-11';
 
 export const LIMITE_MENSAGEM = 4000;
 export const LIMITE_NOME = 200;

@@ -1,8 +1,10 @@
-import { ChangeDetectionStrategy, Component, output, signal } from '@angular/core';
+import { ChangeDetectionStrategy, Component, input, output, signal } from '@angular/core';
+import { RouterLink } from '@angular/router';
 
 @Component({
   selector: 'app-aviso-consentimento',
   changeDetection: ChangeDetectionStrategy.OnPush,
+  imports: [RouterLink],
   template: `
     <section class="aviso">
       <div class="painel">
@@ -17,7 +19,7 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
         </p>
         <p>
           Suas mensagens não são usadas pelo provedor para treinar ou melhorar modelos de
-          inteligência artificial. Consulte a <a href="#politica-de-privacidade">Política de Privacidade</a>.
+          inteligência artificial. Consulte o <a routerLink="/privacidade">Aviso de Privacidade completo</a>.
         </p>
         <p>Não envie documentos, dados bancários ou informações sensíveis.</p>
       </div>
@@ -31,11 +33,21 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
       </label>
 
       <div class="acoes">
-        <button type="button" class="primario" [disabled]="!marcado()" (click)="aceitar.emit()">
-          Concordo e continuar
+        <button
+          type="button"
+          class="primario"
+          [disabled]="!marcado() || enviando()"
+          (click)="aceitar.emit()"
+        >
+          {{ enviando() ? 'Registrando...' : 'Concordo e continuar' }}
         </button>
-        <button type="button" class="secundario" (click)="recusar.emit()">Não concordo</button>
+        <button type="button" class="secundario" [disabled]="enviando()" (click)="recusar.emit()">
+          Não concordo
+        </button>
       </div>
+      @if (erro()) {
+        <p class="erro" role="alert">{{ erro() }}</p>
+      }
     </section>
   `,
   styles: `
@@ -148,6 +160,12 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
       color: var(--texto-primario);
     }
 
+    .erro {
+      color: var(--erro);
+      font-size: 14px;
+      line-height: 1.45;
+    }
+
     @media (max-width: 640px) {
       .painel {
         padding: 16px;
@@ -164,6 +182,8 @@ import { ChangeDetectionStrategy, Component, output, signal } from '@angular/cor
   `,
 })
 export class AvisoConsentimento {
+  readonly enviando = input(false);
+  readonly erro = input<string | null>(null);
   readonly aceitar = output<void>();
   readonly recusar = output<void>();
 
