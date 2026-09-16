@@ -62,13 +62,13 @@ export class Entrar implements OnInit {
   });
 
   readonly confirmacaoDivergente = computed(
-    () => this.confirmacaoSenha().length > 0 && this.novaSenha() !== this.confirmacaoSenha()
+    () => this.confirmacaoSenha().length > 0 && this.novaSenha() !== this.confirmacaoSenha(),
   );
 
   readonly podeSalvarSenha = computed(
     () =>
       this.novaSenha().length >= MINIMO_CARACTERES_SENHA &&
-      this.novaSenha() === this.confirmacaoSenha()
+      this.novaSenha() === this.confirmacaoSenha(),
   );
 
   ngOnInit(): void {
@@ -115,7 +115,7 @@ export class Entrar implements OnInit {
         this.erroEmail.set(
           erro?.status === 400
             ? 'Verifique o formato do e-mail.'
-            : 'Não foi possível continuar. Tente novamente.'
+            : 'Não foi possível continuar. Tente novamente.',
         );
       },
     });
@@ -143,7 +143,7 @@ export class Entrar implements OnInit {
       next: (resposta) => {
         this.enviando.set(false);
         this.tentativasRestantes.set(null);
-        this.sessao.definir(resposta.corretor);
+        this.sessao.definir(resposta);
         this.router.navigate(['/painel']);
       },
       error: (erro) => {
@@ -161,7 +161,7 @@ export class Entrar implements OnInit {
           this.erroSenha.set(
             restantes !== null && restantes < TENTATIVAS_ATE_BLOQUEIO - 1
               ? `Senha incorreta. Restam ${restantes} tentativas antes do bloqueio temporário.`
-              : 'Senha incorreta.'
+              : 'Senha incorreta.',
           );
           return;
         }
@@ -238,7 +238,7 @@ export class Entrar implements OnInit {
     this.api.salvarSenha(this.token, this.novaSenha()).subscribe({
       next: (resposta) => {
         this.enviando.set(false);
-        this.sessao.definir(resposta.corretor);
+        this.sessao.definir(resposta);
         this.router.navigate(['/painel']);
       },
       error: (erro) => {
@@ -252,7 +252,7 @@ export class Entrar implements OnInit {
         this.erroNovaSenha.set(
           erro?.status === 400
             ? `A senha precisa ter no mínimo ${MINIMO_CARACTERES_SENHA} caracteres.`
-            : 'Não foi possível salvar a nova senha. Tente novamente.'
+            : 'Não foi possível salvar a nova senha. Tente novamente.',
         );
       },
     });
@@ -263,7 +263,7 @@ export class Entrar implements OnInit {
     this.tentativasRestantes.set(null);
     this.segundosBloqueado.set(segundos);
     this.erroSenha.set(
-      `Muitas tentativas incorretas. Formulário bloqueado por ${segundos} segundos.`
+      `Muitas tentativas incorretas. Formulário bloqueado por ${segundos} segundos.`,
     );
 
     this.cronometro = setInterval(() => {

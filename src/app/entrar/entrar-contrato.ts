@@ -10,6 +10,11 @@ export interface IdentificacaoResposta {
 
 export interface SessaoResposta {
   corretor: CorretorSessao;
+  perfil?: 'corretor' | 'supervisor';
+  corretorId?: string | null;
+  vinculoAtivo?: boolean;
+  filtrosPermitidos?: string[];
+  filtroInicial?: string;
 }
 
 export interface RecuperacaoResposta {

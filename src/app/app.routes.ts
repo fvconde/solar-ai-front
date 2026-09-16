@@ -9,6 +9,7 @@ export const routes: Routes = [
   { path: '', component: Chat },
   { path: 'entrar', component: Entrar },
   { path: 'painel', component: Painel, canActivate: [sessaoGuard] },
+  { path: 'painel/leads/:id', component: Painel, canActivate: [sessaoGuard] },
   { path: 'privacidade', component: PoliticaPrivacidade },
   { path: '**', redirectTo: '' },
 ];
