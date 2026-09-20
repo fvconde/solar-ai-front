@@ -32,6 +32,8 @@ export interface ItemLia {
   imoveis: ImovelSugerido[];
   /** Decide qual dos dois precos o cartao mostra. Null quando nao se sabe. */
   intencao: string | null;
+  /** So a fala que chega ao vivo passa pelo veu; historico entra pronto. */
+  revelar: boolean;
 }
 
 export interface ItemPessoa {
