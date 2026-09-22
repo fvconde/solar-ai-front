@@ -31,6 +31,31 @@
   --corpo: 18px;
 }
 
+/* Remove the browser's scrollbar arrow controls consistently across the app. */
+* {
+  scrollbar-width: thin;
+}
+
+*::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+*::-webkit-scrollbar-button:single-button,
+*::-webkit-scrollbar-button:vertical:start:decrement,
+*::-webkit-scrollbar-button:vertical:end:increment,
+*::-webkit-scrollbar-button:vertical:start:increment,
+*::-webkit-scrollbar-button:vertical:end:decrement {
+  display: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  min-width: 0 !important;
+  min-height: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
 @media (prefers-color-scheme: dark) {
   :root:not([data-tema='claro']) {
     --fundo-conversa: #14130f;

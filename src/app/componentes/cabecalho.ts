@@ -80,8 +80,9 @@ import { SessaoStore } from '../sessao/sessao-store';
 
     .bloco-usuario {
       display: flex;
-      align-items: baseline;
-      gap: 12px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 2px;
     }
 
     .nome-usuario {
@@ -91,7 +92,7 @@ import { SessaoStore } from '../sessao/sessao-store';
     }
 
     .perfil-usuario {
-      font-size: 12.5px;
+      font-size: 10px;
       letter-spacing: 0.08em;
       text-transform: uppercase;
       color: var(--texto-secundario);

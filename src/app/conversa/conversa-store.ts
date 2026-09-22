@@ -278,6 +278,7 @@ export class ConversaStore {
       hora: horaAgora(),
       imoveis: resposta.imoveisSugeridos ?? [],
       intencao: resposta.intencao,
+      revelar: true,
     });
 
     const eventoAgendamento = this.eventoDoAgendamento(resposta.agendamento);
@@ -338,6 +339,7 @@ export class ConversaStore {
               hora: horaDe(msg.em),
               imoveis: msg.imoveisSugeridos ?? [],
               intencao: conversa.perfilLead?.intencao ?? null,
+              revelar: true,
             });
 
             const eventoAgendamento = this.eventoDoAgendamento(msg.agendamento);
@@ -510,6 +512,7 @@ export class ConversaStore {
         hora: horaDe(mensagem.em),
         imoveis: mensagem.imoveisSugeridos ?? [],
         intencao,
+        revelar: false,
       });
 
       const eventoAgendamento = this.eventoDoAgendamento(mensagem.agendamento);

@@ -13,7 +13,7 @@ export class PainelApi {
   private readonly http = inject(HttpClient);
 
   obterSessao(): Observable<SessaoPainelResposta> {
-    return this.http.get<SessaoPainelResposta>('/painel/sessao', {
+    return this.http.get<SessaoPainelResposta>('/api/painel/sessao', {
       withCredentials: true,
     });
   }
@@ -27,14 +27,14 @@ export class PainelApi {
       params = params.set('intencao', intencao);
     }
 
-    return this.http.get<FilaLeadsResponse>('/painel/leads', {
+    return this.http.get<FilaLeadsResponse>('/api/painel/leads', {
       params,
       withCredentials: true,
     });
   }
 
   obterDetalheLead(id: string): Observable<LeadDetalheResponse> {
-    return this.http.get<LeadDetalheResponse>(`/painel/leads/${encodeURIComponent(id)}`, {
+    return this.http.get<LeadDetalheResponse>(`/api/painel/leads/${encodeURIComponent(id)}`, {
       withCredentials: true,
     });
   }

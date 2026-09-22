@@ -65,7 +65,7 @@ import { LIMITE_MENSAGEM } from '../conversa/contrato';
     textarea {
       flex: 1;
       min-height: 52px;
-      max-height: 148px;
+      max-height: calc(2.9em + 30px);
       padding: 14px 20px;
       border: 1px solid var(--borda-componente);
       border-radius: var(--raio-campo);
@@ -163,6 +163,12 @@ export class Composer {
 
   private ajustarAltura(area: HTMLTextAreaElement): void {
     area.style.height = 'auto';
-    area.style.height = `${area.scrollHeight}px`;
+    const estilos = getComputedStyle(area);
+    const bordasVerticais =
+      Number.parseFloat(estilos.borderTopWidth) + Number.parseFloat(estilos.borderBottomWidth);
+    const alturaNecessaria = area.scrollHeight + bordasVerticais;
+    const alturaMaxima = Number.parseFloat(estilos.maxHeight);
+
+    area.style.height = `${Math.min(alturaNecessaria, alturaMaxima)}px`;
   }
 }
