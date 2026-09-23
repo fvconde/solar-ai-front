@@ -3,11 +3,12 @@ import { toSignal } from '@angular/core/rxjs-interop';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { SessaoStore } from '../sessao/sessao-store';
+import { MenuPerfil } from './menu-perfil';
 
 @Component({
   selector: 'app-cabecalho',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink],
+  imports: [MenuPerfil, RouterLink],
   template: `
     <header>
       <div class="linha">
@@ -38,10 +39,7 @@ import { SessaoStore } from '../sessao/sessao-store';
             }
           </nav>
           @if (sessao.ativa()) {
-            <span class="usuario">
-              <span class="nome-usuario">{{ sessao.primeiroNome() }}</span>
-              <span class="avatar" aria-hidden="true">{{ sessao.iniciais() }}</span>
-            </span>
+            <app-menu-perfil />
           } @else {
             <a routerLink="/entrar" class="pilula-entrar">Entrar</a>
           }
@@ -163,34 +161,6 @@ import { SessaoStore } from '../sessao/sessao-store';
       }
     }
 
-    .usuario {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding-left: 20px;
-      border-left: 1px solid var(--borda-estrutura);
-    }
-
-    .nome-usuario {
-      font-size: 14px;
-      font-weight: 500;
-      color: var(--texto-primario);
-      white-space: nowrap;
-    }
-
-    .avatar {
-      display: grid;
-      place-items: center;
-      width: 34px;
-      height: 34px;
-      flex: none;
-      border-radius: 50%;
-      font-size: 12.5px;
-      font-weight: 600;
-      color: var(--marca);
-      background: color-mix(in srgb, var(--marca) 14%, var(--superficie-elevada));
-    }
-
     .abas {
       display: none;
     }
@@ -202,14 +172,8 @@ import { SessaoStore } from '../sessao/sessao-store';
       }
 
       .identificacao,
-      .navegacao,
-      .nome-usuario {
+      .navegacao {
         display: none;
-      }
-
-      .usuario {
-        padding-left: 0;
-        border-left: none;
       }
 
       .abas {
