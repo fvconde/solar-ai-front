@@ -1,9 +1,69 @@
 :host {
   display: flex;
-  flex-direction: column;
   flex: 1;
   min-height: 0;
   height: 100%;
+}
+
+.coluna-historico {
+  flex: none;
+  width: 280px;
+  min-height: 0;
+}
+
+.area-chat,
+.lista-historico {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.barra-conversas {
+  display: none;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--borda-estrutura);
+}
+
+.botao-conversas {
+  padding: 6px 14px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--marca);
+  background: none;
+  border: 1px solid var(--marca);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.convite {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 14px;
+  border: 1px dashed var(--borda-componente);
+  border-radius: 10px;
+  font-size: 15px;
+  color: var(--texto-secundario);
+}
+
+.convite-curto {
+  display: none;
+}
+
+.convite-link {
+  margin-left: auto;
+  font-weight: 600;
+}
+
+.convite-fechar {
+  padding: 4px 6px;
+  font-size: 13px;
+  color: var(--texto-secundario);
+  background: none;
+  border: none;
+  cursor: pointer;
 }
 
 .palco {
@@ -40,7 +100,25 @@
   border-top: 1px solid var(--borda-estrutura);
 }
 
+@media (max-width: 860px) {
+  .coluna-historico {
+    display: none;
+  }
+
+  .barra-conversas {
+    display: block;
+  }
+}
+
 @media (max-width: 640px) {
+  .convite-longo {
+    display: none;
+  }
+
+  .convite-curto {
+    display: inline;
+  }
+
   .coluna {
     padding: 24px 20px;
     gap: 24px;
