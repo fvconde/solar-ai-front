@@ -1,30 +1,49 @@
-import { inject, Injectable, signal } from '@angular/core';
+import { computed, inject, Injectable, signal } from '@angular/core';
 import { catchError, map, Observable, of, shareReplay, tap } from 'rxjs';
-import { EntrarApi } from '../entrar/entrar-api';
-import { CorretorSessao, SessaoResposta } from '../entrar/entrar-contrato';
+import { SessaoApi } from './sessao-api';
+import { Perfil, SessaoResponse, StatusCorretor, UsuarioSessao } from './sessao-contrato';
 
-export type DefinirSessaoPayload = SessaoResposta | CorretorSessao;
+export function iniciaisDe(nome: string): string {
+  const partes = nome.trim().split(/\s+/).filter(Boolean);
+  if (partes.length === 0) {
+    return '';
+  }
+  const primeira = partes[0][0];
+  const ultima = partes.length > 1 ? partes[partes.length - 1][0] : '';
+  return (primeira + ultima).toUpperCase();
+}
+
+export function primeiroNomeDe(nome: string): string {
+  return nome.trim().split(/\s+/)[0] ?? '';
+}
 
 @Injectable({ providedIn: 'root' })
 export class SessaoStore {
-  private readonly api = inject(EntrarApi);
-  private restauracao: Observable<CorretorSessao | null> | null = null;
+  private readonly api = inject(SessaoApi);
+  private restauracao: Observable<SessaoResponse | null> | null = null;
 
-  readonly corretor = signal<CorretorSessao | null>(null);
-  readonly perfil = signal<'corretor' | 'supervisor' | null>(null);
+  readonly usuario = signal<UsuarioSessao | null>(null);
+  readonly perfil = signal<Perfil | null>(null);
+  readonly statusCorretor = signal<StatusCorretor | null>(null);
   readonly corretorId = signal<string | null>(null);
   readonly vinculoAtivo = signal<boolean>(false);
   readonly filtrosPermitidos = signal<string[]>([]);
   readonly filtroInicial = signal<string | null>(null);
+  readonly pendentesAprovacao = signal<number | null>(null);
 
-  restaurar(): Observable<CorretorSessao | null> {
-    if (this.corretor()) {
-      return of(this.corretor());
-    }
+  readonly ativa = computed(() => this.usuario() !== null);
+  readonly temPainel = computed(
+    () => this.perfil() === 'corretor' || this.perfil() === 'supervisor',
+  );
+  readonly emAnalise = computed(
+    () => this.perfil() === 'corretor' && this.statusCorretor() === 'em_analise',
+  );
+  readonly primeiroNome = computed(() => primeiroNomeDe(this.usuario()?.nome ?? ''));
+  readonly iniciais = computed(() => iniciaisDe(this.usuario()?.nome ?? ''));
 
-    this.restauracao ??= this.api.obterSessao().pipe(
-      tap((resposta) => this.aplicarDados(resposta)),
-      map((resposta) => resposta.corretor),
+  restaurar(): Observable<SessaoResponse | null> {
+    this.restauracao ??= this.api.obter().pipe(
+      tap((resposta) => this.aplicar(resposta)),
       catchError(() => {
         this.limpar();
         return of(null);
@@ -35,48 +54,52 @@ export class SessaoStore {
     return this.restauracao;
   }
 
-  definir(dados: DefinirSessaoPayload): void {
-    if ('id' in dados && 'especialidade' in dados) {
-      const c = dados as CorretorSessao;
-      this.aplicarDados({
-        corretor: c,
-        perfil: 'corretor',
-        corretorId: c.id,
-        vinculoAtivo: true,
-        filtrosPermitidos: ['meus_leads'],
-        filtroInicial: 'meus_leads',
-      });
-      this.restauracao = of(c);
-    } else {
-      const resp = dados as SessaoResposta;
-      this.aplicarDados(resp);
-      this.restauracao = of(resp.corretor);
+  definir(resposta: SessaoResponse): void {
+    this.aplicar(resposta);
+    this.restauracao = of(resposta);
+  }
+
+  atualizarUsuario(dados: Pick<UsuarioSessao, 'nome' | 'email'>): void {
+    const atual = this.usuario();
+    if (atual) {
+      this.usuario.set({ ...atual, ...dados });
     }
   }
 
+  descontarPendente(): void {
+    const atual = this.pendentesAprovacao();
+    if (atual !== null) {
+      this.pendentesAprovacao.set(Math.max(atual - 1, 0));
+    }
+  }
+
+  sair(): Observable<void> {
+    return this.api.encerrar().pipe(
+      catchError(() => of(undefined)),
+      map(() => this.limpar()),
+    );
+  }
+
   limpar(): void {
-    this.corretor.set(null);
+    this.usuario.set(null);
     this.perfil.set(null);
+    this.statusCorretor.set(null);
     this.corretorId.set(null);
     this.vinculoAtivo.set(false);
     this.filtrosPermitidos.set([]);
     this.filtroInicial.set(null);
-    this.restauracao = null;
+    this.pendentesAprovacao.set(null);
+    this.restauracao = of(null);
   }
 
-  private aplicarDados(dados: SessaoResposta | null): void {
-    if (!dados) {
-      this.limpar();
-      return;
-    }
-
-    this.corretor.set(dados.corretor);
-    this.perfil.set(dados.perfil ?? 'corretor');
-    this.corretorId.set(
-      dados.corretorId !== undefined ? dados.corretorId : (dados.corretor?.id ?? null),
-    );
-    this.vinculoAtivo.set(dados.vinculoAtivo ?? true);
-    this.filtrosPermitidos.set(dados.filtrosPermitidos ?? ['meus_leads']);
-    this.filtroInicial.set(dados.filtroInicial ?? 'meus_leads');
+  private aplicar(dados: SessaoResponse): void {
+    this.usuario.set(dados.usuario);
+    this.perfil.set(dados.perfil);
+    this.statusCorretor.set(dados.statusCorretor);
+    this.corretorId.set(dados.corretorId);
+    this.vinculoAtivo.set(dados.vinculoAtivo);
+    this.filtrosPermitidos.set(dados.filtrosPermitidos ?? []);
+    this.filtroInicial.set(dados.filtroInicial);
+    this.pendentesAprovacao.set(dados.pendentesAprovacao);
   }
 }

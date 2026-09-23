@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { CorretorSessao } from '../entrar/entrar-contrato';
+import { UsuarioSessao } from '../sessao/sessao-contrato';
 import { SessaoStore } from '../sessao/sessao-store';
 import { Painel } from './painel';
 import { FilaLeadsResponse, LeadDetalheResponse } from './painel-contrato';
@@ -12,10 +12,10 @@ describe('Painel (S-21)', () => {
   let sessao: SessaoStore;
   let router: Router;
 
-  const corretorComum: CorretorSessao = {
+  const corretorComum: UsuarioSessao = {
     id: 'c-201',
     nome: 'Diego Marques',
-    especialidade: 'moradia',
+    email: 'corretor@solar.com.br',
   };
 
   const filaMock: FilaLeadsResponse = {
@@ -144,8 +144,10 @@ describe('Painel (S-21)', () => {
     router = TestBed.inject(Router);
 
     sessao.definir({
-      corretor: corretorComum,
+      usuario: corretorComum,
       perfil: 'corretor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: null,
       corretorId: 'c-201',
       vinculoAtivo: true,
       filtrosPermitidos: ['meus_leads'],
@@ -301,8 +303,10 @@ describe('Painel (S-21)', () => {
 
   it('5. filtros são derivados exclusivamente de filtrosPermitidos', () => {
     sessao.definir({
-      corretor: { id: 's-1', nome: 'Helena Vasques', especialidade: 'moradia' },
+      usuario: { id: 's-1', nome: 'Helena Vasques', email: 'supervisor@solar.com.br' },
       perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 0,
       corretorId: 'c-201',
       vinculoAtivo: true,
       filtrosPermitidos: ['minha_fila', 'sem_corretor', 'visao_geral'],
@@ -326,8 +330,10 @@ describe('Painel (S-21)', () => {
 
   it('6. supervisor sem vínculo não renderiza "Minha fila" de forma alguma', () => {
     sessao.definir({
-      corretor: { id: 's-2', nome: 'Marcelo Tavares', especialidade: 'geral' },
+      usuario: { id: 's-2', nome: 'Marcelo Tavares', email: 'supervisor@solar.com.br' },
       perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 0,
       corretorId: null,
       vinculoAtivo: false,
       filtrosPermitidos: ['sem_corretor', 'visao_geral'],
@@ -462,7 +468,7 @@ describe('Painel (S-21)', () => {
       .flush('Sessão inválida', { status: 401, statusText: 'Unauthorized' });
     fixture.detectChanges();
 
-    expect(sessao.corretor()).toBeNull();
+    expect(sessao.usuario()).toBeNull();
     expect(navegou).toHaveBeenCalledWith(['/entrar']);
   });
 
@@ -475,8 +481,10 @@ describe('Painel (S-21)', () => {
 
     // supervisor sem_corretor
     sessao.definir({
-      corretor: { id: 's-1', nome: 'Helena', especialidade: 'geral' },
+      usuario: { id: 's-1', nome: 'Helena', email: 'supervisor@solar.com.br' },
       perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 0,
       corretorId: null,
       vinculoAtivo: false,
       filtrosPermitidos: ['sem_corretor', 'visao_geral'],

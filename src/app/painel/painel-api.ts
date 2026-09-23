@@ -1,22 +1,11 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import {
-  FilaLeadsResponse,
-  LeadDetalheResponse,
-  ResumoLia,
-  SessaoPainelResposta,
-} from './painel-contrato';
+import { FilaLeadsResponse, LeadDetalheResponse, ResumoLia } from './painel-contrato';
 
 @Injectable({ providedIn: 'root' })
 export class PainelApi {
   private readonly http = inject(HttpClient);
-
-  obterSessao(): Observable<SessaoPainelResposta> {
-    return this.http.get<SessaoPainelResposta>('/api/painel/sessao', {
-      withCredentials: true,
-    });
-  }
 
   listarLeads(filtro?: string | null, intencao?: string | null): Observable<FilaLeadsResponse> {
     let params = new HttpParams();

@@ -1,61 +1,91 @@
 import { ChangeDetectionStrategy, Component, computed, inject } from '@angular/core';
 import { toSignal } from '@angular/core/rxjs-interop';
-import { NavigationEnd, Router, RouterLink, RouterLinkActive } from '@angular/router';
+import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import { filter, map } from 'rxjs';
 import { SessaoStore } from '../sessao/sessao-store';
 
 @Component({
   selector: 'app-cabecalho',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [RouterLink, RouterLinkActive],
+  imports: [RouterLink],
   template: `
     <header>
-      @if (painelComSessao()) {
+      <div class="linha">
         <div class="lado-esquerdo">
           <a routerLink="/" class="marca-link"><span class="marca">SOLAR</span></a>
-          <span class="identificacao">Painel</span>
+          <span class="identificacao">{{ identificacao() }}</span>
         </div>
         <div class="lado-direito">
-          <nav class="navegacao">
-            <a routerLink="/" class="link-nav">Chat</a>
+          <nav class="navegacao" aria-label="Principal">
+            <a
+              routerLink="/"
+              class="link-nav"
+              [class.ativo]="chatAtivo()"
+              [attr.aria-current]="chatAtivo() ? 'page' : null"
+              >Chat</a
+            >
+            @if (sessao.temPainel()) {
+              <a
+                routerLink="/painel"
+                class="link-nav"
+                [class.ativo]="painelAtivo()"
+                [attr.aria-current]="painelAtivo() ? 'page' : null"
+                >Painel do Corretor
+                @if (selo(); as s) {
+                  <span class="selo" [class.neutro]="s.neutro">{{ s.texto }}</span>
+                }
+              </a>
+            }
           </nav>
-          <div class="bloco-usuario">
-            <span class="nome-usuario">{{ usuarioNome() }}</span>
-            <span class="perfil-usuario">{{ perfilRotulo() }}</span>
-          </div>
+          @if (sessao.ativa()) {
+            <span class="usuario">
+              <span class="nome-usuario">{{ sessao.primeiroNome() }}</span>
+              <span class="avatar" aria-hidden="true">{{ sessao.iniciais() }}</span>
+            </span>
+          } @else {
+            <a routerLink="/entrar" class="pilula-entrar">Entrar</a>
+          }
         </div>
-      } @else {
-        <div class="lado-esquerdo">
-          <a routerLink="/" class="marca-link"><span class="marca">SOLAR</span></a>
-          <span class="identificacao">Lia · assistente de IA</span>
-        </div>
-        <nav class="navegacao">
-          <a routerLink="/" class="link-nav" [class.ativo]="chatAtivo()">Chat</a>
-          <a routerLink="/painel" class="link-nav" [class.ativo]="painelAtivo()"
-            >Painel do Corretor</a
-          >
+      </div>
+      @if (sessao.temPainel()) {
+        <nav class="abas" aria-label="Páginas">
+          <a routerLink="/" class="aba" [class.ativo]="chatAtivo()">Chat</a>
+          <a routerLink="/painel" class="aba" [class.ativo]="painelAtivo()"
+            >Painel
+            @if (selo(); as s) {
+              <span class="selo" [class.neutro]="s.neutro">{{ s.curto }}</span>
+            }
+          </a>
         </nav>
       }
     </header>
   `,
   styles: `
     header {
+      background: var(--superficie-barra);
+      border-bottom: 1px solid var(--borda-estrutura);
+    }
+
+    .linha {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding: 16px 40px;
-      background: var(--superficie-barra);
-      border-bottom: 1px solid var(--borda-estrutura);
+      gap: 16px;
+      min-height: 64px;
+      padding: 10px 40px;
     }
 
     .lado-esquerdo {
       display: flex;
       align-items: baseline;
       gap: 12px;
+      min-width: 0;
     }
 
-    .marca-link {
-      text-decoration: none;
+    .marca-link,
+    .link-nav,
+    .pilula-entrar,
+    .aba {
       border-bottom: none;
     }
 
@@ -70,50 +100,27 @@ import { SessaoStore } from '../sessao/sessao-store';
       font-size: 13px;
       line-height: 1.3;
       color: var(--texto-secundario);
+      white-space: nowrap;
     }
 
-    .lado-direito {
-      display: flex;
-      align-items: baseline;
-      gap: 24px;
-    }
-
-    .bloco-usuario {
-      display: flex;
-      flex-direction: column;
-      align-items: flex-start;
-      gap: 2px;
-    }
-
-    .nome-usuario {
-      font-size: 15px;
-      font-weight: 500;
-      color: var(--texto-primario);
-    }
-
-    .perfil-usuario {
-      font-size: 10px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--texto-secundario);
-    }
-
+    .lado-direito,
     .navegacao {
       display: flex;
-      align-items: baseline;
-      gap: 16px;
+      align-items: center;
+      gap: 20px;
     }
 
     .link-nav {
       font-size: 14px;
       color: var(--texto-secundario);
-      text-decoration: none;
       border-bottom: 2px solid transparent;
-      padding-bottom: 4px;
-      transition: all 0.15s ease;
+      padding: 4px 0;
+      white-space: nowrap;
+      transition: color 0.15s ease;
 
       &:hover {
         color: var(--texto-primario);
+        border-bottom-color: transparent;
       }
 
       &.ativo {
@@ -123,32 +130,115 @@ import { SessaoStore } from '../sessao/sessao-store';
       }
     }
 
+    .selo {
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 3px;
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      vertical-align: 1px;
+      color: var(--atencao);
+      background: color-mix(in srgb, var(--atencao) 14%, var(--superficie-elevada));
+
+      &.neutro {
+        color: var(--marca);
+        background: color-mix(in srgb, var(--marca) 14%, var(--superficie-elevada));
+      }
+    }
+
+    .pilula-entrar {
+      padding: 7px 18px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 600;
+      white-space: nowrap;
+      color: var(--marca-contraste);
+      background: var(--marca);
+
+      &:hover {
+        background: color-mix(in srgb, var(--marca) 86%, var(--texto-primario));
+      }
+    }
+
+    .usuario {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding-left: 20px;
+      border-left: 1px solid var(--borda-estrutura);
+    }
+
+    .nome-usuario {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--texto-primario);
+      white-space: nowrap;
+    }
+
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      flex: none;
+      border-radius: 50%;
+      font-size: 12.5px;
+      font-weight: 600;
+      color: var(--marca);
+      background: color-mix(in srgb, var(--marca) 14%, var(--superficie-elevada));
+    }
+
+    .abas {
+      display: none;
+    }
+
     @media (max-width: 640px) {
-      header {
-        padding: 12px 20px;
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 8px;
+      .linha {
+        min-height: 56px;
+        padding: 8px 20px;
       }
-      .marca {
-        font-size: 13px;
-        letter-spacing: 0.18em;
+
+      .identificacao,
+      .navegacao,
+      .nome-usuario {
+        display: none;
       }
-      .navegacao {
-        gap: 12px;
+
+      .usuario {
+        padding-left: 0;
+        border-left: none;
       }
-      .lado-direito {
-        width: 100%;
-        justify-content: space-between;
-        flex-wrap: wrap;
-        gap: 12px;
+
+      .abas {
+        display: flex;
+        border-top: 1px solid var(--borda-estrutura);
+      }
+
+      .aba {
+        flex: 1;
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 14px;
+        color: var(--texto-secundario);
+        border-bottom: 2px solid transparent;
+
+        &.ativo {
+          color: var(--marca);
+          border-bottom-color: var(--marca);
+          font-weight: 600;
+        }
       }
     }
   `,
 })
 export class Cabecalho {
   private readonly router = inject(Router);
-  private readonly sessao = inject(SessaoStore);
+  protected readonly sessao = inject(SessaoStore);
 
   private readonly urlAtual = toSignal(
     this.router.events.pipe(
@@ -158,25 +248,27 @@ export class Cabecalho {
     { initialValue: this.router.url },
   );
 
-  private readonly rotaAtual = computed(() => this.urlAtual().split('?')[0]);
+  private readonly rotaAtual = computed(() => this.urlAtual().split(/[?#]/)[0]);
 
-  readonly painelAtivo = computed(() => {
+  readonly painelAtivo = computed(() => this.rotaAtual().startsWith('/painel'));
+  readonly chatAtivo = computed(() => {
     const rota = this.rotaAtual();
-    return rota.startsWith('/painel') || rota.startsWith('/entrar');
+    return rota === '/' || rota === '' || rota.startsWith('/privacidade');
   });
 
-  readonly chatAtivo = computed(() => !this.painelAtivo());
+  readonly identificacao = computed(() =>
+    this.sessao.temPainel() ? 'Painel' : 'Lia · assistente de IA',
+  );
 
-  readonly sessaoAtiva = computed(() => this.sessao.corretor() !== null);
-  readonly painelComSessao = computed(() => this.painelAtivo() && this.sessaoAtiva());
-  readonly usuarioNome = computed(() => this.sessao.corretor()?.nome ?? '');
-  readonly perfilRotulo = computed(() => {
-    const p = this.sessao.perfil();
-    if (p === 'supervisor') {
-      return this.sessao.vinculoAtivo()
-        ? 'Supervisor · carteira própria'
-        : 'Supervisor · sem carteira';
+  readonly selo = computed(() => {
+    if (this.sessao.emAnalise()) {
+      return { texto: 'em análise', curto: 'análise', neutro: false };
     }
-    return 'Corretor';
+    const pendentes = this.sessao.perfil() === 'supervisor' ? this.sessao.pendentesAprovacao() : 0;
+    if (pendentes) {
+      const texto = pendentes === 1 ? '1 novo' : `${pendentes} novos`;
+      return { texto, curto: texto, neutro: true };
+    }
+    return null;
   });
 }

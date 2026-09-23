@@ -50,7 +50,7 @@ export class Painel implements OnInit, OnDestroy {
 
   readonly modalQualificacaoAberto = signal<boolean>(false);
 
-  readonly usuarioNome = computed(() => this.sessao.corretor()?.nome ?? '');
+  readonly usuarioNome = computed(() => this.sessao.usuario()?.nome ?? '');
   readonly perfil = computed(() => this.sessao.perfil());
   readonly filtrosPermitidos = computed(() => this.sessao.filtrosPermitidos());
 

@@ -9,5 +9,19 @@ export const sessaoGuard: CanActivateFn = () => {
 
   return sessao
     .restaurar()
-    .pipe(map((corretor) => (corretor ? true : router.createUrlTree(['/entrar']))));
+    .pipe(map((resposta) => (resposta ? true : router.createUrlTree(['/entrar']))));
+};
+
+export const painelGuard: CanActivateFn = () => {
+  const sessao = inject(SessaoStore);
+  const router = inject(Router);
+
+  return sessao.restaurar().pipe(
+    map((resposta) => {
+      if (!resposta) {
+        return router.createUrlTree(['/entrar']);
+      }
+      return resposta.perfil === 'cliente' ? router.createUrlTree(['/']) : true;
+    }),
+  );
 };
