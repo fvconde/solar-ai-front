@@ -29,9 +29,16 @@ describe('Cabecalho', () => {
         provideHttpClient(),
         provideHttpClientTesting(),
         provideRouter(
-          ['', 'entrar', 'cadastro', 'seja-corretor', 'painel', 'privacidade', 'conta'].map(
-            (path) => ({ path, component: TelaFalsa }),
-          ),
+          [
+            '',
+            'entrar',
+            'cadastro',
+            'seja-corretor',
+            'painel',
+            'painel/leads/:id',
+            'privacidade',
+            'conta',
+          ].map((path) => ({ path, component: TelaFalsa })),
         ),
       ],
     }).compileComponents();
@@ -126,11 +133,62 @@ describe('Cabecalho', () => {
     expect(html.querySelector('.selo')).toBeNull();
   });
 
-  it('o cabeçalho troca pelo papel, não pela rota: o corretor vê "Painel" também no chat', async () => {
-    const html = await montarEm('/', sessaoCorretor('aprovado'));
+  describe('identificação ao lado da marca depende da rota, não do papel', () => {
+    const papeis: [string, SessaoResponse | null][] = [
+      ['visitante', null],
+      ['cliente', sessaoCliente()],
+      ['corretor em análise', sessaoCorretor('em_analise')],
+      ['corretor aprovado', sessaoCorretor('aprovado')],
+      ['supervisor', sessaoSupervisor(2)],
+    ];
 
-    expect(html.querySelector('.identificacao')?.textContent).toBe('Painel');
-    expect(ativos(html)).toEqual(['Chat']);
+    for (const [papel, sessao] of papeis) {
+      it(`${papel} vê "Lia · assistente de IA" no chat`, async () => {
+        const html = await montarEm('/', sessao);
+
+        expect(html.querySelector('.identificacao')?.textContent).toBe('Lia · assistente de IA');
+      });
+    }
+
+    for (const [papel, sessao] of papeis.slice(2)) {
+      for (const rota of ['/painel', '/painel/leads/lead-123']) {
+        it(`${papel} vê "Painel" em ${rota}`, async () => {
+          const html = await montarEm(rota, sessao);
+
+          expect(html.querySelector('.identificacao')?.textContent).toBe('Painel');
+        });
+      }
+    }
+
+    for (const rota of ['/entrar', '/cadastro', '/seja-corretor', '/conta', '/privacidade']) {
+      it(`corretor vê "Lia · assistente de IA" em ${rota}`, async () => {
+        const html = await montarEm(rota, sessaoCorretor('aprovado'));
+
+        expect(html.querySelector('.identificacao')?.textContent).toBe('Lia · assistente de IA');
+      });
+    }
+
+    it('troca ao navegar de / para /painel e de volta, sem recriar o cabeçalho', async () => {
+      TestBed.inject(SessaoStore).definir(sessaoSupervisor(2));
+      await router.navigateByUrl('/');
+      const fixture = TestBed.createComponent(Cabecalho);
+      fixture.detectChanges();
+      const identificacao = () =>
+        (fixture.nativeElement as HTMLElement).querySelector('.identificacao')?.textContent;
+      expect(identificacao()).toBe('Lia · assistente de IA');
+
+      await router.navigateByUrl('/painel');
+      fixture.detectChanges();
+      expect(identificacao()).toBe('Painel');
+
+      await router.navigateByUrl('/painel/leads/lead-123');
+      fixture.detectChanges();
+      expect(identificacao()).toBe('Painel');
+
+      await router.navigateByUrl('/');
+      fixture.detectChanges();
+      expect(identificacao()).toBe('Lia · assistente de IA');
+    });
   });
 
   it('em /conta nenhum link fica ativo', async () => {

@@ -221,7 +221,7 @@ export class Cabecalho {
   });
 
   readonly identificacao = computed(() =>
-    this.sessao.temPainel() ? 'Painel' : 'Lia · assistente de IA',
+    this.painelAtivo() ? 'Painel' : 'Lia · assistente de IA',
   );
 
   readonly selo = computed(() => {
