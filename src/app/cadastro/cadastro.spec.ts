@@ -151,9 +151,17 @@ describe('Cadastro', () => {
       expect(texto(fixture)).toContain('Use ao menos 2 caracteres.');
       expect(texto(fixture)).toContain('Verifique o formato do e-mail.');
       expect(texto(fixture)).toContain('Informe o DDD e o número completo.');
-      expect(texto(fixture)).toContain('Use ao menos 8 caracteres. As senhas não coincidem.');
+      const senha = html(fixture).querySelector<HTMLInputElement>('#campo-senha')!;
+      const confirmacao = html(fixture).querySelector<HTMLInputElement>('#campo-confirmacao')!;
+      expect(senha.classList).toContain('com-erro');
+      expect(senha.parentElement?.querySelector('.dica.erro')?.textContent?.trim()).toBe(
+        'Use ao menos 8 caracteres.',
+      );
       expect(html(fixture).querySelector('#campo-telefone')?.classList).toContain('com-erro');
-      expect(html(fixture).querySelector('#campo-confirmacao')?.classList).toContain('com-erro');
+      expect(confirmacao.classList).toContain('com-erro');
+      expect(confirmacao.parentElement?.querySelector('.dica.erro')?.textContent?.trim()).toBe(
+        'As senhas não coincidem.',
+      );
       expect(botao(fixture).disabled).toBeTrue();
       httpMock.expectNone(() => true);
     });

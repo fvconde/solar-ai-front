@@ -101,6 +101,9 @@
           (ngModelChange)="alterar('senha', $event)"
           (blur)="tocar('senha')"
         />
+        @if (erro('senha'); as mensagem) {
+          <p class="dica erro">{{ mensagem }}</p>
+        }
       </div>
       <div>
         <label class="rotulo" for="campo-confirmacao">Confirmar</label>
@@ -116,11 +119,12 @@
           (ngModelChange)="alterar('confirmacao', $event)"
           (blur)="tocar('confirmacao')"
         />
+        @if (erro('confirmacao'); as mensagem) {
+          <p class="dica erro">{{ mensagem }}</p>
+        }
       </div>
     </div>
-    @if (erroSenhas()) {
-      <p class="dica erro">{{ erroSenhas() }}</p>
-    } @else if (senhasCoincidem() && !enviando()) {
+    @if (senhasCoincidem() && !enviando()) {
       <p class="dica ok">✓ As senhas coincidem</p>
     }
 

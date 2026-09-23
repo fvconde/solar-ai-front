@@ -96,10 +96,6 @@ export class Cadastro {
       this.senha().length >= MINIMO_CARACTERES_SENHA,
   );
 
-  readonly erroSenhas = computed(() =>
-    [this.erro('senha'), this.erro('confirmacao')].filter(Boolean).join(' '),
-  );
-
   erro(campo: Campo): string | undefined {
     const servidor = this.errosServidor()[campo];
     if (servidor) {
