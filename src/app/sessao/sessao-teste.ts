@@ -4,10 +4,15 @@ export const TEMAS = ['claro', 'escuro'] as const;
 
 export function aplicarTema(tema: (typeof TEMAS)[number]): void {
   document.documentElement.setAttribute('data-tema', tema);
+  const semTransicao = document.createElement('style');
+  semTransicao.id = 'tema-sem-transicao';
+  semTransicao.textContent = '* { transition: none !important; }';
+  document.head.appendChild(semTransicao);
 }
 
 export function limparTema(): void {
   document.documentElement.removeAttribute('data-tema');
+  document.getElementById('tema-sem-transicao')?.remove();
 }
 
 export const MARCA_POR_TEMA = {

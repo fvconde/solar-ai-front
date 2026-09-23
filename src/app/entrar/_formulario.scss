@@ -111,6 +111,18 @@
   }
 }
 
+.dica {
+  color: var(--login-texto-secundario);
+
+  &.erro {
+    color: var(--login-erro);
+  }
+
+  &.ok {
+    color: var(--sucesso);
+  }
+}
+
 .alerta {
   margin-top: 16px;
   padding: 10px 12px;
