@@ -156,6 +156,7 @@ describe('Painel (S-21)', () => {
   });
 
   afterEach(() => {
+    httpMock.match('/api/conta');
     httpMock.verify();
   });
 

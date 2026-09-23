@@ -15,13 +15,23 @@ import { CardImovel } from '../componentes/card-imovel';
 import { MensagemLia } from '../componentes/mensagem-lia';
 import { MensagemPessoa } from '../componentes/mensagem-pessoa';
 import { SessaoStore } from '../sessao/sessao-store';
+import { AvisoAprovacao } from './aviso-aprovacao';
 import { PainelApi } from './painel-api';
 import { LeadDetalheResponse, LeadPainelItem } from './painel-contrato';
+import { PainelEmAnalise } from './painel-em-analise';
 
 @Component({
   selector: 'app-painel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, CardImovel, MensagemLia, MensagemPessoa],
+  imports: [
+    CommonModule,
+    FormsModule,
+    AvisoAprovacao,
+    CardImovel,
+    MensagemLia,
+    MensagemPessoa,
+    PainelEmAnalise,
+  ],
   templateUrl: './painel.html',
   styleUrls: ['./painel.scss', './painel-detalhe.scss'],
 })
@@ -52,6 +62,10 @@ export class Painel implements OnInit, OnDestroy {
 
   readonly usuarioNome = computed(() => this.sessao.usuario()?.nome ?? '');
   readonly perfil = computed(() => this.sessao.perfil());
+  readonly emAnalise = computed(() => this.sessao.emAnalise());
+  readonly corretorAprovado = computed(
+    () => this.sessao.perfil() === 'corretor' && this.sessao.statusCorretor() === 'aprovado',
+  );
   readonly filtrosPermitidos = computed(() => this.sessao.filtrosPermitidos());
 
   readonly filtroFixo = computed(() => this.filtrosPermitidos().length === 1);
@@ -100,6 +114,10 @@ export class Painel implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    if (this.emAnalise()) {
+      return;
+    }
+
     this.subParams = this.route.paramMap.subscribe((params) => {
       const id = params.get('id');
       if (id) {

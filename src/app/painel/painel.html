@@ -1,5 +1,7 @@
 <div class="painel-shell">
-  @if (acessoRestrito()) {
+  @if (emAnalise()) {
+    <app-painel-em-analise />
+  } @else if (acessoRestrito()) {
     <main class="bloco-acesso-restrito">
       <div class="cartao-restrito">
         <span class="badge-estado">
@@ -17,6 +19,9 @@
       </div>
     </main>
   } @else {
+    @if (corretorAprovado()) {
+      <app-aviso-aprovacao />
+    }
     <div class="barra-fila">
       <div class="grupo-esquerda-fila">
         <span class="titulo-fila">Fila de leads</span>
