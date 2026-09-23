@@ -106,6 +106,7 @@ describe('Cadastro', () => {
       aplicarTema('claro');
       const fixture = await montar('cliente');
 
+      expect(html(fixture).querySelector('.resumo-email')).toBeNull();
       expect(texto(fixture)).toContain('← Voltar para o login');
       const voltar = html(fixture).querySelector<HTMLAnchorElement>('.link-voltar')!;
       const seta = voltar.querySelector<HTMLElement>('.link-voltar-direcao-a__seta')!;
@@ -228,9 +229,11 @@ describe('Cadastro', () => {
       httpMock.expectOne('/api/contas').flush(sessaoCliente());
     });
 
-    it('409 email_em_uso mostra o aviso com links para entrar e redefinir a senha', async () => {
+    it('409 email_em_uso destaca a orientação e mantém o aviso curto no e-mail', async () => {
+      aplicarTema('claro');
       const fixture = await montar('cliente');
       preencherBase(fixture);
+      const telefoneAntes = html(fixture).querySelector<HTMLInputElement>('#campo-telefone')!.value;
       aceitar(fixture);
       botao(fixture).click();
       httpMock
@@ -238,15 +241,71 @@ describe('Cadastro', () => {
         .flush({ codigo: 'email_em_uso', mensagem: 'x' }, { status: 409, statusText: 'Conflict' });
       fixture.detectChanges();
 
+      const resumo = html(fixture).querySelector<HTMLElement>('.resumo-email')!;
+      const titulo = resumo.querySelector('.resumo-email__titulo');
+      const orientacao = resumo.querySelector('.resumo-email__orientacao');
+      expect(titulo?.textContent?.trim()).toBe('Este e-mail já está cadastrado');
+      expect(orientacao?.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Entre na sua conta ou redefina a senha. Se o e-mail estiver errado, corrija abaixo.',
+      );
+      const links = Array.from(resumo.querySelectorAll('a')).map((a) => a.getAttribute('href'));
+      expect(links).toEqual(['/entrar', '/entrar?redefinir=1']);
+      const indicacao = html(fixture).querySelector<HTMLElement>('#email-em-uso-indicacao')!;
+      const campoEmail = html(fixture).querySelector<HTMLInputElement>('#campo-email')!;
+      expect(indicacao.textContent?.trim()).toBe('Este e-mail já tem conta.');
+      expect(indicacao.querySelector('a')).toBeNull();
+      expect(campoEmail.classList).toContain('com-erro');
+      expect(campoEmail.getAttribute('aria-describedby')).toBe('email-em-uso-indicacao');
+      expect(html(fixture).querySelector<HTMLInputElement>('#campo-nome')?.value).toBe('Marina Couto');
+      expect(campoEmail.value).toBe('marina.couto@email.com');
+      expect(html(fixture).querySelector<HTMLInputElement>('#campo-telefone')?.value).toBe(telefoneAntes);
+      expect(html(fixture).querySelector<HTMLInputElement>('#campo-senha')?.value).toBe(
+        'senha-forte',
+      );
+      expect(html(fixture).querySelector<HTMLInputElement>('#campo-confirmacao')?.value).toBe(
+        'senha-forte',
+      );
+      expect(html(fixture).querySelector<HTMLInputElement>('.aceite input')?.checked).toBeTrue();
+      expect(botao(fixture).disabled).toBeTrue();
+
+      for (const tema of TEMAS) {
+        aplicarTema(tema);
+        fixture.detectChanges();
+        expect(getComputedStyle(resumo).backgroundColor).not.toBe(
+          getComputedStyle(html(fixture).querySelector('.cartao')!).backgroundColor,
+        );
+        expect(getComputedStyle(resumo.querySelector('a')!).color).toBe(MARCA_POR_TEMA[tema]);
+      }
+
+      digitar(fixture, 'campo-email', 'marina.nova@email.com');
+      expect(html(fixture).querySelector('.resumo-email')).toBeNull();
+      expect(html(fixture).querySelector('#email-em-uso-indicacao')).toBeNull();
+      expect(botao(fixture).disabled).toBeFalse();
+    });
+
+    it('409 no cadastro de corretor mantém o aviso inline existente', async () => {
+      const fixture = await montar('corretor');
+      preencherBase(fixture);
+      clicarChip(fixture, 'Norte');
+      clicarChip(fixture, 'Moradia');
+      aceitar(fixture);
+      botao(fixture).click();
+      httpMock
+        .expectOne('/api/corretores')
+        .flush({ codigo: 'email_em_uso', mensagem: 'x' }, { status: 409, statusText: 'Conflict' });
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('.resumo-email')).toBeNull();
       const aviso = Array.from(html(fixture).querySelectorAll('.dica.erro')).find((d) =>
         d.textContent?.includes('Este e-mail já tem conta.'),
       )!;
       expect(aviso.textContent?.replace(/\s+/g, ' ').trim()).toBe(
         'Este e-mail já tem conta. Entrar ou redefinir a senha.',
       );
-      const links = Array.from(aviso.querySelectorAll('a')).map((a) => a.getAttribute('href'));
-      expect(links).toEqual(['/entrar', '/entrar?redefinir=1']);
-      expect(botao(fixture).disabled).toBeTrue();
+      expect(Array.from(aviso.querySelectorAll('a')).map((a) => a.getAttribute('href'))).toEqual([
+        '/entrar',
+        '/entrar?redefinir=1',
+      ]);
     });
 
     it('400 validacao mostra o erro de cada campo devolvido pela API', async () => {

@@ -23,6 +23,19 @@
       </p>
     }
 
+    @if (!corretor && emailEmUso()) {
+      <div class="resumo-email" role="alert" aria-labelledby="titulo-email-cadastrado">
+        <p class="resumo-email__titulo" id="titulo-email-cadastrado">
+          Este e-mail já está cadastrado
+        </p>
+        <p class="resumo-email__orientacao">
+          <a routerLink="/entrar">Entre na sua conta</a> ou
+          <a routerLink="/entrar" [queryParams]="{ redefinir: 1 }">redefina a senha</a>.
+          Se o e-mail estiver errado, corrija abaixo.
+        </p>
+      </div>
+    }
+
     <label class="rotulo" for="campo-nome">Nome</label>
     <input
       id="campo-nome"
@@ -49,6 +62,7 @@
           name="email"
           autocomplete="email"
           [class.com-erro]="erro('email') || emailEmUso()"
+          [attr.aria-describedby]="emailEmUso() && !corretor ? 'email-em-uso-indicacao' : null"
           [disabled]="enviando()"
           [ngModel]="email()"
           (ngModelChange)="alterar('email', $event)"
@@ -230,10 +244,14 @@
 
 <ng-template #dicaEmail>
   @if (emailEmUso()) {
-    <p class="dica erro" role="alert">
-      Este e-mail já tem conta. <a routerLink="/entrar">Entrar</a> ou
-      <a routerLink="/entrar" [queryParams]="{ redefinir: 1 }">redefinir a senha</a>.
-    </p>
+    @if (corretor) {
+      <p class="dica erro" role="alert">
+        Este e-mail já tem conta. <a routerLink="/entrar">Entrar</a> ou
+        <a routerLink="/entrar" [queryParams]="{ redefinir: 1 }">redefinir a senha</a>.
+      </p>
+    } @else {
+      <p class="dica erro" id="email-em-uso-indicacao">Este e-mail já tem conta.</p>
+    }
   } @else if (erro('email'); as mensagem) {
     <p class="dica erro">{{ mensagem }}</p>
   }
