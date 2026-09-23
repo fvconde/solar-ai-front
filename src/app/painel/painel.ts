@@ -23,7 +23,7 @@ import { LeadDetalheResponse, LeadPainelItem } from './painel-contrato';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CommonModule, FormsModule, CardImovel, MensagemLia, MensagemPessoa],
   templateUrl: './painel.html',
-  styleUrl: './painel.scss',
+  styleUrls: ['./painel.scss', './painel-detalhe.scss'],
 })
 export class Painel implements OnInit, OnDestroy {
   private readonly api = inject(PainelApi);
