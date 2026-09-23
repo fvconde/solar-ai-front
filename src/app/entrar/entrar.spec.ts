@@ -92,6 +92,32 @@ describe('Entrar', () => {
       expect(hrefs).toEqual(['/cadastro', '/seja-corretor']);
     });
 
+    it('Cadastrar-se fica sozinho na linha, sem a nota "para conversar"', () => {
+      const fixture = montar();
+      const cadastro = (fixture.nativeElement as HTMLElement).querySelector('.saida')!;
+
+      expect(cadastro.textContent?.trim()).toBe('Cadastrar-se');
+      expect(cadastro.querySelector('.complemento')).toBeNull();
+      expect(elemento(fixture, '.saidas')?.textContent).not.toContain('para conversar');
+    });
+
+    it('os rótulos de campo do login e da recuperação usam IBM Plex Mono com peso 600', () => {
+      const fixture = montar();
+      const pesos = () =>
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.rotulo')).map(
+          (r) => getComputedStyle(r).fontWeight,
+        );
+      expect(pesos()).toEqual(['600', '600']);
+      const rotulo = elemento(fixture, '.rotulo')!;
+      expect(getComputedStyle(rotulo).fontFamily).toContain('IBM Plex Mono');
+      expect(getComputedStyle(rotulo).fontSize).toBe('10px');
+      expect(getComputedStyle(rotulo).textTransform).toBe('uppercase');
+
+      fixture.componentInstance.irParaRecuperacao();
+      fixture.detectChanges();
+      expect(pesos()).toEqual(['600']);
+    });
+
     it('Mostrar alterna a senha entre oculta e visível', () => {
       const fixture = montar();
       const campo = elemento<HTMLInputElement>(fixture, '#campo-senha')!;

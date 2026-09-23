@@ -165,6 +165,7 @@ const LIMITE_MOTIVO = 500;
       margin-top: 8px;
       font-family: 'IBM Plex Mono', monospace;
       font-size: 11px;
+      font-weight: 600;
       letter-spacing: 0.1em;
       text-transform: uppercase;
       color: var(--texto-secundario);

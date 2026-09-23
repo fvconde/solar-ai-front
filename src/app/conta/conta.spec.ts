@@ -171,6 +171,17 @@ describe('Conta', () => {
     expect(botao(fixture, 'Excluir conta…')).toBeTruthy();
   });
 
+  it('os rótulos de campo usam peso 600, sem mudar o peso do papel nem dos títulos de bloco', () => {
+    const fixture = montar();
+    clicar(fixture, 'Editar');
+
+    const rotulos = Array.from(html(fixture).querySelectorAll('.rotulo'));
+    expect(rotulos.length).toBe(4);
+    expect(rotulos.every((r) => getComputedStyle(r).fontWeight === '600')).toBeTrue();
+    expect(getComputedStyle(html(fixture).querySelector('.papel')!).fontWeight).toBe('500');
+    expect(getComputedStyle(html(fixture).querySelector('h2')!).fontWeight).toBe('500');
+  });
+
   it('trocar o e-mail pede a senha atual antes de chamar a API', async () => {
     const fixture = montar();
     clicar(fixture, 'Editar');

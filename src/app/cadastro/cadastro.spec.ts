@@ -92,6 +92,16 @@ describe('Cadastro', () => {
   });
 
   describe('cliente em /cadastro', () => {
+    it('os rótulos de campo usam peso 600', async () => {
+      const fixture = await montar('corretor');
+      const pesos = Array.from(html(fixture).querySelectorAll('.rotulo')).map(
+        (r) => getComputedStyle(r).fontWeight,
+      );
+
+      expect(pesos.length).toBe(7);
+      expect(pesos.every((peso) => peso === '600')).toBeTrue();
+    });
+
     it('abre com os textos do desenho, aceite desmarcado e botão apagado', async () => {
       const fixture = await montar('cliente');
 

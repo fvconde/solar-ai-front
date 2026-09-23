@@ -139,6 +139,7 @@ describe('Fila de aprovação de corretores', () => {
     expect(linha.querySelector('.rotulo')?.textContent?.trim()).toBe(
       'Motivo · opcional, vai no e-mail',
     );
+    expect(getComputedStyle(linha.querySelector('.rotulo')!).fontWeight).toBe('600');
     expect(linha.querySelector('textarea')?.getAttribute('maxlength')).toBe('500');
     expect(Array.from(linha.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual([
       'Recusar e avisar por e-mail',
