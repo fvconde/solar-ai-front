@@ -74,7 +74,7 @@ describe('Entrar', () => {
       const fixture = montar();
 
       expect(texto(fixture)).toContain('Entrar na Solar');
-      expect(texto(fixture)).toContain(
+      expect(texto(fixture)).not.toContain(
         'Use o mesmo acesso para conversar com a Lia ou abrir seu painel.',
       );
       expect(elemento(fixture, '#campo-email')).toBeTruthy();
