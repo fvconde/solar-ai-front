@@ -395,6 +395,37 @@ describe('Entrar', () => {
       }));
     });
 
+    it('a faixa do corretor some durante o bloqueio e volta quando ele termina', fakeAsync(() => {
+      const fixture = montar();
+      expect(elemento(fixture, '.faixa-corretor')).toBeTruthy();
+
+      preencher(fixture);
+      fixture.componentInstance.entrar();
+      httpMock
+        .expectOne('/api/sessoes')
+        .flush(
+          { codigo: 'bloqueado', segundosRestantes: 3 },
+          { status: 423, statusText: 'Locked' },
+        );
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.bloqueado()).toBeTrue();
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
+      expect(texto(fixture)).not.toContain('É corretor de imóveis?');
+      expect(elemento(fixture, '.botao-secundario')?.textContent?.trim()).toBe('Redefinir senha');
+
+      tick(2000);
+      fixture.detectChanges();
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
+
+      tick(1000);
+      fixture.detectChanges();
+      tick();
+      expect(fixture.componentInstance.bloqueado()).toBeFalse();
+      expect(elemento(fixture, '.faixa-corretor')?.getAttribute('href')).toBe('/seja-corretor');
+      expect(elemento(fixture, '.sem-conta')).toBeTruthy();
+    }));
+
     it('Redefinir senha no bloqueio abre o pedido de link', fakeAsync(() => {
       const fixture = montar();
       preencher(fixture);
@@ -408,7 +439,7 @@ describe('Entrar', () => {
       fixture.detectChanges();
 
       expect(elemento(fixture, '.sem-conta')).toBeNull();
-      expect(elemento(fixture, '.faixa-corretor')).toBeTruthy();
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
 
       elemento<HTMLButtonElement>(fixture, '.botao-secundario')!.click();
       fixture.detectChanges();

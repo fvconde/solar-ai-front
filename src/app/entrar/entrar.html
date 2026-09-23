@@ -219,7 +219,7 @@
     }
   </div>
 
-  @if (tela() === 'entrar') {
+  @if (tela() === 'entrar' && !bloqueado()) {
     <a
       class="faixa-corretor"
       routerLink="/seja-corretor"
