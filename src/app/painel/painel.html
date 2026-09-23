@@ -22,6 +22,9 @@
     @if (corretorAprovado()) {
       <app-aviso-aprovacao />
     }
+    @if (perfil() === 'supervisor') {
+      <app-fila-aprovacao />
+    }
     <div class="barra-fila">
       <div class="grupo-esquerda-fila">
         <span class="titulo-fila">Fila de leads</span>

@@ -157,6 +157,7 @@ describe('Painel (S-21)', () => {
 
   afterEach(() => {
     httpMock.match('/api/conta');
+    httpMock.match('/api/painel/corretores/pendentes');
     httpMock.verify();
   });
 

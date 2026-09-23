@@ -1,7 +1,12 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { FilaLeadsResponse, LeadDetalheResponse, ResumoLia } from './painel-contrato';
+import {
+  CorretorPendente,
+  FilaLeadsResponse,
+  LeadDetalheResponse,
+  ResumoLia,
+} from './painel-contrato';
 
 @Injectable({ providedIn: 'root' })
 export class PainelApi {
@@ -41,6 +46,28 @@ export class PainelApi {
         params,
         withCredentials: true,
       },
+    );
+  }
+
+  listarPendentes(): Observable<CorretorPendente[]> {
+    return this.http.get<CorretorPendente[]>('/api/painel/corretores/pendentes', {
+      withCredentials: true,
+    });
+  }
+
+  aprovarCorretor(id: string): Observable<void> {
+    return this.http.post<void>(
+      `/api/painel/corretores/${encodeURIComponent(id)}/aprovacao`,
+      {},
+      { withCredentials: true },
+    );
+  }
+
+  recusarCorretor(id: string, motivo: string | null): Observable<void> {
+    return this.http.post<void>(
+      `/api/painel/corretores/${encodeURIComponent(id)}/recusa`,
+      motivo ? { motivo } : {},
+      { withCredentials: true },
     );
   }
 }

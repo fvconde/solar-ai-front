@@ -79,3 +79,13 @@ export interface LeadDetalheResponse {
   imoveisSugeridos: ImovelSugerido[];
   transcricao: TurnoTranscricao[];
 }
+
+export interface CorretorPendente {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+  regioes: string[];
+  especialidades: string[];
+  criadoEm: string;
+}

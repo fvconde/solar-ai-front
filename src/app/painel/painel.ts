@@ -16,6 +16,7 @@ import { MensagemLia } from '../componentes/mensagem-lia';
 import { MensagemPessoa } from '../componentes/mensagem-pessoa';
 import { SessaoStore } from '../sessao/sessao-store';
 import { AvisoAprovacao } from './aviso-aprovacao';
+import { FilaAprovacao } from './fila-aprovacao';
 import { PainelApi } from './painel-api';
 import { LeadDetalheResponse, LeadPainelItem } from './painel-contrato';
 import { PainelEmAnalise } from './painel-em-analise';
@@ -28,6 +29,7 @@ import { PainelEmAnalise } from './painel-em-analise';
     FormsModule,
     AvisoAprovacao,
     CardImovel,
+    FilaAprovacao,
     MensagemLia,
     MensagemPessoa,
     PainelEmAnalise,
