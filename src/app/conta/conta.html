@@ -1,0 +1,286 @@
+<main class="conta">
+  @if (conta(); as c) {
+    <div class="topo">
+      <span class="avatar" aria-hidden="true">{{ iniciais() }}</span>
+      <div>
+        <h1 class="nome">{{ c.nome }}</h1>
+        <p class="papel">{{ papel() }}</p>
+      </div>
+    </div>
+
+    @if (confirmacao()) {
+      <p class="aviso-ok" role="status">{{ confirmacao() }}</p>
+    }
+
+    @if (aberto() === 'dados') {
+      <section class="bloco" aria-labelledby="titulo-dados">
+        <h2 id="titulo-dados">Dados</h2>
+        <label class="rotulo" for="conta-nome">Nome</label>
+        <input
+          id="conta-nome"
+          class="campo"
+          name="nome"
+          [class.com-erro]="errosCampo()['nome']"
+          [ngModel]="nome()"
+          (ngModelChange)="nome.set($event)"
+        />
+        @if (errosCampo()['nome']; as erro) {
+          <p class="dica erro">{{ erro }}</p>
+        }
+        <label class="rotulo" for="conta-email">E-mail</label>
+        <input
+          id="conta-email"
+          class="campo"
+          type="email"
+          name="email"
+          [class.com-erro]="errosCampo()['email']"
+          [ngModel]="email()"
+          (ngModelChange)="email.set($event)"
+        />
+        @if (errosCampo()['email']; as erro) {
+          <p class="dica erro">{{ erro }}</p>
+        }
+        <label class="rotulo" for="conta-senha-atual">Senha atual</label>
+        <input
+          id="conta-senha-atual"
+          class="campo"
+          type="password"
+          name="senhaAtual"
+          autocomplete="current-password"
+          placeholder="Para trocar o e-mail"
+          [class.com-erro]="errosCampo()['senhaAtual']"
+          [ngModel]="senhaAtual()"
+          (ngModelChange)="senhaAtual.set($event)"
+        />
+        @if (errosCampo()['senhaAtual']; as erro) {
+          <p class="dica erro">{{ erro }}</p>
+        } @else {
+          <p class="dica">Trocar o e-mail pede a senha atual.</p>
+        }
+        <label class="rotulo" for="conta-telefone">Telefone</label>
+        <input
+          id="conta-telefone"
+          class="campo"
+          type="tel"
+          name="telefone"
+          inputmode="numeric"
+          [class.com-erro]="errosCampo()['telefone']"
+          [ngModel]="telefone()"
+          (ngModelChange)="mascarar($event)"
+        />
+        @if (errosCampo()['telefone']; as erro) {
+          <p class="dica erro">{{ erro }}</p>
+        }
+        <ng-container *ngTemplateOutlet="botoesEdicao" />
+      </section>
+    } @else {
+      <section class="bloco" aria-labelledby="titulo-dados">
+        <h2 id="titulo-dados">
+          Dados <button class="acao-bloco" type="button" (click)="abrir('dados')">Editar</button>
+        </h2>
+        <p class="par"><span>E-mail</span>{{ c.email }}</p>
+        <p class="par"><span>Telefone</span>{{ telefoneFormatado() }}</p>
+        <p class="par">
+          <span>Senha</span>
+          <button class="link" type="button" (click)="abrir('senha')">Alterar</button>
+        </p>
+      </section>
+    }
+
+    @if (aberto() === 'senha') {
+      <section class="bloco" aria-labelledby="titulo-senha">
+        <h2 id="titulo-senha">Senha</h2>
+        <label class="rotulo" for="senha-atual">Senha atual</label>
+        <input
+          id="senha-atual"
+          class="campo"
+          type="password"
+          name="senhaAtual"
+          autocomplete="current-password"
+          [class.com-erro]="errosCampo()['senhaAtual']"
+          [ngModel]="senhaAtual()"
+          (ngModelChange)="senhaAtual.set($event)"
+        />
+        @if (errosCampo()['senhaAtual']; as erro) {
+          <p class="dica erro">{{ erro }}</p>
+        }
+        <label class="rotulo" for="senha-nova">Nova senha</label>
+        <input
+          id="senha-nova"
+          class="campo"
+          type="password"
+          name="novaSenha"
+          autocomplete="new-password"
+          [class.com-erro]="errosCampo()['novaSenha']"
+          [ngModel]="novaSenha()"
+          (ngModelChange)="novaSenha.set($event)"
+        />
+        <label class="rotulo" for="senha-confirmacao">Confirmar</label>
+        <input
+          id="senha-confirmacao"
+          class="campo"
+          type="password"
+          name="confirmacaoSenha"
+          autocomplete="new-password"
+          [class.com-erro]="errosCampo()['novaSenha']"
+          [ngModel]="confirmacaoSenha()"
+          (ngModelChange)="confirmacaoSenha.set($event)"
+        />
+        @if (errosCampo()['novaSenha']; as erro) {
+          <p class="dica erro">{{ erro }}</p>
+        }
+        <ng-container *ngTemplateOutlet="botoesEdicao" />
+      </section>
+    }
+
+    @if (corretor()) {
+      <section class="bloco" aria-labelledby="titulo-atuacao">
+        @if (aberto() === 'atuacao') {
+          <h2 id="titulo-atuacao">Atuação</h2>
+          <p class="rotulo" id="conta-regioes">Região · uma ou mais</p>
+          <div class="chips" role="group" aria-labelledby="conta-regioes">
+            @for (regiao of regioesDisponiveis; track regiao.valor) {
+              <button
+                class="chip"
+                type="button"
+                [class.ligado]="regioes().includes(regiao.valor)"
+                [attr.aria-pressed]="regioes().includes(regiao.valor)"
+                (click)="alternarRegiao(regiao.valor)"
+              >
+                {{ regiao.rotulo }}
+              </button>
+            }
+          </div>
+          @if (errosCampo()['regioes']; as erro) {
+            <p class="dica erro">{{ erro }}</p>
+          }
+          <p class="rotulo" id="conta-especialidades">Especialidade · uma ou as duas</p>
+          <div class="chips" role="group" aria-labelledby="conta-especialidades">
+            @for (especialidade of especialidadesDisponiveis; track especialidade.valor) {
+              <button
+                class="chip"
+                type="button"
+                [class.ligado]="especialidades().includes(especialidade.valor)"
+                [attr.aria-pressed]="especialidades().includes(especialidade.valor)"
+                (click)="alternarEspecialidade(especialidade.valor)"
+              >
+                {{ especialidade.rotulo }}
+              </button>
+            }
+          </div>
+          @if (errosCampo()['especialidades']; as erro) {
+            <p class="dica erro">{{ erro }}</p>
+          }
+          <ng-container *ngTemplateOutlet="botoesEdicao" />
+        } @else {
+          <h2 id="titulo-atuacao">
+            Atuação
+            <button class="acao-bloco" type="button" (click)="abrir('atuacao')">Editar</button>
+          </h2>
+          <p class="par"><span>Região</span>{{ lista(c.corretor?.regioes) }}</p>
+          <p class="par"><span>Especialidade</span>{{ lista(c.corretor?.especialidades) }}</p>
+        }
+      </section>
+    }
+
+    @if (c.perfil === 'cliente') {
+      <section class="bloco" aria-labelledby="titulo-privacidade">
+        <h2 id="titulo-privacidade">Conversas e privacidade</h2>
+        <p class="par">
+          <span>Conversas salvas</span>
+          <a routerLink="/">{{ c.conversasSalvas }} · ver no chat</a>
+        </p>
+        @if (c.consentimento) {
+          <p class="par"><span>Consentimento</span>{{ consentimento() }}</p>
+        }
+      </section>
+    }
+
+    <button class="botao" type="button" (click)="sair()">Sair</button>
+
+    @if (podeExcluir()) {
+      <section class="bloco perigo" aria-labelledby="titulo-excluir">
+        <h2 id="titulo-excluir">Excluir conta</h2>
+        @if (aberto() === 'excluir') {
+          @if (corretor()) {
+            <p>
+              Isto apaga <b>sua conta</b>. Seus leads em atendimento voltam para a fila e são
+              redistribuídos. Não dá para desfazer.
+            </p>
+          } @else {
+            <p>
+              Isto apaga <b>{{ conversasNaExclusao() }}</b> e os seus dados que a Solar repassou a
+              corretores. Não dá para desfazer.
+            </p>
+          }
+          <p>
+            Registros que a lei obriga a guardar ficam retidos pelo prazo legal e depois são
+            apagados.
+          </p>
+          <label class="rotulo" for="conta-confirmar-email">Digite seu e-mail para confirmar</label>
+          <input
+            id="conta-confirmar-email"
+            class="campo"
+            type="email"
+            name="emailDigitado"
+            autocomplete="off"
+            [ngModel]="emailDigitado()"
+            (ngModelChange)="emailDigitado.set($event)"
+          />
+          @if (erroBloco()) {
+            <p class="dica erro" role="alert">{{ erroBloco() }}</p>
+          }
+          <div class="linha-botoes">
+            <button
+              class="botao perigo-cheio"
+              type="button"
+              [disabled]="!emailConfere() || salvando()"
+              (click)="excluir()"
+            >
+              Excluir definitivamente
+            </button>
+            <button class="botao" type="button" [disabled]="salvando()" (click)="fechar()">
+              Cancelar
+            </button>
+          </div>
+        } @else {
+          @if (corretor()) {
+            <p><b>Seus leads em atendimento voltam para a fila</b> e são redistribuídos.</p>
+          } @else {
+            <p>Apaga sua conta e as conversas salvas.</p>
+          }
+          <button class="botao perigo" type="button" (click)="abrir('excluir')">
+            Excluir conta…
+          </button>
+        }
+      </section>
+    }
+  } @else if (falhaAoCarregar()) {
+    <p class="estado">Não foi possível carregar sua conta.</p>
+    <button class="botao" type="button" (click)="carregar()">Tentar de novo</button>
+  } @else {
+    <p class="estado">Carregando sua conta…</p>
+  }
+</main>
+
+<ng-template #botoesEdicao>
+  @if (erroBloco()) {
+    <p class="dica erro" role="alert">{{ erroBloco() }}</p>
+  }
+  <div class="linha-botoes">
+    <button
+      class="botao primario"
+      type="button"
+      [class.enviando]="salvando()"
+      [disabled]="salvando()"
+      (click)="salvarAberto()"
+    >
+      @if (salvando()) {
+        <span class="verificando" aria-label="Salvando"></span>
+      } @else {
+        Salvar
+      }
+    </button>
+    <button class="botao" type="button" [disabled]="salvando()" (click)="fechar()">Cancelar</button>
+  </div>
+</ng-template>
