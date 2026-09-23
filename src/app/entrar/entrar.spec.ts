@@ -321,6 +321,80 @@ describe('Entrar', () => {
       expect(texto(fixture)).not.toContain('Muitas tentativas seguidas');
     }));
 
+    describe('foco no campo de senha', () => {
+      function montarNoDocumento(): ComponentFixture<Entrar> {
+        const fixture = montar();
+        document.body.appendChild(fixture.nativeElement);
+        fixture.autoDetectChanges();
+        return fixture;
+      }
+
+      afterEach(() => document.body.querySelectorAll('app-entrar').forEach((el) => el.remove()));
+
+      it('depois de 401 credenciais_invalidas, o foco vai para a senha já limpa', fakeAsync(() => {
+        const fixture = montarNoDocumento();
+        preencher(fixture, 'errada');
+        elemento<HTMLButtonElement>(fixture, '.botao-primario')!.focus();
+        fixture.componentInstance.entrar();
+        fixture.detectChanges();
+        tick();
+        httpMock
+          .expectOne('/api/sessoes')
+          .flush(
+            { codigo: 'credenciais_invalidas', mensagem: 'x' },
+            { status: 401, statusText: 'Unauthorized' },
+          );
+        fixture.detectChanges();
+        tick();
+
+        const senha = elemento<HTMLInputElement>(fixture, '#campo-senha')!;
+        expect(document.activeElement).toBe(senha);
+        expect(senha.disabled).toBeFalse();
+        expect(senha.value).toBe('');
+      }));
+
+      it('outros erros não puxam o foco para a senha', fakeAsync(() => {
+        const fixture = montarNoDocumento();
+        preencher(fixture);
+        fixture.componentInstance.entrar();
+        httpMock.expectOne('/api/sessoes').flush(null, { status: 500, statusText: 'Erro' });
+        fixture.detectChanges();
+        tick();
+
+        expect(document.activeElement).not.toBe(elemento(fixture, '#campo-senha'));
+      }));
+
+      it('quando o bloqueio termina e o campo volta a ficar habilitado, o foco vai para a senha', fakeAsync(() => {
+        const fixture = montarNoDocumento();
+        preencher(fixture);
+        fixture.componentInstance.entrar();
+        httpMock
+          .expectOne('/api/sessoes')
+          .flush(
+            { codigo: 'bloqueado', segundosRestantes: 2 },
+            { status: 423, statusText: 'Locked' },
+          );
+        fixture.detectChanges();
+        tick();
+
+        const senha = elemento<HTMLInputElement>(fixture, '#campo-senha')!;
+        expect(senha.disabled).toBeTrue();
+        expect(document.activeElement).not.toBe(senha);
+
+        tick(1000);
+        fixture.detectChanges();
+        tick();
+        expect(document.activeElement).not.toBe(senha);
+
+        tick(1000);
+        fixture.detectChanges();
+        tick();
+        expect(fixture.componentInstance.bloqueado()).toBeFalse();
+        expect(senha.disabled).toBeFalse();
+        expect(document.activeElement).toBe(senha);
+      }));
+    });
+
     it('Redefinir senha no bloqueio abre o pedido de link', fakeAsync(() => {
       const fixture = montar();
       preencher(fixture);

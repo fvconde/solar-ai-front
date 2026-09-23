@@ -3,9 +3,11 @@ import {
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router, RouterLink } from '@angular/router';
@@ -37,6 +39,8 @@ export class Entrar implements OnInit {
 
   private token = '';
   private cronometro: ReturnType<typeof setInterval> | null = null;
+
+  private readonly campoSenha = viewChild<ElementRef<HTMLInputElement>>('campoSenha');
 
   readonly tela = signal<TelaEntrar>('entrar');
   readonly email = signal('');
@@ -130,6 +134,7 @@ export class Entrar implements OnInit {
 
         if (erro?.status === 401) {
           this.erroEntrar.set('E-mail ou senha incorretos. Confira e tente de novo.');
+          this.focarSenha();
           return;
         }
 
@@ -247,8 +252,13 @@ export class Entrar implements OnInit {
 
       if (restante <= 0) {
         this.pararCronometro();
+        this.focarSenha();
       }
     }, 1000);
+  }
+
+  private focarSenha(): void {
+    setTimeout(() => this.campoSenha()?.nativeElement.focus());
   }
 
   private pararCronometro(): void {
