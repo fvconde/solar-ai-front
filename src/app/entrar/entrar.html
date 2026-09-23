@@ -91,16 +91,10 @@
             Redefinir senha
           </button>
         } @else {
-          <p class="divisor">ainda sem conta</p>
-          <div class="saidas" [class.apagado]="enviando()" [attr.aria-disabled]="enviando()">
-            <a class="saida" routerLink="/cadastro" [attr.tabindex]="enviando() ? -1 : null">
-              <span class="link-saida">Cadastrar-se</span>
-            </a>
-            <a class="saida" routerLink="/seja-corretor" [attr.tabindex]="enviando() ? -1 : null">
-              <span class="link-saida">Venha ser um corretor na Solar</span>
-              <span class="complemento" aria-hidden="true">→</span>
-            </a>
-          </div>
+          <p class="sem-conta" [class.apagado]="enviando()">
+            Ainda não tem conta?
+            <a routerLink="/cadastro" [attr.tabindex]="enviando() ? -1 : null">Cadastre-se</a>
+          </p>
         }
       }
 
@@ -223,4 +217,21 @@
       }
     }
   </div>
+
+  @if (tela() === 'entrar') {
+    <a
+      class="faixa-corretor"
+      routerLink="/seja-corretor"
+      [class.apagado]="enviando()"
+      [attr.tabindex]="enviando() ? -1 : null"
+    >
+      <span class="faixa-texto">
+        <span class="faixa-titulo">É corretor de imóveis?</span>
+        <span class="faixa-apoio"
+          >Receba leads que a Lia já qualificou, na sua região e especialidade.</span
+        >
+      </span>
+      <span class="faixa-chamada">Venha para a Solar →</span>
+    </a>
+  }
 </section>

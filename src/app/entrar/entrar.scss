@@ -44,54 +44,84 @@
   margin-top: 12px;
 }
 
-.divisor {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 28px;
-  font-family: 'IBM Plex Mono', monospace;
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--login-rotulo-mono);
-
-  &::before,
-  &::after {
-    content: '';
-    flex: 1;
-    height: 1px;
-    background: var(--login-borda);
-  }
-}
-
-.saidas {
-  display: flex;
+.tela-entrar {
   flex-direction: column;
-  gap: 4px;
-  margin-top: 12px;
+  align-items: center;
+  gap: 16px;
 }
 
-.saida {
+.sem-conta {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  min-height: var(--login-alvo-toque);
+  justify-content: center;
+  gap: 6px;
+  min-height: 44px;
+  margin-top: 20px;
   font-size: 14px;
-  border-bottom: none;
+  color: var(--login-texto-secundario);
 
-  .link-saida {
-    color: var(--login-acao);
+  a {
     font-weight: 600;
+    color: var(--login-acao);
+    border-bottom: none;
     text-decoration: underline;
     text-underline-offset: 3px;
     text-decoration-color: color-mix(in srgb, var(--login-acao) 40%, transparent);
-  }
 
-  .complemento {
-    color: var(--login-texto-secundario);
+    &:hover {
+      color: var(--login-erro);
+    }
   }
+}
 
-  &:hover .link-saida {
-    text-decoration-color: var(--login-acao);
+.faixa-corretor {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: var(--login-largura-card);
+  max-width: 100%;
+  padding: 18px 20px;
+  color: var(--login-texto-primario);
+  background: var(--login-fundo-travado);
+  border: none;
+  border-radius: 12px;
+
+  &:hover .faixa-chamada {
+    color: var(--login-erro);
+  }
+}
+
+.faixa-texto {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  gap: 4px;
+}
+
+.faixa-titulo {
+  font-family: 'Libre Franklin', system-ui, sans-serif;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.faixa-apoio {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--login-texto-secundario);
+}
+
+.faixa-chamada {
+  flex: none;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--login-acao);
+}
+
+@media (max-width: 640px) {
+  .faixa-corretor {
+    width: 100%;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
   }
 }

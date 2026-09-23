@@ -14,6 +14,11 @@ import {
 } from '../sessao/sessao-teste';
 import { Entrar } from './entrar';
 
+const FUNDO_TRAVADO_POR_TEMA = {
+  claro: 'rgb(236, 230, 220)',
+  escuro: 'rgb(36, 35, 29)',
+} as const;
+
 describe('Entrar', () => {
   let httpMock: HttpTestingController;
 
@@ -75,30 +80,82 @@ describe('Entrar', () => {
       expect(elemento(fixture, '#campo-email')).toBeTruthy();
       expect(elemento(fixture, '#campo-senha')).toBeTruthy();
       expect(texto(fixture)).toContain('Esqueci minha senha');
-      expect(texto(fixture)).toContain('ainda sem conta');
-      expect(texto(fixture)).toContain('Cadastrar-se');
-      expect(texto(fixture)).toContain('Venha ser um corretor na Solar');
+      expect(texto(fixture)).toContain('Ainda não tem conta? Cadastre-se');
+      expect(texto(fixture)).toContain('É corretor de imóveis?');
+      expect(texto(fixture)).not.toContain('ainda sem conta');
+      expect(elemento(fixture, '.divisor')).toBeNull();
       expect(texto(fixture)).not.toContain('Não encontramos esse e-mail');
       expect(elemento<HTMLButtonElement>(fixture, '.botao-primario')?.disabled).toBeTrue();
       httpMock.expectNone(() => true);
     });
 
-    it('as saídas levam ao cadastro de cliente e ao de corretor', () => {
+    it('dentro do cartão, depois do Entrar, fica só a linha "Ainda não tem conta? Cadastre-se"', () => {
       const fixture = montar();
-      const hrefs = Array.from(
-        (fixture.nativeElement as HTMLElement).querySelectorAll<HTMLAnchorElement>('.saida'),
-      ).map((a) => a.getAttribute('href'));
+      const linha = elemento(fixture, '.cartao .sem-conta')!;
+      const link = linha.querySelector('a')!;
 
-      expect(hrefs).toEqual(['/cadastro', '/seja-corretor']);
+      expect(linha.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Ainda não tem conta? Cadastre-se',
+      );
+      expect(link.getAttribute('href')).toBe('/cadastro');
+      expect(getComputedStyle(link).fontWeight).toBe('600');
+      expect(getComputedStyle(linha).justifyContent).toBe('center');
+      expect(parseFloat(getComputedStyle(linha).minHeight)).toBeGreaterThanOrEqual(44);
+      expect(elemento(fixture, '.botao-primario')!.nextElementSibling).toBe(linha);
+      expect(elemento(fixture, '.cartao')!.querySelectorAll('a').length).toBe(1);
+      expect(linha.textContent).not.toContain('para conversar');
     });
 
-    it('Cadastrar-se fica sozinho na linha, sem a nota "para conversar"', () => {
+    it('fora e abaixo do cartão, a faixa inteira é um link para /seja-corretor', () => {
       const fixture = montar();
-      const cadastro = (fixture.nativeElement as HTMLElement).querySelector('.saida')!;
+      const faixa = elemento<HTMLAnchorElement>(fixture, '.faixa-corretor')!;
+      const estilo = getComputedStyle(faixa);
 
-      expect(cadastro.textContent?.trim()).toBe('Cadastrar-se');
-      expect(cadastro.querySelector('.complemento')).toBeNull();
-      expect(elemento(fixture, '.saidas')?.textContent).not.toContain('para conversar');
+      expect(faixa.closest('.cartao')).toBeNull();
+      expect(elemento(fixture, '.cartao')!.nextElementSibling).toBe(faixa);
+      expect(faixa.getAttribute('href')).toBe('/seja-corretor');
+      expect(faixa.querySelector('.faixa-titulo')?.textContent).toBe('É corretor de imóveis?');
+      expect(faixa.querySelector('.faixa-apoio')?.textContent).toBe(
+        'Receba leads que a Lia já qualificou, na sua região e especialidade.',
+      );
+      expect(faixa.querySelector('.faixa-chamada')?.textContent).toBe('Venha para a Solar →');
+      expect(estilo.borderTopStyle).toBe('none');
+      expect(estilo.borderTopLeftRadius).toBe('12px');
+      expect(estilo.padding).toBe('18px 20px');
+      expect(getComputedStyle(elemento(fixture, '.tela-entrar')!).rowGap).toBe('16px');
+      expect(faixa.getBoundingClientRect().width).toBe(
+        elemento(fixture, '.cartao')!.getBoundingClientRect().width,
+      );
+      expect(getComputedStyle(faixa.querySelector('.faixa-titulo')!).fontSize).toBe('15px');
+      expect(getComputedStyle(faixa.querySelector('.faixa-titulo')!).fontWeight).toBe('600');
+      expect(getComputedStyle(faixa.querySelector('.faixa-apoio')!).fontSize).toBe('13px');
+      expect(getComputedStyle(faixa.querySelector('.faixa-chamada')!).fontSize).toBe('14px');
+    });
+
+    it('no celular a chamada da faixa desce para baixo do texto', () => {
+      montar();
+      const regra = Array.from(document.styleSheets)
+        .flatMap((folha) => Array.from(folha.cssRules))
+        .filter(
+          (r): r is CSSMediaRule =>
+            r instanceof CSSMediaRule && r.conditionText.replace(/\s/g, '') === '(max-width:640px)',
+        )
+        .flatMap((r) => Array.from(r.cssRules))
+        .find(
+          (r): r is CSSStyleRule =>
+            r instanceof CSSStyleRule && /\.faixa-corretor(?![\w-])/.test(r.selectorText),
+        );
+
+      expect(regra?.style.flexDirection).toBe('column');
+    });
+
+    it('a faixa some nas telas de redefinir senha', () => {
+      const fixture = montar();
+      fixture.componentInstance.irParaRecuperacao();
+      fixture.detectChanges();
+
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
+      expect(elemento(fixture, '.sem-conta')).toBeNull();
     });
 
     it('os rótulos de campo do login e da recuperação usam IBM Plex Mono com peso 600', () => {
@@ -175,7 +232,9 @@ describe('Entrar', () => {
       expect(elemento(fixture, '.botao-primario .verificando')?.getAttribute('aria-label')).toBe(
         'Entrando',
       );
-      expect(elemento(fixture, '.saidas')?.classList).toContain('apagado');
+      expect(elemento(fixture, '.sem-conta')?.classList).toContain('apagado');
+      expect(elemento(fixture, '.faixa-corretor')?.classList).toContain('apagado');
+      expect(elemento(fixture, '.faixa-corretor')?.getAttribute('tabindex')).toBe('-1');
 
       httpMock.expectOne('/api/sessoes').flush(sessaoCliente());
     });
@@ -274,6 +333,9 @@ describe('Entrar', () => {
         );
       fixture.detectChanges();
 
+      expect(elemento(fixture, '.sem-conta')).toBeNull();
+      expect(elemento(fixture, '.faixa-corretor')).toBeTruthy();
+
       elemento<HTMLButtonElement>(fixture, '.botao-secundario')!.click();
       fixture.detectChanges();
 
@@ -337,6 +399,20 @@ describe('Entrar', () => {
         const botao = elemento<HTMLButtonElement>(fixture, '.botao-primario')!;
         expect(botao.disabled).toBeFalse();
         expect(getComputedStyle(botao).backgroundColor).toBe(MARCA_POR_TEMA[tema]);
+      });
+
+      it(`no tema ${tema}, a faixa usa o fundo travado e a chamada usa a cor de ação`, () => {
+        aplicarTema(tema);
+        const fixture = montar();
+        const faixa = elemento(fixture, '.faixa-corretor')!;
+
+        expect(getComputedStyle(faixa).backgroundColor).toBe(FUNDO_TRAVADO_POR_TEMA[tema]);
+        expect(getComputedStyle(faixa.querySelector('.faixa-chamada')!).color).toBe(
+          MARCA_POR_TEMA[tema],
+        );
+        expect(getComputedStyle(elemento(fixture, '.sem-conta a')!).color).toBe(
+          MARCA_POR_TEMA[tema],
+        );
       });
     }
   });
