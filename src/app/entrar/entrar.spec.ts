@@ -71,6 +71,7 @@ describe('Entrar', () => {
     });
 
     it('padrão: e-mail e senha na mesma tela, sem passo de identificação', () => {
+      aplicarTema('claro');
       const fixture = montar();
 
       expect(texto(fixture)).toContain('Entrar na Solar');
@@ -80,6 +81,20 @@ describe('Entrar', () => {
       expect(elemento(fixture, '#campo-email')).toBeTruthy();
       expect(elemento(fixture, '#campo-senha')).toBeTruthy();
       expect(texto(fixture)).toContain('Esqueci minha senha');
+      const esqueci = elemento<HTMLButtonElement>(fixture, '.link-recuperar-direcao-a')!;
+      const textoEsqueci = elemento<HTMLElement>(fixture, '.link-recuperar-direcao-a__texto')!;
+      const linhaSenha = elemento(fixture, '.linha-rotulo')!;
+      const estiloEsqueci = getComputedStyle(esqueci);
+      expect(esqueci.type).toBe('button');
+      expect(esqueci.closest('.linha-rotulo')).toBe(linhaSenha);
+      expect(linhaSenha.querySelector('label')?.textContent?.trim()).toBe('Senha');
+      expect(getComputedStyle(linhaSenha).justifyContent).toBe('space-between');
+      expect(estiloEsqueci.fontFamily).toContain('Instrument Sans');
+      expect(estiloEsqueci.fontSize).toBe('13px');
+      expect(estiloEsqueci.fontWeight).toBe('600');
+      expect(estiloEsqueci.color).toBe(MARCA_POR_TEMA.claro);
+      expect(estiloEsqueci.textDecorationLine).toBe('none');
+      expect(getComputedStyle(textoEsqueci).textDecorationLine).toBe('underline');
       expect(texto(fixture)).toContain('Ainda não tem conta? Cadastre-se');
       expect(texto(fixture)).toContain('É corretor de imóveis?');
       expect(texto(fixture)).not.toContain('ainda sem conta');

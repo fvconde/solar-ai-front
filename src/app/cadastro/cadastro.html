@@ -1,11 +1,14 @@
 <section class="tela-entrar">
   <form class="cartao" novalidate (ngSubmit)="enviar()">
     <a
-      class="link-mono link-voltar"
+      class="link-mono link-voltar link-voltar-direcao-a"
       routerLink="/entrar"
       [class.apagado]="enviando()"
       [attr.tabindex]="enviando() ? -1 : null"
-      >← Voltar para o login</a
+    >
+      <span class="link-voltar-direcao-a__seta" aria-hidden="true">←&nbsp;</span>
+      <span class="link-voltar-direcao-a__texto">Voltar para o login</span>
+    </a
     >
 
     @if (corretor) {

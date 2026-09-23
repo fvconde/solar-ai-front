@@ -103,9 +103,26 @@ describe('Cadastro', () => {
     });
 
     it('abre com os textos do desenho, aceite desmarcado e botão apagado', async () => {
+      aplicarTema('claro');
       const fixture = await montar('cliente');
 
       expect(texto(fixture)).toContain('← Voltar para o login');
+      const voltar = html(fixture).querySelector<HTMLAnchorElement>('.link-voltar')!;
+      const seta = voltar.querySelector<HTMLElement>('.link-voltar-direcao-a__seta')!;
+      const textoVoltar = voltar.querySelector<HTMLElement>('.link-voltar-direcao-a__texto')!;
+      const estiloVoltar = getComputedStyle(voltar);
+      expect(voltar.getAttribute('href')).toBe('/entrar');
+      expect(estiloVoltar.fontFamily).toContain('Instrument Sans');
+      expect(estiloVoltar.fontSize).toBe('14px');
+      expect(estiloVoltar.fontWeight).toBe('600');
+      expect(estiloVoltar.color).toBe(MARCA_POR_TEMA.claro);
+      expect(estiloVoltar.textDecorationLine).toBe('none');
+      expect(getComputedStyle(seta).fontFamily).toBe(estiloVoltar.fontFamily);
+      expect(getComputedStyle(seta).textDecorationLine).toBe('none');
+      expect(getComputedStyle(textoVoltar).textDecorationLine).toBe('underline');
+      expect(getComputedStyle(textoVoltar).getPropertyValue('text-decoration-thickness')).toBe(
+        '1px',
+      );
       expect(texto(fixture)).toContain('Criar sua conta');
       expect(texto(fixture)).toContain(
         'Suas conversas com a Lia ficam salvas e você continua de onde parou, em qualquer aparelho.',

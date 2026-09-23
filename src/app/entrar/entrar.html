@@ -27,12 +27,12 @@
           <label class="rotulo" for="campo-senha">Senha</label>
           @if (!bloqueado()) {
             <button
-              class="link-mono"
+              class="link-mono link-recuperar-direcao-a"
               type="button"
               [disabled]="enviando()"
               (click)="irParaRecuperacao()"
             >
-              Esqueci minha senha
+              <span class="link-recuperar-direcao-a__texto">Esqueci minha senha</span>
             </button>
           }
         </div>
