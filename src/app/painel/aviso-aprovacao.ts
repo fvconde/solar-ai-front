@@ -39,11 +39,6 @@ const CHAVE_APROVACAO_VISTA = 'solar.aprovacaoVista';
       cursor: pointer;
     }
 
-    @media (min-width: 641px) {
-      .aviso-ok {
-        margin-inline: 14px;
-      }
-    }
   `,
 })
 export class AvisoAprovacao implements OnInit {
