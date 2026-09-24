@@ -309,6 +309,24 @@
   border-radius: var(--raio-card);
 }
 
+@media (min-width: 641px) {
+  .dados-pessoa {
+    display: grid;
+    gap: 4px;
+  }
+
+  .nome,
+  .atuacao-lista {
+    display: block;
+    line-height: 1.3;
+  }
+
+  .tempo-lista {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+}
+
 @media (max-width: 640px) {
   .fila-aprovacao {
     padding: 14px 16px 24px;
