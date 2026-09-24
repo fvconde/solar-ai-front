@@ -112,7 +112,11 @@ describe('Painel do corretor em análise e aviso de aprovação', () => {
 
   it('depois da aprovação, o aviso verde aparece uma única vez', () => {
     let fixture = aprovado('2026-09-23T10:00:00Z');
-    expect(texto(fixture)).toContain('Cadastro aprovado. Seus primeiros leads já estão aqui.');
+    expect(texto(fixture)).toContain('Cadastro aprovado. Seus primeiros leads aparecerão aqui.');
+    const aviso = (fixture.nativeElement as HTMLElement).querySelector<HTMLElement>('.aviso-ok')!;
+    expect(getComputedStyle(aviso).marginTop).toBe('0px');
+    expect(getComputedStyle(aviso).marginLeft).toBe('28px');
+    expect(getComputedStyle(aviso).marginRight).toBe('28px');
     fixture.destroy();
 
     fixture = aprovado('2026-09-23T10:00:00Z');

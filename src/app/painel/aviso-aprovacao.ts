@@ -9,7 +9,7 @@ const CHAVE_APROVACAO_VISTA = 'solar.aprovacaoVista';
   template: `
     @if (visivel()) {
       <p class="aviso-ok" role="status">
-        <span><b>Cadastro aprovado.</b> Seus primeiros leads já estão aqui.</span>
+        <span><b>Cadastro aprovado.</b> Seus primeiros leads aparecerão aqui.</span>
         <button class="fechar" type="button" aria-label="Fechar" (click)="visivel.set(false)">
           ✕
         </button>
@@ -21,7 +21,7 @@ const CHAVE_APROVACAO_VISTA = 'solar.aprovacaoVista';
       display: flex;
       align-items: baseline;
       gap: 8px;
-      margin: 16px 28px 0;
+      margin: 0 28px;
       padding: 10px 14px;
       border-radius: 8px;
       font-size: 14.5px;
