@@ -76,7 +76,14 @@ describe('Fila de aprovação de corretores', () => {
   }
 
   function clicar(elemento: HTMLElement, rotulo: string, fixture: ComponentFixture<Painel>) {
-    Array.from(elemento.querySelectorAll<HTMLButtonElement>('button'))
+    const botaoAcaoNaLinha = Array.from(elemento.querySelectorAll<HTMLButtonElement>('.acao'))
+      .find((b) => b.textContent?.trim() === rotulo);
+    if (!botaoAcaoNaLinha) {
+      elemento.querySelector<HTMLButtonElement>('.selecao-pendente')?.click();
+      fixture.detectChanges();
+    }
+    const alvo = html(fixture).querySelector<HTMLElement>('.detalhe') ?? elemento;
+    Array.from(alvo.querySelectorAll<HTMLButtonElement>('.acao'))
       .find((b) => b.textContent?.trim() === rotulo)!
       .click();
     fixture.detectChanges();
@@ -95,17 +102,16 @@ describe('Fila de aprovação de corretores', () => {
   it('supervisor vê "Novos corretores" no topo, do mais antigo ao mais novo, com contato e atuação', () => {
     const fixture = montarSupervisor();
 
-    expect(html(fixture).querySelector('.fila-aprovacao .titulo')?.textContent?.trim()).toBe(
-      'Novos corretores · 2',
-    );
+    expect(html(fixture).querySelector('#aba-novos-corretores .contagem-desktop')?.textContent?.trim())
+      .toBe('2 pendentes');
     const [rafael, bianca] = linhas(fixture);
     expect(rafael.querySelector('.nome')?.textContent).toBe('Rafael Nunes');
-    expect(rafael.querySelector('.estado')?.textContent).toBe('Em análise');
-    const metas = Array.from(rafael.querySelectorAll('.meta')).map((m) => m.textContent?.trim());
-    expect(metas).toEqual([
-      'rafael@imob.com · (11) 91234-5678',
-      'Sul, Centro · Moradia, Investimento · há 5 h',
-    ]);
+    expect(rafael.querySelector('.atuacao-lista')?.textContent?.trim())
+      .toBe('Sul, Centro · Moradia, Investimento');
+    expect(rafael.querySelector('.tempo-lista')?.textContent?.trim()).toBe('há 5 h');
+    expect(html(fixture).querySelector('.detalhe .estado')?.textContent?.trim()).toBe('EM ANÁLISE');
+    expect(Array.from(html(fixture).querySelectorAll('.detalhe .valor-dado'))
+      .map((d) => d.textContent?.trim())).toContain('rafael@imob.com');
     expect(bianca.querySelector('.nome')?.textContent).toBe('Bianca Lopes');
     expect(TestBed.inject(SessaoStore).pendentesAprovacao()).toBe(2);
   });
@@ -120,9 +126,8 @@ describe('Fila de aprovação de corretores', () => {
     fixture.detectChanges();
 
     expect(linhas(fixture).length).toBe(1);
-    expect(html(fixture).querySelector('.fila-aprovacao .titulo')?.textContent?.trim()).toBe(
-      'Novos corretores · 1',
-    );
+    expect(html(fixture).querySelector('#aba-novos-corretores .contagem-desktop')?.textContent?.trim())
+      .toBe('1 pendente');
     expect(html(fixture).querySelector('.aviso-ok')?.textContent).toBe(
       'Cadastro de Rafael Nunes aprovado. O aviso segue por e-mail.',
     );
@@ -133,22 +138,22 @@ describe('Fila de aprovação de corretores', () => {
     const fixture = montarSupervisor();
 
     clicar(linhas(fixture)[1], 'Recusar', fixture);
-    const linha = linhas(fixture)[1];
+    const detalhe = html(fixture).querySelector<HTMLElement>('.detalhe')!;
 
-    expect(linha.classList).toContain('aberta');
-    expect(linha.querySelector('.rotulo')?.textContent?.trim()).toBe(
+    expect(detalhe.classList).toContain('recusando');
+    expect(detalhe.querySelector('.rotulo')?.textContent?.trim()).toBe(
       'Motivo · opcional, vai no e-mail',
     );
-    expect(getComputedStyle(linha.querySelector('.rotulo')!).fontWeight).toBe('600');
-    expect(linha.querySelector('textarea')?.getAttribute('maxlength')).toBe('500');
-    expect(Array.from(linha.querySelectorAll('button')).map((b) => b.textContent?.trim())).toEqual([
+    expect(getComputedStyle(detalhe.querySelector('.rotulo')!).fontWeight).toBe('600');
+    expect(detalhe.querySelector('textarea')?.getAttribute('maxlength')).toBe('500');
+    expect(Array.from(detalhe.querySelectorAll('.acao')).map((b) => b.textContent?.trim())).toEqual([
       'Recusar e avisar por e-mail',
       'Cancelar',
     ]);
     httpMock.expectNone((r) => r.url.endsWith('/recusa'));
 
-    clicar(linha, 'Cancelar', fixture);
-    expect(linhas(fixture)[1].querySelector('textarea')).toBeNull();
+    clicar(linhas(fixture)[1], 'Cancelar', fixture);
+    expect(html(fixture).querySelector('.detalhe textarea')).toBeNull();
   });
 
   it('confirmar a recusa manda o motivo e remove a linha', async () => {
@@ -156,7 +161,7 @@ describe('Fila de aprovação de corretores', () => {
     clicar(linhas(fixture)[1], 'Recusar', fixture);
     await fixture.whenStable();
 
-    const campo = linhas(fixture)[1].querySelector('textarea')!;
+    const campo = html(fixture).querySelector<HTMLTextAreaElement>('.detalhe textarea')!;
     campo.value = 'Não encontramos seu CRECI ativo.';
     campo.dispatchEvent(new Event('input'));
     fixture.detectChanges();
@@ -218,7 +223,8 @@ describe('Fila de aprovação de corretores', () => {
     httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
     fixture.detectChanges();
 
-    expect(html(fixture).querySelector('.fila-aprovacao')).toBeNull();
+    expect(html(fixture).querySelector('.fila-aprovacao .sem-pendentes')?.textContent)
+      .toContain('Nenhum corretor pendente no momento.');
   });
 
   for (const tema of TEMAS) {
@@ -226,11 +232,11 @@ describe('Fila de aprovação de corretores', () => {
       aplicarTema(tema);
       const fixture = montarSupervisor();
 
-      const aprovar = linhas(fixture)[0].querySelector<HTMLElement>('.acao.principal')!;
+      const aprovar = html(fixture).querySelector<HTMLElement>('.detalhe .acao.principal')!;
       expect(getComputedStyle(aprovar).backgroundColor).toBe(MARCA_POR_TEMA[tema]);
 
       clicar(linhas(fixture)[0], 'Recusar', fixture);
-      const recusar = linhas(fixture)[0].querySelector<HTMLElement>('.acao.perigo')!;
+      const recusar = html(fixture).querySelector<HTMLElement>('.detalhe .acao.perigo')!;
       expect(getComputedStyle(recusar).backgroundColor).toBe(ERRO_POR_TEMA[tema]);
     });
   }

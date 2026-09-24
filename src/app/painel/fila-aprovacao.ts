@@ -1,4 +1,12 @@
-import { ChangeDetectionStrategy, Component, inject, OnInit, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  ElementRef,
+  inject,
+  OnInit,
+  signal,
+} from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
 import { formatarTelefone, rotuloDe } from '../conta/conta-contrato';
@@ -13,242 +21,166 @@ const LIMITE_MOTIVO = 500;
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [FormsModule],
   template: `
-    @if (pendentes().length > 0 || aviso() || erro()) {
-      <section class="fila-aprovacao" aria-labelledby="titulo-novos-corretores">
-        @if (pendentes().length > 0) {
-          <h2 class="titulo" id="titulo-novos-corretores">
-            Novos corretores · {{ pendentes().length }}
-          </h2>
-          <ul class="lista">
-            @for (pendente of pendentes(); track pendente.id) {
-              <li class="linha" [class.aberta]="recusando() === pendente.id">
-                <span class="nome">{{ pendente.nome }}</span>
-                <span class="estado">Em análise</span>
-                @if (recusando() !== pendente.id) {
-                  <span class="meta">{{ pendente.email }} · {{ telefone(pendente.telefone) }}</span>
-                }
-                <span class="meta">{{ atuacao(pendente) }}</span>
+    <section class="fila-aprovacao" aria-label="Novos corretores" [attr.aria-busy]="carregando()">
+      @if (carregando()) {
+        <p class="carregando" role="status">Carregando novos corretores...</p>
+      } @else if (pendentes().length > 0) {
+        <div class="layout" [class.detalhe-aberto]="detalheMobile()">
+          @if (aviso()) {
+            <p class="aviso-ok" role="status">{{ aviso() }}</p>
+          }
+          @if (erro()) {
+            <p class="erro" role="alert">{{ erro() }}</p>
+          }
+
+          <aside class="lista" aria-label="Corretores pendentes">
+            <p class="cabecalho-lista">
+              Pendentes · <strong>{{ pendentes().length }}</strong>
+            </p>
+            <ul class="lista-pendentes">
+              @for (pendente of pendentes(); track pendente.id) {
+                <li class="linha" [class.selecionada]="selecionadoId() === pendente.id">
+                  <button
+                    type="button"
+                    class="selecao-pendente"
+                    [attr.aria-pressed]="selecionadoId() === pendente.id"
+                    [attr.aria-label]="
+                      'Selecionar ' + pendente.nome + ', ' + atuacao(pendente) + ', ' + espera(pendente.criadoEm)
+                    "
+                    (click)="selecionar(pendente)"
+                  >
+                    <span class="avatar-pequeno" aria-hidden="true">{{ iniciais(pendente.nome) }}</span>
+                    <span class="dados-pessoa">
+                      <span class="nome">{{ pendente.nome }}</span>
+                      <span class="atuacao-lista">{{ atuacao(pendente) }}</span>
+                    </span>
+                    <span class="tempo-lista">{{ espera(pendente.criadoEm) }}</span>
+                  </button>
+                </li>
+              }
+            </ul>
+          </aside>
+
+          @if (selecionado(); as pendente) {
+            <section class="detalhe" [class.recusando]="recusando() === pendente.id" aria-labelledby="titulo-corretor-selecionado">
+              <button type="button" class="voltar-mobile" (click)="voltarParaLista()">
+                <span aria-hidden="true">←</span> Novos corretores
+              </button>
+
+              <div class="conteudo-detalhe">
+                <header class="cabecalho-detalhe">
+                  <span class="avatar-grande" aria-hidden="true">{{ iniciais(pendente.nome) }}</span>
+                  <div class="identidade">
+                    <h2 class="nome-detalhe" id="titulo-corretor-selecionado">{{ pendente.nome }}</h2>
+                    <div class="estado-espera">
+                      <span class="estado">EM ANÁLISE</span>
+                      <span>Aguardando {{ espera(pendente.criadoEm) }}</span>
+                    </div>
+                  </div>
+                </header>
+
+                <div class="blocos-dados">
+                  <section class="bloco-dado" aria-labelledby="rotulo-contato">
+                    <h3 class="rotulo-dado" id="rotulo-contato">Contato</h3>
+                    <p class="valor-dado">{{ pendente.email || 'E-mail não informado' }}</p>
+                    <p class="valor-dado secundario">{{ telefone(pendente.telefone) }}</p>
+                  </section>
+                  <section class="bloco-dado" aria-labelledby="rotulo-atuacao">
+                    <h3 class="rotulo-dado" id="rotulo-atuacao">Atuação</h3>
+                    <p class="valor-dado">Região: {{ regioes(pendente) }}</p>
+                    <p class="valor-dado secundario">
+                      Especialidade: {{ especialidades(pendente) }}
+                    </p>
+                  </section>
+                </div>
 
                 @if (recusando() === pendente.id) {
-                  <label class="rotulo" [for]="'motivo-' + pendente.id"
-                    >Motivo · opcional, vai no e-mail</label
-                  >
-                  <textarea
-                    class="motivo"
-                    [id]="'motivo-' + pendente.id"
-                    [name]="'motivo-' + pendente.id"
-                    [maxlength]="limiteMotivo"
-                    [disabled]="enviando()"
-                    [ngModel]="motivo()"
-                    (ngModelChange)="motivo.set($event)"
-                  ></textarea>
-                  <div class="acoes">
-                    <button
-                      class="acao perigo"
-                      type="button"
+                  <div class="formulario-recusa">
+                    <label class="rotulo" [for]="'motivo-' + pendente.id">
+                      Motivo · opcional, vai no e-mail
+                    </label>
+                    <textarea
+                      class="motivo"
+                      [id]="'motivo-' + pendente.id"
+                      [name]="'motivo-' + pendente.id"
+                      [maxlength]="limiteMotivo"
                       [disabled]="enviando()"
-                      (click)="confirmarRecusa(pendente)"
-                    >
-                      Recusar e avisar por e-mail
-                    </button>
-                    <button
-                      class="acao neutra"
-                      type="button"
-                      [disabled]="enviando()"
-                      (click)="cancelarRecusa()"
-                    >
-                      Cancelar
-                    </button>
-                  </div>
-                } @else {
-                  <div class="acoes">
-                    <button
-                      class="acao principal"
-                      type="button"
-                      [disabled]="enviando()"
-                      (click)="aprovar(pendente)"
-                    >
-                      Aprovar
-                    </button>
-                    <button
-                      class="acao neutra"
-                      type="button"
-                      [disabled]="enviando()"
-                      (click)="abrirRecusa(pendente)"
-                    >
-                      Recusar
-                    </button>
+                      [ngModel]="motivo()"
+                      (ngModelChange)="motivo.set($event)"
+                    ></textarea>
                   </div>
                 }
-              </li>
-            }
-          </ul>
-        }
-        @if (aviso()) {
-          <p class="aviso-ok" role="status">{{ aviso() }}</p>
-        }
-        @if (erro()) {
-          <p class="erro" role="alert">{{ erro() }}</p>
-        }
-      </section>
-    }
+              </div>
+
+              <footer class="acoes">
+                @if (recusando() === pendente.id) {
+                  <button
+                    class="acao perigo"
+                    type="button"
+                    [disabled]="enviando()"
+                    (click)="confirmarRecusa(pendente)"
+                  >
+                    Recusar e avisar por e-mail
+                  </button>
+                  <button
+                    class="acao neutra"
+                    type="button"
+                    [disabled]="enviando()"
+                    (click)="cancelarRecusa()"
+                  >
+                    Cancelar
+                  </button>
+                } @else {
+                  <button
+                    class="acao principal"
+                    type="button"
+                    [disabled]="enviando()"
+                    (click)="aprovar(pendente)"
+                  >
+                    Aprovar
+                  </button>
+                  <button
+                    class="acao neutra"
+                    type="button"
+                    [disabled]="enviando()"
+                    (click)="abrirRecusa(pendente)"
+                  >
+                    Recusar
+                  </button>
+                }
+              </footer>
+            </section>
+          }
+        </div>
+      } @else {
+        <div class="sem-pendentes">
+          @if (aviso()) {
+            <p class="aviso-ok" role="status">{{ aviso() }}</p>
+          }
+          @if (erro()) {
+            <p class="erro" role="alert">{{ erro() }}</p>
+          }
+          <p>Nenhum corretor pendente no momento.</p>
+        </div>
+      }
+    </section>
   `,
-  styles: `
-    .fila-aprovacao {
-      flex: none;
-      max-height: 45vh;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-      padding: 20px 28px;
-      background: var(--superficie-barra);
-      border-bottom: 1px solid var(--borda-estrutura);
-    }
-
-    .titulo {
-      margin: 0;
-      font-size: 16px;
-      font-weight: 600;
-    }
-
-    .lista {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      margin: 0;
-      padding: 0;
-      list-style: none;
-    }
-
-    .linha {
-      display: grid;
-      grid-template-columns: 1fr auto;
-      gap: 4px 12px;
-      max-width: 720px;
-      padding: 14px 16px;
-      font-size: 14.5px;
-      background: var(--superficie-elevada);
-      border: 1px solid var(--borda-componente);
-      border-radius: var(--raio-card);
-    }
-
-    .nome {
-      font-weight: 600;
-    }
-
-    .estado {
-      align-self: start;
-      padding: 3px 9px;
-      border-radius: 3px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      color: var(--atencao);
-      background: color-mix(in srgb, var(--atencao) 14%, var(--superficie-elevada));
-    }
-
-    .meta,
-    .rotulo,
-    .motivo,
-    .acoes {
-      grid-column: 1 / -1;
-    }
-
-    .meta {
-      font-size: 13.5px;
-      color: var(--texto-secundario);
-    }
-
-    .rotulo {
-      margin-top: 8px;
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      color: var(--texto-secundario);
-    }
-
-    .motivo {
-      min-height: 64px;
-      padding: 10px 12px;
-      font: inherit;
-      font-size: 14px;
-      color: var(--texto-primario);
-      background: var(--fundo-conversa);
-      border: 1px solid var(--marca);
-      border-radius: 8px;
-      resize: vertical;
-    }
-
-    .acoes {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8px;
-      margin-top: 8px;
-    }
-
-    .acao {
-      min-height: 36px;
-      padding: 0 16px;
-      font-size: 14px;
-      font-weight: 600;
-      border-radius: 999px;
-      border: 1px solid transparent;
-      cursor: pointer;
-
-      &:disabled {
-        opacity: 0.6;
-        cursor: not-allowed;
-      }
-
-      &.principal {
-        color: var(--marca-contraste);
-        background: var(--marca);
-      }
-
-      &.neutra {
-        color: var(--texto-secundario);
-        background: none;
-        border-color: var(--borda-componente);
-      }
-
-      &.perigo {
-        color: var(--superficie-elevada);
-        background: var(--erro);
-      }
-    }
-
-    .aviso-ok {
-      max-width: 720px;
-      padding: 10px 14px;
-      border-radius: 8px;
-      font-size: 14.5px;
-      color: var(--sucesso);
-      background: color-mix(in srgb, var(--sucesso) 14%, var(--superficie-elevada));
-    }
-
-    .erro {
-      font-size: 14px;
-      color: var(--erro);
-    }
-
-    @media (max-width: 640px) {
-      .fila-aprovacao {
-        padding: 16px;
-      }
-    }
-  `,
+  styleUrl: './fila-aprovacao.scss',
 })
 export class FilaAprovacao implements OnInit {
+  private readonly host = inject<ElementRef<HTMLElement>>(ElementRef);
   private readonly api = inject(PainelApi);
   private readonly sessao = inject(SessaoStore);
   private readonly router = inject(Router);
 
   readonly limiteMotivo = LIMITE_MOTIVO;
+  readonly carregando = signal(true);
   readonly pendentes = signal<CorretorPendente[]>([]);
+  readonly selecionadoId = signal<string | null>(null);
+  readonly selecionado = computed(
+    () => this.pendentes().find((pendente) => pendente.id === this.selecionadoId()) ?? null,
+  );
+  readonly detalheMobile = signal(false);
   readonly recusando = signal<string | null>(null);
   readonly motivo = signal('');
   readonly enviando = signal(false);
@@ -259,10 +191,26 @@ export class FilaAprovacao implements OnInit {
     this.api.listarPendentes().subscribe({
       next: (lista) => {
         this.pendentes.set(lista);
+        this.selecionadoId.set(lista[0]?.id ?? null);
         this.sessao.pendentesAprovacao.set(lista.length);
+        this.carregando.set(false);
       },
-      error: (erro) => this.tratarErro(erro, null),
+      error: (erro) => {
+        this.carregando.set(false);
+        this.tratarErro(erro, null);
+      },
     });
+  }
+
+  selecionar(pendente: CorretorPendente): void {
+    this.selecionadoId.set(pendente.id);
+    this.detalheMobile.set(true);
+    this.focarNoCelular('.voltar-mobile');
+  }
+
+  voltarParaLista(): void {
+    this.detalheMobile.set(false);
+    this.focarNoCelular('.selecao-pendente[aria-pressed="true"]');
   }
 
   aprovar(pendente: CorretorPendente): void {
@@ -296,13 +244,37 @@ export class FilaAprovacao implements OnInit {
   }
 
   telefone(digitos: string): string {
-    return formatarTelefone(digitos);
+    return digitos ? formatarTelefone(digitos) : 'Telefone não informado';
   }
 
   atuacao(pendente: CorretorPendente): string {
     const regioes = pendente.regioes.map(rotuloDe).join(', ');
     const especialidades = pendente.especialidades.map(rotuloDe).join(', ');
-    return `${regioes} · ${especialidades} · ${haQuanto(pendente.criadoEm)}`;
+    return `${regioes || 'Região não informada'} · ${especialidades || 'Especialidade não informada'}`;
+  }
+
+  regioes(pendente: CorretorPendente): string {
+    return pendente.regioes.map(rotuloDe).join(', ') || 'não informada';
+  }
+
+  especialidades(pendente: CorretorPendente): string {
+    return pendente.especialidades.map(rotuloDe).join(', ') || 'não informada';
+  }
+
+  iniciais(nome: string): string {
+    const partes = nome
+      .trim()
+      .split(/\s+/)
+      .filter((parte) => !['de', 'da', 'do', 'das', 'dos', 'e'].includes(parte.toLowerCase()));
+    return partes
+      .slice(0, 2)
+      .map((parte) => parte.charAt(0))
+      .join('')
+      .toUpperCase();
+  }
+
+  espera(criadoEm: string): string {
+    return haQuanto(criadoEm);
   }
 
   private iniciar(): void {
@@ -318,7 +290,13 @@ export class FilaAprovacao implements OnInit {
   }
 
   private remover(pendente: CorretorPendente): void {
+    const removendoSelecionado = this.selecionadoId() === pendente.id;
     this.pendentes.update((lista) => lista.filter((item) => item.id !== pendente.id));
+    if (removendoSelecionado) {
+      const proximo = this.pendentes()[0] ?? null;
+      this.selecionadoId.set(proximo?.id ?? null);
+      if (!proximo) this.detalheMobile.set(false);
+    }
     this.sessao.descontarPendente();
     this.cancelarRecusa();
   }
@@ -343,6 +321,13 @@ export class FilaAprovacao implements OnInit {
     }
 
     this.erro.set('Não foi possível concluir agora. Tente de novo.');
+  }
+
+  private focarNoCelular(seletor: string): void {
+    if (typeof window === 'undefined' || !window.matchMedia('(max-width: 640px)').matches) return;
+    window.requestAnimationFrame(() => {
+      this.host.nativeElement.querySelector<HTMLElement>(seletor)?.focus();
+    });
   }
 }
 

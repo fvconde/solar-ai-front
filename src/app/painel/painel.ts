@@ -52,6 +52,7 @@ export class Painel implements OnInit, OnDestroy {
   readonly acessoRestrito = signal<boolean>(false);
 
   readonly filtroAtivo = signal<string>('meus_leads');
+  readonly novosCorretoresAtivo = signal(false);
   readonly intencaoAtiva = signal<string>('');
 
   readonly leadSelecionadoId = signal<string | null>(null);
@@ -69,6 +70,15 @@ export class Painel implements OnInit, OnDestroy {
     () => this.sessao.perfil() === 'corretor' && this.sessao.statusCorretor() === 'aprovado',
   );
   readonly filtrosPermitidos = computed(() => this.sessao.filtrosPermitidos());
+  readonly abasSupervisor = computed(() =>
+    ['minha_fila', 'sem_corretor', 'visao_geral'].filter((filtro) =>
+      this.filtrosPermitidos().includes(filtro),
+    ),
+  );
+  readonly pendentesAprovacao = computed(() => this.sessao.pendentesAprovacao() ?? 0);
+  readonly abaAtivaId = computed(() =>
+    this.novosCorretoresAtivo() ? 'aba-novos-corretores' : `aba-${this.filtroAtivo()}`,
+  );
 
   readonly filtroFixo = computed(() => this.filtrosPermitidos().length === 1);
   readonly temSeletor = computed(() => this.filtrosPermitidos().length > 1);
@@ -136,7 +146,14 @@ export class Painel implements OnInit, OnDestroy {
       queryFiltro || this.sessao.filtroInicial() || this.filtrosPermitidos()[0] || 'meus_leads';
     this.filtroAtivo.set(inicial);
 
-    this.carregarLeads();
+    const abrirNovosCorretores =
+      this.perfil() === 'supervisor' &&
+      !queryFiltro &&
+      !this.route.snapshot.paramMap.get('id');
+    this.novosCorretoresAtivo.set(abrirNovosCorretores);
+    if (!abrirNovosCorretores) {
+      this.carregarLeads();
+    }
   }
 
   ngOnDestroy(): void {
@@ -144,6 +161,7 @@ export class Painel implements OnInit, OnDestroy {
   }
 
   selecionarFiltro(filtro: string): void {
+    this.novosCorretoresAtivo.set(false);
     this.filtroAtivo.set(filtro);
     this.router.navigate([], {
       relativeTo: this.route,
@@ -151,6 +169,29 @@ export class Painel implements OnInit, OnDestroy {
       queryParamsHandling: 'merge',
     });
     this.carregarLeads();
+  }
+
+  selecionarNovosCorretores(): void {
+    if (this.perfil() !== 'supervisor') return;
+    this.novosCorretoresAtivo.set(true);
+    void this.router.navigate(['/painel'], { queryParams: { filtro: null } });
+  }
+
+  navegarAbasSupervisor(evento: KeyboardEvent): void {
+    const lista = (evento.currentTarget as HTMLElement).parentElement;
+    const abas = Array.from(lista?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);
+    const atual = abas.indexOf(evento.currentTarget as HTMLButtonElement);
+    if (atual < 0 || abas.length === 0) return;
+
+    let proximo = atual;
+    if (evento.key === 'ArrowRight') proximo = (atual + 1) % abas.length;
+    else if (evento.key === 'ArrowLeft') proximo = (atual - 1 + abas.length) % abas.length;
+    else if (evento.key === 'Home') proximo = 0;
+    else if (evento.key === 'End') proximo = abas.length - 1;
+    else return;
+
+    evento.preventDefault();
+    abas[proximo].focus();
   }
 
   carregarLeads(): void {

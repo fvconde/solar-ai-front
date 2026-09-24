@@ -318,16 +318,24 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
+    httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('#aba-minha_fila') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
     const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     expect(req.request.params.get('filtro')).toBe('minha_fila');
     req.flush(filaMock);
     fixture.detectChanges();
 
     const html = fixture.nativeElement as HTMLElement;
-    const botoes = Array.from(html.querySelectorAll('.botao-filtro')).map((b) =>
+    expect(html.querySelectorAll('[role="tab"]').length).toBe(4);
+    expect(html.querySelector('.seletor-filtros')).toBeNull();
+    expect(html.querySelector('#aba-minha_fila')?.getAttribute('aria-selected')).toBe('true');
+    const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Minha fila', 'Sem corretor elegível', 'Visão geral']);
+    expect(botoes).toEqual(['Minha fila', 'Sem corretor elegível', 'Visão geral', 'Novos corretores']);
   });
 
   it('6. supervisor sem vínculo não renderiza "Minha fila" de forma alguma', () => {
@@ -345,6 +353,11 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
+    httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('#aba-sem_corretor') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
     const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     expect(req.request.params.get('filtro')).toBe('sem_corretor');
     req.flush(filaMock);
@@ -354,10 +367,10 @@ describe('Painel (S-21)', () => {
     const textoTodo = html.textContent || '';
     expect(textoTodo).not.toContain('Minha fila');
 
-    const botoes = Array.from(html.querySelectorAll('.botao-filtro')).map((b) =>
+    const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Sem corretor elegível', 'Visão geral']);
+    expect(botoes).toEqual(['Sem corretor elegível', 'Visão geral', 'Novos corretores']);
   });
 
   it('7. estado de acesso restrito bloqueia antes de chamada de dados ou em 403', () => {
@@ -493,6 +506,10 @@ describe('Painel (S-21)', () => {
       filtroInicial: 'sem_corretor',
     });
     const f2 = TestBed.createComponent(Painel);
+    f2.detectChanges();
+    httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
+    f2.detectChanges();
+    (f2.nativeElement.querySelector('#aba-sem_corretor') as HTMLButtonElement).click();
     f2.detectChanges();
     httpMock.expectOne((r) => r.url === '/api/painel/leads').flush({ total: 0, itens: [] });
     f2.detectChanges();
