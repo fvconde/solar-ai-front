@@ -210,6 +210,7 @@ describe('Cadastro', () => {
 
       expect(TestBed.inject(SessaoStore).perfil()).toBe('cliente');
       expect(TestBed.inject(Avisos).atual()).toBe('Conta criada. Esta conversa já está salva.');
+      expect(TestBed.inject(Avisos).alinhamento()).toBe('composer');
       expect(navegou).toHaveBeenCalledWith(['/']);
       tick(5000);
     }));
@@ -411,6 +412,7 @@ describe('Cadastro', () => {
 
       expect(TestBed.inject(SessaoStore).emAnalise()).toBeTrue();
       expect(TestBed.inject(Avisos).atual()).toBe('Conta criada. Você já está dentro.');
+      expect(TestBed.inject(Avisos).alinhamento()).toBe('composer');
       expect(navegou).toHaveBeenCalledWith(['/painel']);
       tick(5000);
     }));

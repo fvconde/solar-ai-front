@@ -201,6 +201,7 @@ export class Cadastro {
       levouConversa
         ? 'Conta criada. Esta conversa já está salva.'
         : 'Conta criada. Você já está dentro.',
+      'composer',
     );
     void this.router.navigate(resposta.perfil === 'cliente' ? ['/'] : ['/painel']);
   }
