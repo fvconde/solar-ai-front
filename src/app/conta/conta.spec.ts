@@ -162,29 +162,30 @@ describe('Conta', () => {
     expect(pares(fixture)).toEqual([
       'E-mail: marina.couto@email.com',
       'Telefone: (11) 98765-4321',
-      'Senha: Alterar',
-      'Conversas salvas: 3 · ver no chat',
-      'Consentimento: 22 set 2026 · aviso v. 2026-09-11',
+      'Senha · ••••••••: Alterar senha',
+      'Conversas salvas: Ver no chat',
+      'Consentimento: Aviso de privacidade v. 2026-09-11',
     ]);
-    expect(botao(fixture, 'Sair')).toBeTruthy();
+    expect(botao(fixture, 'Sair da conta')).toBeTruthy();
     expect(texto(fixture)).toContain('Apaga sua conta e as conversas salvas.');
+    expect(texto(fixture)).toContain('Registrado em 22 set 2026');
     expect(botao(fixture, 'Excluir conta…')).toBeTruthy();
   });
 
   it('os rótulos de campo usam peso 600, sem mudar o peso do papel nem dos títulos de bloco', () => {
     const fixture = montar();
-    clicar(fixture, 'Editar');
+    clicar(fixture, 'Editar dados');
 
-    const rotulos = Array.from(html(fixture).querySelectorAll('.rotulo'));
+    const rotulos = Array.from(html(fixture).querySelectorAll('label.rotulo'));
     expect(rotulos.length).toBe(4);
     expect(rotulos.every((r) => getComputedStyle(r).fontWeight === '600')).toBeTrue();
-    expect(getComputedStyle(html(fixture).querySelector('.papel')!).fontWeight).toBe('500');
-    expect(getComputedStyle(html(fixture).querySelector('h2')!).fontWeight).toBe('500');
+    expect(getComputedStyle(html(fixture).querySelector('.papel')!).fontWeight).toBe('600');
+    expect(getComputedStyle(html(fixture).querySelector('h2')!).fontWeight).toBe('600');
   });
 
   it('trocar o e-mail pede a senha atual antes de chamar a API', async () => {
     const fixture = montar();
-    clicar(fixture, 'Editar');
+    clicar(fixture, 'Editar dados');
 
     expect(texto(fixture)).toContain('Trocar o e-mail pede a senha atual.');
     await digitar(fixture, 'conta-email', 'marina.c@novoemail.com');
@@ -196,7 +197,7 @@ describe('Conta', () => {
 
   it('salvar edita no lugar, manda só o que mudou e mostra "Dados atualizados"', async () => {
     const fixture = montar();
-    clicar(fixture, 'Editar');
+    clicar(fixture, 'Editar dados');
     await digitar(fixture, 'conta-email', 'marina.c@novoemail.com');
     await digitar(fixture, 'conta-senha-atual', 'senha-atual-123');
     clicar(fixture, 'Salvar');
@@ -217,7 +218,7 @@ describe('Conta', () => {
 
   it('só o telefone mudou: o corpo leva só os dígitos do telefone', async () => {
     const fixture = montar();
-    clicar(fixture, 'Editar');
+    clicar(fixture, 'Editar dados');
     await digitar(fixture, 'conta-telefone', '11 3456-7890');
     clicar(fixture, 'Salvar');
 
@@ -228,7 +229,7 @@ describe('Conta', () => {
 
   it('senha atual incorreta e e-mail em uso aparecem no campo certo', async () => {
     const fixture = montar();
-    clicar(fixture, 'Editar');
+    clicar(fixture, 'Editar dados');
     await digitar(fixture, 'conta-email', 'outra@email.com');
     await digitar(fixture, 'conta-senha-atual', 'errada');
     clicar(fixture, 'Salvar');
@@ -248,7 +249,7 @@ describe('Conta', () => {
 
   it('alterar senha chama POST /api/conta/senha e confirma', async () => {
     const fixture = montar();
-    clicar(fixture, 'Alterar');
+    clicar(fixture, 'Alterar senha');
     await digitar(fixture, 'senha-atual', 'senha-atual-123');
     await digitar(fixture, 'senha-nova', 'senha-nova-456');
     await digitar(fixture, 'senha-confirmacao', 'senha-nova-456');

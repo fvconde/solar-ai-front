@@ -70,6 +70,10 @@ export class Conta implements OnInit {
   readonly iniciais = computed(() => iniciaisDe(this.conta()?.nome ?? ''));
   readonly corretor = computed(() => this.conta()?.perfil === 'corretor');
   readonly podeExcluir = computed(() => !!this.conta() && this.conta()?.perfil !== 'supervisor');
+  readonly mesEAnoConta = computed(() => {
+    const criadaEm = this.conta()?.criadaEm;
+    return criadaEm ? mesEAno(criadaEm) : '';
+  });
 
   readonly papel = computed(() => {
     const conta = this.conta();
@@ -129,13 +133,17 @@ export class Conta implements OnInit {
     return (valores ?? []).map(rotuloDe).join(', ');
   }
 
-  consentimento(): string {
+  consentimentoData(): string {
     const c = this.conta()?.consentimento;
     if (!c) {
       return '';
     }
     const data = new Date(c.em);
-    return `${diaCurto(c.em)} ${data.getFullYear()} · aviso v. ${c.versao}`;
+    return `${diaCurto(c.em)} ${data.getFullYear()}`;
+  }
+
+  versaoAviso(): string {
+    return this.conta()?.consentimento?.versao ?? '';
   }
 
   abrir(bloco: Bloco): void {
