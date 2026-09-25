@@ -4,11 +4,11 @@ import { Chat } from './chat/chat';
 import { Entrar } from './entrar/entrar';
 import { Painel } from './painel/painel';
 import { PoliticaPrivacidade } from './privacidade/politica-privacidade';
-import { painelGuard, sessaoGuard } from './sessao/sessao-guard';
+import { entrarGuard, painelGuard, sessaoGuard } from './sessao/sessao-guard';
 
 export const routes: Routes = [
   { path: '', component: Chat },
-  { path: 'entrar', component: Entrar },
+  { path: 'entrar', component: Entrar, canActivate: [entrarGuard] },
   { path: 'cadastro', component: Cadastro, data: { tipo: 'cliente' } },
   { path: 'seja-corretor', component: Cadastro, data: { tipo: 'corretor' } },
   { path: 'painel', component: Painel, canActivate: [painelGuard] },

@@ -169,9 +169,23 @@ import { MenuPerfil } from './menu-perfil';
       .linha {
         min-height: 56px;
         padding: 8px 20px;
+        gap: 8px;
       }
 
-      .identificacao,
+      .lado-esquerdo,
+      .lado-direito {
+        gap: 8px;
+      }
+
+      .lado-direito {
+        flex-shrink: 0;
+      }
+
+      .identificacao {
+        display: inline;
+        font-size: 12px;
+      }
+
       .navegacao {
         display: none;
       }

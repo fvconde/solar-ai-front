@@ -41,6 +41,7 @@ describe('Celular (até 640 px)', () => {
         provideHttpClientTesting(),
         provideRouter([
           { path: '', component: TelaFalsa },
+          { path: 'entrar', component: TelaFalsa },
           { path: 'painel', component: TelaFalsa },
         ]),
       ],
@@ -57,13 +58,18 @@ describe('Celular (até 640 px)', () => {
     return fixture.nativeElement as HTMLElement;
   }
 
-  it('o cabeçalho vira uma linha: esconde a identificação e os links, mostra as abas', async () => {
-    await cabecalho(sessaoCorretor('aprovado'));
+  it('no login, mantém SOLAR e Lia visíveis na linha mobile, sem navegação', async () => {
+    const html = await cabecalho(null, '/entrar');
 
-    expect(regrasNoCelular(640, 'identificacao').some((r) => r.display === 'none')).toBeTrue();
+    expect(html.querySelector('.marca')?.textContent).toBe('SOLAR');
+    expect(html.querySelector('.identificacao')?.textContent).toBe('Lia · assistente de IA');
+    expect(regrasNoCelular(640, 'identificacao').some((r) => r.display === 'inline')).toBeTrue();
+    expect(regrasNoCelular(640, 'identificacao').some((r) => r.fontSize === '12px')).toBeTrue();
     expect(regrasNoCelular(640, 'navegacao').some((r) => r.display === 'none')).toBeTrue();
     expect(regrasNoCelular(640, 'abas').some((r) => r.display === 'flex')).toBeTrue();
-    expect(regrasNoCelular(640, 'nome-usuario').some((r) => r.display === 'none')).toBeTrue();
+    expect(regrasNoCelular(640, 'linha').some((r) => r.gap === '8px')).toBeTrue();
+    expect(regrasNoCelular(640, 'lado-direito').some((r) => r.flexShrink === '0')).toBeTrue();
+    expect(html.querySelector('.pilula-entrar')?.textContent?.trim()).toBe('Entrar');
   });
 
   it('visitante fica com a marca e o Entrar, sem abas', async () => {
