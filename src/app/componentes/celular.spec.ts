@@ -112,10 +112,36 @@ describe('Celular (até 640 px)', () => {
     fixture.detectChanges();
 
     expect(regrasNoCelular(860, 'coluna-historico').some((r) => r.display === 'none')).toBeTrue();
-    expect(regrasNoCelular(860, 'barra-conversas').some((r) => r.display === 'block')).toBeTrue();
+    expect(regrasNoCelular(860, 'barra-conversas').some((r) => r.display === 'flex')).toBeTrue();
     expect(
       (fixture.nativeElement as HTMLElement).querySelector('.botao-conversas')?.textContent?.trim(),
     ).toBe('Conversas');
+  });
+
+  it('no celular, o cliente abre a lista rolável de conversas', () => {
+    TestBed.inject(SessaoStore).definir(sessaoCliente());
+    const fixture = TestBed.createComponent(Chat);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    host.querySelector<HTMLButtonElement>('.botao-conversas')!.click();
+    fixture.detectChanges();
+
+    const lista = host.querySelector<HTMLElement>('.lista-historico');
+    expect(lista?.querySelector('nav')?.getAttribute('aria-label')).toBe('Suas conversas');
+    expect(lista?.querySelector('h2')?.textContent?.trim()).toBe('Conversas');
+    expect(regrasNoCelular(860, 'barra-conversas').some((r) => r.flexShrink === '0')).toBeTrue();
+    expect(regrasNoCelular(860, 'lista-historico').some((r) => r.overflow === 'hidden')).toBeTrue();
+  });
+
+  it('não mostra botão nem histórico de conversas ao corretor no celular', () => {
+    TestBed.inject(SessaoStore).definir(sessaoCorretor('aprovado'));
+    const fixture = TestBed.createComponent(Chat);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    expect(host.querySelector('.botao-conversas')).toBeNull();
+    expect(host.querySelector('app-historico-conversas')).toBeNull();
   });
 
   it('o convite encurta para "Guardar esta conversa?" no celular', () => {

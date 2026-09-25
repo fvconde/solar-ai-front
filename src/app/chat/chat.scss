@@ -106,7 +106,13 @@
   }
 
   .barra-conversas {
-    display: block;
+    display: flex;
+    align-items: center;
+    flex: 0 0 auto;
+  }
+
+  .lista-historico {
+    overflow: hidden;
   }
 }
 
