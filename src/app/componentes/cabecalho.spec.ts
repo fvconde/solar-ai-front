@@ -3,7 +3,17 @@ import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { Component } from '@angular/core';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
+import { SessaoResponse } from '../sessao/sessao-contrato';
 import { SessaoStore } from '../sessao/sessao-store';
+import {
+  aplicarTema,
+  limparTema,
+  MARCA_POR_TEMA,
+  sessaoCliente,
+  sessaoCorretor,
+  sessaoSupervisor,
+  TEMAS,
+} from '../sessao/sessao-teste';
 import { Cabecalho } from './cabecalho';
 
 @Component({ template: '' })
@@ -18,126 +28,200 @@ describe('Cabecalho', () => {
       providers: [
         provideHttpClient(),
         provideHttpClientTesting(),
-        provideRouter([
-          { path: '', component: TelaFalsa },
-          { path: 'entrar', component: TelaFalsa },
-          { path: 'painel', component: TelaFalsa },
-          { path: 'privacidade', component: TelaFalsa },
-        ]),
+        provideRouter(
+          [
+            '',
+            'entrar',
+            'cadastro',
+            'seja-corretor',
+            'painel',
+            'painel/leads/:id',
+            'privacidade',
+            'conta',
+          ].map((path) => ({ path, component: TelaFalsa })),
+        ),
       ],
     }).compileComponents();
 
     router = TestBed.inject(Router);
   });
 
-  afterEach(() => {
-    TestBed.inject(SessaoStore).limpar();
-  });
+  afterEach(() => limparTema());
 
-  async function montarEm(url: string) {
+  async function montarEm(url: string, sessao: SessaoResponse | null = null) {
+    if (sessao) {
+      TestBed.inject(SessaoStore).definir(sessao);
+    }
     await router.navigateByUrl(url);
     const fixture = TestBed.createComponent(Cabecalho);
     fixture.detectChanges();
-    return fixture;
+    return fixture.nativeElement as HTMLElement;
   }
 
-  function linkPainel(fixture: { nativeElement: unknown }): HTMLElement | null {
-    const html = fixture.nativeElement as HTMLElement;
-    return (
-      Array.from(html.querySelectorAll<HTMLElement>('.link-nav')).find((a) =>
-        a.textContent?.includes('Painel do Corretor'),
-      ) ?? null
+  function links(html: HTMLElement): string[] {
+    return Array.from(html.querySelectorAll('.navegacao .link-nav')).map(
+      (a) => a.textContent?.replace(/\s+/g, ' ').trim() ?? '',
     );
   }
 
-  function linkChat(fixture: { nativeElement: unknown }): HTMLElement | null {
-    const html = fixture.nativeElement as HTMLElement;
-    return (
-      Array.from(html.querySelectorAll<HTMLElement>('.link-nav')).find(
-        (a) => a.textContent?.trim() === 'Chat',
-      ) ?? null
+  function ativos(html: HTMLElement): string[] {
+    return Array.from(html.querySelectorAll('.navegacao .link-nav.ativo')).map(
+      (a) => a.textContent?.replace(/\s+/g, ' ').trim() ?? '',
     );
   }
 
-  it('marca Painel do Corretor como ativo na tela de login, como no handoff', async () => {
-    const fixture = await montarEm('/entrar');
+  it('visitante no chat vê Chat ativo e o botão Entrar, sem Painel do Corretor', async () => {
+    const html = await montarEm('/');
 
-    expect(linkPainel(fixture)?.classList).toContain('ativo');
-    expect(linkChat(fixture)?.classList).not.toContain('ativo');
+    expect(links(html)).toEqual(['Chat']);
+    expect(ativos(html)).toEqual(['Chat']);
+    expect(html.querySelector('.pilula-entrar')?.textContent?.trim()).toBe('Entrar');
+    expect(html.querySelector('.identificacao')?.textContent).toBe('Lia · assistente de IA');
+    expect(html.querySelector('.avatar')).toBeNull();
   });
 
-  it('mantém Painel do Corretor ativo no fluxo de nova senha vindo do e-mail', async () => {
-    const fixture = await montarEm('/entrar?token=abc123');
+  for (const rota of ['/entrar', '/entrar?token=abc', '/cadastro', '/seja-corretor']) {
+    it(`em ${rota} nenhum link fica ativo e o Entrar continua visível`, async () => {
+      const html = await montarEm(rota);
 
-    expect(linkPainel(fixture)?.classList).toContain('ativo');
+      expect(ativos(html)).toEqual([]);
+      expect(html.querySelector('.pilula-entrar')).toBeTruthy();
+    });
+  }
+
+  it('cliente vê Chat, o primeiro nome e as iniciais, sem Entrar nem Painel', async () => {
+    const html = await montarEm('/', sessaoCliente());
+
+    expect(links(html)).toEqual(['Chat']);
+    expect(ativos(html)).toEqual(['Chat']);
+    expect(html.querySelector('.nome-usuario')?.textContent).toBe('Marina');
+    expect(html.querySelector('.avatar')?.textContent?.trim()).toBe('MC');
+    expect(html.querySelector('.pilula-entrar')).toBeNull();
+    expect(html.querySelector('.abas')).toBeNull();
   });
 
-  it('mantém Painel do Corretor ativo dentro do painel', async () => {
-    const fixture = await montarEm('/painel');
+  it('corretor em análise vê Painel do Corretor com o selo "em análise"', async () => {
+    const html = await montarEm('/painel', sessaoCorretor('em_analise'));
 
-    expect(linkPainel(fixture)?.classList).toContain('ativo');
-    expect(linkChat(fixture)?.classList).not.toContain('ativo');
+    expect(html.querySelector('.identificacao')?.textContent).toBe('Painel');
+    expect(links(html)).toEqual(['Chat', 'Painel do Corretor em análise']);
+    expect(ativos(html)).toEqual(['Painel do Corretor em análise']);
+    expect(html.querySelector('.navegacao .selo')?.classList).not.toContain('neutro');
+    expect(html.querySelector('.nome-usuario')?.textContent).toBe('Rafael');
+    expect(html.querySelector('.avatar')?.textContent?.trim()).toBe('RN');
   });
 
-  it('não marca o painel quando o corretor está no chat', async () => {
-    const fixture = await montarEm('/');
+  it('corretor aprovado vê Painel do Corretor sem selo', async () => {
+    const html = await montarEm('/painel', sessaoCorretor('aprovado'));
 
-    expect(linkPainel(fixture)?.classList).not.toContain('ativo');
-    expect(linkChat(fixture)?.classList).toContain('ativo');
+    expect(links(html)).toEqual(['Chat', 'Painel do Corretor']);
+    expect(html.querySelector('.selo')).toBeNull();
+  });
+
+  it('supervisor vê o selo com pendentesAprovacao, no singular e no plural', async () => {
+    let html = await montarEm('/painel', sessaoSupervisor(2));
+    expect(html.querySelector('.navegacao .selo')?.textContent).toBe('2 novos');
+    expect(html.querySelector('.navegacao .selo')?.classList).toContain('neutro');
+
+    const sessao = TestBed.inject(SessaoStore);
+    sessao.descontarPendente();
+    html = await montarEm('/painel');
+    expect(html.querySelector('.navegacao .selo')?.textContent).toBe('1 novo');
+
+    sessao.descontarPendente();
+    html = await montarEm('/painel');
+    expect(html.querySelector('.selo')).toBeNull();
+  });
+
+  describe('identificação ao lado da marca depende da rota, não do papel', () => {
+    const papeis: [string, SessaoResponse | null][] = [
+      ['visitante', null],
+      ['cliente', sessaoCliente()],
+      ['corretor em análise', sessaoCorretor('em_analise')],
+      ['corretor aprovado', sessaoCorretor('aprovado')],
+      ['supervisor', sessaoSupervisor(2)],
+    ];
+
+    for (const [papel, sessao] of papeis) {
+      it(`${papel} vê "Lia · assistente de IA" no chat`, async () => {
+        const html = await montarEm('/', sessao);
+
+        expect(html.querySelector('.identificacao')?.textContent).toBe('Lia · assistente de IA');
+      });
+    }
+
+    for (const [papel, sessao] of papeis.slice(2)) {
+      for (const rota of ['/painel', '/painel/leads/lead-123']) {
+        it(`${papel} vê "Painel" em ${rota}`, async () => {
+          const html = await montarEm(rota, sessao);
+
+          expect(html.querySelector('.identificacao')?.textContent).toBe('Painel');
+        });
+      }
+    }
+
+    for (const rota of ['/entrar', '/cadastro', '/seja-corretor', '/conta', '/privacidade']) {
+      it(`corretor vê "Lia · assistente de IA" em ${rota}`, async () => {
+        const html = await montarEm(rota, sessaoCorretor('aprovado'));
+
+        expect(html.querySelector('.identificacao')?.textContent).toBe('Lia · assistente de IA');
+      });
+    }
+
+    it('troca ao navegar de / para /painel e de volta, sem recriar o cabeçalho', async () => {
+      TestBed.inject(SessaoStore).definir(sessaoSupervisor(2));
+      await router.navigateByUrl('/');
+      const fixture = TestBed.createComponent(Cabecalho);
+      fixture.detectChanges();
+      const identificacao = () =>
+        (fixture.nativeElement as HTMLElement).querySelector('.identificacao')?.textContent;
+      expect(identificacao()).toBe('Lia · assistente de IA');
+
+      await router.navigateByUrl('/painel');
+      fixture.detectChanges();
+      expect(identificacao()).toBe('Painel');
+
+      await router.navigateByUrl('/painel/leads/lead-123');
+      fixture.detectChanges();
+      expect(identificacao()).toBe('Painel');
+
+      await router.navigateByUrl('/');
+      fixture.detectChanges();
+      expect(identificacao()).toBe('Lia · assistente de IA');
+    });
+  });
+
+  it('em /conta nenhum link fica ativo', async () => {
+    const html = await montarEm('/conta', sessaoCorretor('aprovado'));
+
+    expect(ativos(html)).toEqual([]);
   });
 
   it('mantém Chat ativo na política de privacidade, que se abre a partir do chat', async () => {
-    const fixture = await montarEm('/privacidade');
+    const html = await montarEm('/privacidade');
 
-    expect(linkChat(fixture)?.classList).toContain('ativo');
-    expect(linkPainel(fixture)?.classList).not.toContain('ativo');
+    expect(ativos(html)).toEqual(['Chat']);
   });
 
-  it('sempre marca exatamente uma aba', async () => {
-    for (const rota of ['/', '/privacidade', '/entrar', '/entrar?token=abc', '/painel']) {
-      const fixture = await montarEm(rota);
-      const ativos = (fixture.nativeElement as HTMLElement).querySelectorAll('.link-nav.ativo');
-      expect(ativos.length).withContext(`rota ${rota}`).toBe(1);
-    }
+  it('quem tem as duas páginas ganha as abas Chat e Painel para o celular', async () => {
+    const html = await montarEm('/painel', sessaoCorretor('em_analise'));
+    const abas = Array.from(html.querySelectorAll('.abas .aba')).map((a) =>
+      a.textContent?.replace(/\s+/g, ' ').trim(),
+    );
+
+    expect(abas).toEqual(['Chat', 'Painel análise']);
+    expect(html.querySelector('.abas .aba.ativo')?.textContent).toContain('Painel');
   });
 
-  it('no painel com sessão ativa, exibe cabeçalho unificado com Painel, link para Chat e dados do usuário', async () => {
-    const sessao = TestBed.inject(SessaoStore);
-    sessao.definir({
-      corretor: {
-        id: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
-        nome: 'Renata Costa',
-        especialidade: 'moradia',
-      },
-      perfil: 'corretor',
+  for (const tema of TEMAS) {
+    it(`no tema ${tema}, o Entrar e o link ativo usam a cor de marca do tema`, async () => {
+      aplicarTema(tema);
+      const html = await montarEm('/');
+
+      const entrar = html.querySelector<HTMLElement>('.pilula-entrar')!;
+      const chat = html.querySelector<HTMLElement>('.link-nav.ativo')!;
+      expect(getComputedStyle(entrar).backgroundColor).toBe(MARCA_POR_TEMA[tema]);
+      expect(getComputedStyle(chat).color).toBe(MARCA_POR_TEMA[tema]);
     });
-
-    const fixture = await montarEm('/painel');
-    const html = fixture.nativeElement as HTMLElement;
-
-    expect(html.querySelector('.identificacao')?.textContent).toBe('Painel');
-    expect(linkChat(fixture)).toBeTruthy();
-    expect(linkPainel(fixture)).toBeNull();
-    expect(html.querySelector('.nome-usuario')?.textContent).toBe('Renata Costa');
-    expect(html.querySelector('.perfil-usuario')?.textContent).toBe('Corretor');
-  });
-
-  it('no painel com sessão de supervisor sem carteira, exibe perfil com rótulo correto', async () => {
-    const sessao = TestBed.inject(SessaoStore);
-    sessao.definir({
-      corretor: {
-        id: '3f6b9c21-4d0a-4c7e-9a11-000000000099',
-        nome: 'Carlos Supervisor',
-        especialidade: 'geral',
-      },
-      perfil: 'supervisor',
-      vinculoAtivo: false,
-    });
-
-    const fixture = await montarEm('/painel');
-    const html = fixture.nativeElement as HTMLElement;
-
-    expect(html.querySelector('.nome-usuario')?.textContent).toBe('Carlos Supervisor');
-    expect(html.querySelector('.perfil-usuario')?.textContent).toBe('Supervisor · sem carteira');
-  });
+  }
 });

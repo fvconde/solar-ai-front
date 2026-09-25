@@ -140,6 +140,31 @@ a:hover {
   outline-offset: 2px;
 }
 
+.tela-entrar .link-mono.link-voltar-direcao-a,
+.tela-entrar .link-mono.link-recuperar-direcao-a {
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  font-weight: 600;
+  letter-spacing: normal;
+  color: var(--login-acao);
+  text-decoration: none;
+}
+
+.tela-entrar .link-mono.link-voltar-direcao-a {
+  font-size: 14px;
+}
+
+.tela-entrar .link-mono.link-recuperar-direcao-a {
+  font-size: 13px;
+}
+
+.tela-entrar .link-voltar-direcao-a__texto,
+.tela-entrar .link-recuperar-direcao-a__texto {
+  text-decoration-line: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+}
+
 button {
   font: inherit;
   color: inherit;

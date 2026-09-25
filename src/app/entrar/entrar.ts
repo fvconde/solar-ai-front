@@ -3,33 +3,36 @@ import {
   Component,
   computed,
   DestroyRef,
+  ElementRef,
   inject,
   OnInit,
   signal,
+  viewChild,
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
-import { ActivatedRoute, Router } from '@angular/router';
+import { ActivatedRoute, Router, RouterLink } from '@angular/router';
+import { ConversaStore } from '../conversa/conversa-store';
 import { SessaoStore } from '../sessao/sessao-store';
 import { EntrarApi } from './entrar-api';
 import {
+  destinoDe,
+  FORMATO_EMAIL,
   MINIMO_CARACTERES_SENHA,
   SEGUNDOS_DE_BLOQUEIO,
   TelaEntrar,
-  TENTATIVAS_ATE_BLOQUEIO,
 } from './entrar-contrato';
-
-const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 @Component({
   selector: 'app-entrar',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   templateUrl: './entrar.html',
   styleUrl: './entrar.scss',
 })
 export class Entrar implements OnInit {
   private readonly api = inject(EntrarApi);
   private readonly sessao = inject(SessaoStore);
+  private readonly conversa = inject(ConversaStore);
   private readonly router = inject(Router);
   private readonly rota = inject(ActivatedRoute);
   private readonly destroyRef = inject(DestroyRef);
@@ -37,29 +40,34 @@ export class Entrar implements OnInit {
   private token = '';
   private cronometro: ReturnType<typeof setInterval> | null = null;
 
-  readonly tela = signal<TelaEntrar>('email');
+  private readonly campoSenha = viewChild<ElementRef<HTMLInputElement>>('campoSenha');
+
+  readonly tela = signal<TelaEntrar>('entrar');
   readonly email = signal('');
   readonly senha = signal('');
+  readonly senhaVisivel = signal(false);
   readonly novaSenha = signal('');
   readonly confirmacaoSenha = signal('');
 
   readonly enviando = signal(false);
+  readonly erroEntrar = signal<string | null>(null);
   readonly erroEmail = signal<string | null>(null);
-  readonly erroSenha = signal<string | null>(null);
   readonly erroNovaSenha = signal<string | null>(null);
+  readonly conversaSemDono = signal(false);
 
-  readonly tentativasRestantes = signal<number | null>(null);
   readonly segundosBloqueado = signal(0);
-  readonly segundosDeBloqueio = SEGUNDOS_DE_BLOQUEIO;
-
   readonly bloqueado = computed(() => this.segundosBloqueado() > 0);
 
   readonly contagemRegressiva = computed(() => {
     const total = this.segundosBloqueado();
     const minutos = Math.floor(total / 60);
     const segundos = total % 60;
-    return `${minutos}:${String(segundos).padStart(2, '0')}`;
+    return `${String(minutos).padStart(2, '0')}:${String(segundos).padStart(2, '0')}`;
   });
+
+  readonly podeEntrar = computed(
+    () => !!this.email().trim() && !!this.senha() && !this.bloqueado() && !this.enviando(),
+  );
 
   readonly confirmacaoDivergente = computed(
     () => this.confirmacaoSenha().length > 0 && this.novaSenha() !== this.confirmacaoSenha(),
@@ -73,8 +81,14 @@ export class Entrar implements OnInit {
 
   ngOnInit(): void {
     this.destroyRef.onDestroy(() => this.pararCronometro());
+    this.conversaSemDono.set(!this.sessao.ativa() && !!this.conversa.conversaGuardada());
 
-    const token = this.rota.snapshot.queryParamMap.get('token');
+    const parametros = this.rota.snapshot.queryParamMap;
+    if (parametros.has('redefinir')) {
+      this.tela.set('recuperar');
+    }
+
+    const token = parametros.get('token');
     if (!token) {
       return;
     }
@@ -94,92 +108,61 @@ export class Entrar implements OnInit {
     });
   }
 
-  continuarComEmail(): void {
-    const email = this.email().trim();
-    if (!FORMATO_EMAIL.test(email)) {
-      this.erroEmail.set('Verifique o formato do e-mail.');
-      return;
-    }
-
-    this.email.set(email);
-    this.erroEmail.set(null);
-    this.enviando.set(true);
-
-    this.api.identificar(email).subscribe({
-      next: (resposta) => {
-        this.enviando.set(false);
-        this.tela.set(resposta.cadastrado ? 'senha' : 'nao-encontrado');
-      },
-      error: (erro) => {
-        this.enviando.set(false);
-        this.erroEmail.set(
-          erro?.status === 400
-            ? 'Verifique o formato do e-mail.'
-            : 'Não foi possível continuar. Tente novamente.',
-        );
-      },
-    });
-  }
-
-  trocarEmail(): void {
-    this.pararCronometro();
-    this.senha.set('');
-    this.erroSenha.set(null);
-    this.erroEmail.set(null);
-    this.tentativasRestantes.set(null);
-    this.segundosBloqueado.set(0);
-    this.tela.set('email');
-  }
-
   entrar(): void {
-    if (this.bloqueado() || !this.senha()) {
+    if (!this.podeEntrar()) {
       return;
     }
 
     this.enviando.set(true);
-    this.erroSenha.set(null);
+    this.erroEntrar.set(null);
+    const conversaId = this.conversaSemDono() ? this.conversa.conversaGuardada() : null;
 
-    this.api.criarSessao(this.email(), this.senha()).subscribe({
+    this.api.criarSessao(this.email().trim(), this.senha(), conversaId).subscribe({
       next: (resposta) => {
         this.enviando.set(false);
-        this.tentativasRestantes.set(null);
         this.sessao.definir(resposta);
-        this.router.navigate(['/painel']);
+        void this.router.navigate(destinoDe(resposta));
       },
       error: (erro) => {
         this.enviando.set(false);
         this.senha.set('');
 
         if (erro?.status === 423) {
-          this.iniciarBloqueio(erro?.error?.bloqueadoPorSegundos ?? SEGUNDOS_DE_BLOQUEIO);
+          this.iniciarBloqueio(erro?.error?.segundosRestantes ?? SEGUNDOS_DE_BLOQUEIO);
           return;
         }
 
         if (erro?.status === 401) {
-          const restantes = erro?.error?.tentativasRestantes ?? null;
-          this.tentativasRestantes.set(restantes);
-          this.erroSenha.set(
-            restantes !== null && restantes < TENTATIVAS_ATE_BLOQUEIO - 1
-              ? `Senha incorreta. Restam ${restantes} tentativas antes do bloqueio temporário.`
-              : 'Senha incorreta.',
-          );
+          this.erroEntrar.set('E-mail ou senha incorretos. Confira e tente de novo.');
+          this.focarSenha();
           return;
         }
 
-        this.erroSenha.set('Não foi possível entrar. Tente novamente.');
+        if (erro?.status === 429) {
+          this.erroEntrar.set('Muitos pedidos seguidos. Aguarde um instante e tente de novo.');
+          return;
+        }
+
+        this.erroEntrar.set('Não foi possível entrar. Tente novamente.');
       },
     });
+  }
+
+  alternarSenhaVisivel(): void {
+    this.senhaVisivel.update((visivel) => !visivel);
   }
 
   irParaRecuperacao(): void {
     this.pararCronometro();
     this.segundosBloqueado.set(0);
-    this.erroSenha.set(null);
+    this.erroEntrar.set(null);
+    this.erroEmail.set(null);
     this.tela.set('recuperar');
   }
 
   voltarParaLogin(): void {
-    this.tela.set('senha');
+    this.erroEmail.set(null);
+    this.tela.set('entrar');
   }
 
   enviarLink(): void {
@@ -239,7 +222,7 @@ export class Entrar implements OnInit {
       next: (resposta) => {
         this.enviando.set(false);
         this.sessao.definir(resposta);
-        this.router.navigate(['/painel']);
+        void this.router.navigate(destinoDe(resposta));
       },
       error: (erro) => {
         this.enviando.set(false);
@@ -260,11 +243,8 @@ export class Entrar implements OnInit {
 
   private iniciarBloqueio(segundos: number): void {
     this.pararCronometro();
-    this.tentativasRestantes.set(null);
+    this.erroEntrar.set(null);
     this.segundosBloqueado.set(segundos);
-    this.erroSenha.set(
-      `Muitas tentativas incorretas. Formulário bloqueado por ${segundos} segundos.`,
-    );
 
     this.cronometro = setInterval(() => {
       const restante = this.segundosBloqueado() - 1;
@@ -272,9 +252,13 @@ export class Entrar implements OnInit {
 
       if (restante <= 0) {
         this.pararCronometro();
-        this.erroSenha.set(null);
+        this.focarSenha();
       }
     }, 1000);
+  }
+
+  private focarSenha(): void {
+    setTimeout(() => this.campoSenha()?.nativeElement.focus());
   }
 
   private pararCronometro(): void {

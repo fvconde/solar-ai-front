@@ -52,3 +52,34 @@ export function rotuloDeDia(iso: string, agora = new Date()): string {
 export function reais(valor: number): string {
   return `R$ ${formatoMilhar.format(valor)}`;
 }
+
+const MESES_CURTOS = [
+  'jan',
+  'fev',
+  'mar',
+  'abr',
+  'mai',
+  'jun',
+  'jul',
+  'ago',
+  'set',
+  'out',
+  'nov',
+  'dez',
+];
+
+export function diaCurto(iso: string): string {
+  const data = new Date(iso);
+  return Number.isNaN(data.getTime()) ? '' : `${data.getDate()} ${MESES_CURTOS[data.getMonth()]}`;
+}
+
+export function mesEAno(iso: string): string {
+  const data = new Date(iso);
+  return Number.isNaN(data.getTime())
+    ? ''
+    : `${MESES_CURTOS[data.getMonth()]} ${data.getFullYear()}`;
+}
+
+export function ehHoje(iso: string, agora = new Date()): boolean {
+  return diaDe(iso) === diaDe(agora.toISOString());
+}

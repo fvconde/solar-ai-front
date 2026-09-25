@@ -1,5 +1,4 @@
 import { ImovelSugerido } from '../conversa/contrato';
-import { CorretorSessao } from '../entrar/entrar-contrato';
 
 export interface LeadCorretorResumo {
   id: string;
@@ -81,11 +80,12 @@ export interface LeadDetalheResponse {
   transcricao: TurnoTranscricao[];
 }
 
-export interface SessaoPainelResposta {
-  corretor: CorretorSessao;
-  perfil: 'corretor' | 'supervisor';
-  corretorId: string | null;
-  vinculoAtivo: boolean;
-  filtrosPermitidos: string[];
-  filtroInicial: string;
+export interface CorretorPendente {
+  id: string;
+  nome: string;
+  email: string;
+  telefone: string;
+  regioes: string[];
+  especialidades: string[];
+  criadoEm: string;
 }

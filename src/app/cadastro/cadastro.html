@@ -1,0 +1,258 @@
+<section class="tela-entrar">
+  <form class="cartao" novalidate (ngSubmit)="enviar()">
+    <a
+      class="link-mono link-voltar link-voltar-direcao-a"
+      routerLink="/entrar"
+      [class.apagado]="enviando()"
+      [attr.tabindex]="enviando() ? -1 : null"
+    >
+      <span class="link-voltar-direcao-a__seta" aria-hidden="true">←&nbsp;</span>
+      <span class="link-voltar-direcao-a__texto">Voltar para o login</span>
+    </a
+    >
+
+    @if (corretor) {
+      <h1 class="titulo">Seja corretor na Solar</h1>
+      <p class="apoio">
+        Receba leads que a Lia já qualificou, na sua região e na sua especialidade.
+      </p>
+    } @else {
+      <h1 class="titulo">Criar sua conta</h1>
+      <p class="apoio">
+        Suas conversas com a Lia ficam salvas e você continua de onde parou, em qualquer aparelho.
+      </p>
+    }
+
+    @if (!corretor && emailEmUso()) {
+      <div class="resumo-email" role="alert" aria-labelledby="titulo-email-cadastrado">
+        <p class="resumo-email__titulo" id="titulo-email-cadastrado">
+          Este e-mail já está cadastrado
+        </p>
+        <p class="resumo-email__orientacao">
+          <a routerLink="/entrar">Entre na sua conta</a> ou
+          <a routerLink="/entrar" [queryParams]="{ redefinir: 1 }">redefina a senha</a>.
+          Se o e-mail estiver errado, corrija abaixo.
+        </p>
+      </div>
+    }
+
+    <label class="rotulo" for="campo-nome">Nome</label>
+    <input
+      id="campo-nome"
+      class="campo"
+      name="nome"
+      autocomplete="name"
+      [class.com-erro]="erro('nome')"
+      [disabled]="enviando()"
+      [ngModel]="nome()"
+      (ngModelChange)="alterar('nome', $event)"
+      (blur)="tocar('nome')"
+    />
+    @if (erro('nome'); as mensagem) {
+      <p class="dica erro">{{ mensagem }}</p>
+    }
+
+    <div [class.dupla]="corretor">
+      <div>
+        <label class="rotulo" for="campo-email">E-mail</label>
+        <input
+          id="campo-email"
+          class="campo"
+          type="email"
+          name="email"
+          autocomplete="email"
+          [class.com-erro]="erro('email') || emailEmUso()"
+          [attr.aria-describedby]="emailEmUso() && !corretor ? 'email-em-uso-indicacao' : null"
+          [disabled]="enviando()"
+          [ngModel]="email()"
+          (ngModelChange)="alterar('email', $event)"
+          (blur)="tocar('email')"
+        />
+        @if (!corretor) {
+          <ng-container *ngTemplateOutlet="dicaEmail" />
+        }
+      </div>
+      <div>
+        <label class="rotulo" for="campo-telefone">Telefone</label>
+        <input
+          id="campo-telefone"
+          class="campo"
+          type="tel"
+          name="telefone"
+          autocomplete="tel-national"
+          inputmode="numeric"
+          [class.com-erro]="erro('telefone')"
+          [disabled]="enviando()"
+          [ngModel]="telefone()"
+          (ngModelChange)="alterar('telefone', $event)"
+          (blur)="tocar('telefone')"
+        />
+        @if (!corretor) {
+          @if (erro('telefone'); as mensagem) {
+            <p class="dica erro">{{ mensagem }}</p>
+          } @else if (!enviando()) {
+            <p class="dica">Usado só para falarmos sobre os imóveis que você pedir.</p>
+          }
+        }
+      </div>
+    </div>
+    @if (corretor) {
+      <ng-container *ngTemplateOutlet="dicaEmail" />
+      @if (erro('telefone'); as mensagem) {
+        <p class="dica erro">{{ mensagem }}</p>
+      }
+    }
+
+    <div class="dupla">
+      <div>
+        <label class="rotulo" for="campo-senha">Senha</label>
+        <input
+          id="campo-senha"
+          class="campo"
+          type="password"
+          name="senha"
+          autocomplete="new-password"
+          [class.com-erro]="erro('senha')"
+          [disabled]="enviando()"
+          [ngModel]="senha()"
+          (ngModelChange)="alterar('senha', $event)"
+          (blur)="tocar('senha')"
+        />
+        @if (erro('senha'); as mensagem) {
+          <p class="dica erro">{{ mensagem }}</p>
+        }
+      </div>
+      <div>
+        <label class="rotulo" for="campo-confirmacao">Confirmar</label>
+        <input
+          id="campo-confirmacao"
+          class="campo"
+          type="password"
+          name="confirmacao"
+          autocomplete="new-password"
+          [class.com-erro]="erro('confirmacao')"
+          [disabled]="enviando()"
+          [ngModel]="confirmacao()"
+          (ngModelChange)="alterar('confirmacao', $event)"
+          (blur)="tocar('confirmacao')"
+        />
+        @if (erro('confirmacao'); as mensagem) {
+          <p class="dica erro">{{ mensagem }}</p>
+        }
+      </div>
+    </div>
+    @if (senhasCoincidem() && !enviando()) {
+      <p class="dica ok">✓ As senhas coincidem</p>
+    }
+
+    @if (corretor) {
+      <p class="rotulo" id="rotulo-regioes">Região · uma ou mais</p>
+      <div
+        class="chips"
+        role="group"
+        aria-labelledby="rotulo-regioes"
+        [class.com-erro]="erro('regioes')"
+      >
+        @for (regiao of regioesDisponiveis; track regiao.valor) {
+          <button
+            class="chip"
+            type="button"
+            [class.ligado]="regioes().includes(regiao.valor)"
+            [attr.aria-pressed]="regioes().includes(regiao.valor)"
+            [disabled]="enviando()"
+            (click)="alternarRegiao(regiao.valor)"
+          >
+            {{ regiao.rotulo }}
+          </button>
+        }
+      </div>
+      @if (erro('regioes'); as mensagem) {
+        <p class="dica erro">{{ mensagem }}</p>
+      }
+
+      <p class="rotulo" id="rotulo-especialidades">Especialidade · uma ou as duas</p>
+      <div
+        class="chips"
+        role="group"
+        aria-labelledby="rotulo-especialidades"
+        [class.com-erro]="erro('especialidades')"
+      >
+        @for (especialidade of especialidadesDisponiveis; track especialidade.valor) {
+          <button
+            class="chip"
+            type="button"
+            [class.ligado]="especialidades().includes(especialidade.valor)"
+            [attr.aria-pressed]="especialidades().includes(especialidade.valor)"
+            [disabled]="enviando()"
+            (click)="alternarEspecialidade(especialidade.valor)"
+          >
+            {{ especialidade.rotulo }}
+          </button>
+        }
+      </div>
+      @if (erro('especialidades'); as mensagem) {
+        <p class="dica erro">{{ mensagem }}</p>
+      }
+    }
+
+    <label class="aceite">
+      <input
+        type="checkbox"
+        name="aceite"
+        [disabled]="enviando()"
+        [ngModel]="aceite()"
+        (ngModelChange)="aceite.set($event)"
+      />
+      <span
+        >Li e aceito a
+        <a routerLink="/privacidade" target="_blank" rel="noopener">Política de privacidade</a
+        >.</span
+      >
+    </label>
+    @if (erro('aceitePrivacidade'); as mensagem) {
+      <p class="dica erro">{{ mensagem }}</p>
+    }
+
+    @if (falhaRede()) {
+      <p class="alerta" role="alert">
+        Não conseguimos criar sua conta agora. Tente de novo em instantes.
+      </p>
+    }
+
+    <button
+      class="botao-primario"
+      type="submit"
+      [class.enviando]="enviando()"
+      [disabled]="!podeEnviar()"
+    >
+      @if (enviando()) {
+        <span class="verificando" aria-label="Criando conta"></span>
+      } @else if (corretor) {
+        Criar conta e enviar para análise
+      } @else {
+        Criar conta e entrar
+      }
+    </button>
+
+    @if (corretor) {
+      <p class="dica centro">
+        Você já entra na Solar. A supervisão confere seus dados em até 1 dia útil.
+      </p>
+    }
+  </form>
+</section>
+
+<ng-template #dicaEmail>
+  @if (emailEmUso()) {
+    @if (corretor) {
+      <p class="dica erro" role="alert">
+        Este e-mail já tem conta. <a routerLink="/entrar">Entrar</a> ou
+        <a routerLink="/entrar" [queryParams]="{ redefinir: 1 }">redefinir a senha</a>.
+      </p>
+    } @else {
+      <p class="dica erro" id="email-em-uso-indicacao">Este e-mail já tem conta.</p>
+    }
+  } @else if (erro('email'); as mensagem) {
+    <p class="dica erro">{{ mensagem }}</p>
+  }
+</ng-template>

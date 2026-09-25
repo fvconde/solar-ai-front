@@ -2,21 +2,15 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 import {
+  CorretorPendente,
   FilaLeadsResponse,
   LeadDetalheResponse,
   ResumoLia,
-  SessaoPainelResposta,
 } from './painel-contrato';
 
 @Injectable({ providedIn: 'root' })
 export class PainelApi {
   private readonly http = inject(HttpClient);
-
-  obterSessao(): Observable<SessaoPainelResposta> {
-    return this.http.get<SessaoPainelResposta>('/api/painel/sessao', {
-      withCredentials: true,
-    });
-  }
 
   listarLeads(filtro?: string | null, intencao?: string | null): Observable<FilaLeadsResponse> {
     let params = new HttpParams();
@@ -52,6 +46,28 @@ export class PainelApi {
         params,
         withCredentials: true,
       },
+    );
+  }
+
+  listarPendentes(): Observable<CorretorPendente[]> {
+    return this.http.get<CorretorPendente[]>('/api/painel/corretores/pendentes', {
+      withCredentials: true,
+    });
+  }
+
+  aprovarCorretor(id: string): Observable<void> {
+    return this.http.post<void>(
+      `/api/painel/corretores/${encodeURIComponent(id)}/aprovacao`,
+      {},
+      { withCredentials: true },
+    );
+  }
+
+  recusarCorretor(id: string, motivo: string | null): Observable<void> {
+    return this.http.post<void>(
+      `/api/painel/corretores/${encodeURIComponent(id)}/recusa`,
+      motivo ? { motivo } : {},
+      { withCredentials: true },
     );
   }
 }
