@@ -104,9 +104,10 @@ describe('Cabecalho', () => {
     const html = await montarEm('/painel', sessaoCorretor('em_analise'));
 
     expect(html.querySelector('.identificacao')?.textContent).toBe('Painel');
-    expect(links(html)).toEqual(['Chat', 'Painel do Corretor em análise']);
-    expect(ativos(html)).toEqual(['Painel do Corretor em análise']);
-    expect(html.querySelector('.navegacao .selo')?.classList).not.toContain('neutro');
+    expect(links(html)).toEqual(['Chat', 'Painel do Corretor']);
+    expect(ativos(html)).toEqual(['Painel do Corretor']);
+    expect(html.querySelector('.selo-global')?.textContent?.trim()).toBe('em análise');
+    expect(html.querySelector('.navegacao .selo')).toBeNull();
     expect(html.querySelector('.nome-usuario')?.textContent).toBe('Rafael');
     expect(html.querySelector('.avatar')?.textContent?.trim()).toBe('RN');
   });
@@ -209,7 +210,9 @@ describe('Cabecalho', () => {
       a.textContent?.replace(/\s+/g, ' ').trim(),
     );
 
-    expect(abas).toEqual(['Chat', 'Painel análise']);
+    expect(abas).toEqual(['Chat', 'Painel']);
+    expect(html.querySelector('.abas .selo')).toBeNull();
+    expect(html.querySelector('.selo-global')?.textContent?.trim()).toBe('em análise');
     expect(html.querySelector('.abas .aba.ativo')?.textContent).toContain('Painel');
   });
 

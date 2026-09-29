@@ -81,10 +81,11 @@ describe('Painel do corretor em análise e aviso de aprovação', () => {
     expect(texto(fixture)).toContain(
       'Quando aprovarem, os leads de Sul e Centro em Moradia e Investimento aparecem aqui. Avisamos por e-mail.',
     );
-    expect(texto(fixture)).toContain(
-      'Enquanto isso, você pode conversar com a Lia e revisar sua conta.',
-    );
-    expect(texto(fixture)).not.toContain('Fila de leads');
+    expect(texto(fixture)).toContain('Fila de leads');
+    expect(texto(fixture)).toContain('Os leads aparecem aqui após a aprovação da supervisão.');
+    expect(texto(fixture)).not.toContain('Você ainda não tem acesso à fila de supervisão.');
+    expect(texto(fixture)).toContain('Conversar com a Lia');
+    expect(texto(fixture)).toContain('Revisar minha conta');
   });
 
   it('a trilha tem os três passos, com a conta criada feita e a análise em andamento', () => {

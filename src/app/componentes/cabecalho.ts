@@ -33,11 +33,16 @@ import { MenuPerfil } from './menu-perfil';
                 [attr.aria-current]="painelAtivo() ? 'page' : null"
                 >Painel do Corretor
                 @if (selo(); as s) {
-                  <span class="selo" [class.neutro]="s.neutro">{{ s.texto }}</span>
+                  @if (!sessao.emAnalise()) {
+                    <span class="selo" [class.neutro]="s.neutro">{{ s.texto }}</span>
+                  }
                 }
               </a>
             }
           </nav>
+          @if (sessao.emAnalise()) {
+            <span class="selo selo-global">em análise</span>
+          }
           @if (sessao.ativa()) {
             <app-menu-perfil />
           } @else {
@@ -51,7 +56,9 @@ import { MenuPerfil } from './menu-perfil';
           <a routerLink="/painel" class="aba" [class.ativo]="painelAtivo()"
             >Painel
             @if (selo(); as s) {
-              <span class="selo" [class.neutro]="s.neutro">{{ s.curto }}</span>
+              @if (!sessao.emAnalise()) {
+                <span class="selo" [class.neutro]="s.neutro">{{ s.curto }}</span>
+              }
             }
           </a>
         </nav>
@@ -145,6 +152,11 @@ import { MenuPerfil } from './menu-perfil';
         color: var(--marca);
         background: color-mix(in srgb, var(--marca) 14%, var(--superficie-elevada));
       }
+    }
+
+    .selo-global {
+      margin-left: 0;
+      white-space: nowrap;
     }
 
     .pilula-entrar {
