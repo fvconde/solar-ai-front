@@ -24,6 +24,11 @@ const LIMITE_MOTIVO = 500;
     <section class="fila-aprovacao" aria-label="Novos corretores" [attr.aria-busy]="carregando()">
       @if (carregando()) {
         <p class="carregando" role="status">Carregando novos corretores...</p>
+      } @else if (erroCarregamento()) {
+        <div class="erro-carregamento" role="alert">
+          <p class="erro">{{ erroCarregamento() }}</p>
+          <button type="button" class="acao neutra" (click)="carregar()">Tentar novamente</button>
+        </div>
       } @else if (pendentes().length > 0) {
         <div class="layout" [class.detalhe-aberto]="detalheMobile()">
           @if (aviso()) {
@@ -186,8 +191,15 @@ export class FilaAprovacao implements OnInit {
   readonly enviando = signal(false);
   readonly aviso = signal<string | null>(null);
   readonly erro = signal<string | null>(null);
+  readonly erroCarregamento = signal<string | null>(null);
 
   ngOnInit(): void {
+    this.carregar();
+  }
+
+  carregar(): void {
+    this.carregando.set(true);
+    this.erroCarregamento.set(null);
     this.api.listarPendentes().subscribe({
       next: (lista) => {
         this.pendentes.set(lista);
@@ -197,7 +209,12 @@ export class FilaAprovacao implements OnInit {
       },
       error: (erro) => {
         this.carregando.set(false);
-        this.tratarErro(erro, null);
+        if (erro?.status === 401) {
+          this.sessao.limpar();
+          void this.router.navigate(['/entrar']);
+          return;
+        }
+        this.erroCarregamento.set('Não foi possível carregar os corretores pendentes.');
       },
     });
   }

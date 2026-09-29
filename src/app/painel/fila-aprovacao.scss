@@ -299,14 +299,31 @@
 }
 
 .carregando,
-.sem-pendentes {
+.sem-pendentes,
+.erro-carregamento {
   padding: 24px;
+}
+
+.carregando,
+.sem-pendentes {
   color: var(--texto-secundario);
 }
 
-.sem-pendentes {
+.sem-pendentes,
+.erro-carregamento {
   border: 1px dashed var(--borda-estrutura);
   border-radius: var(--raio-card);
+}
+
+.erro-carregamento {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+
+  p {
+    margin: 0;
+  }
 }
 
 @media (min-width: 641px) {

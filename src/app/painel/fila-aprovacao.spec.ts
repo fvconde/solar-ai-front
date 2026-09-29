@@ -227,6 +227,59 @@ describe('Fila de aprovação de corretores', () => {
       .toContain('Nenhum corretor pendente no momento.');
   });
 
+  it('500 no carregamento inicial mostra mensagem de erro e permite tentar novamente', () => {
+    TestBed.inject(SessaoStore).definir(sessaoSupervisor(2));
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    const req1 = httpMock.expectOne('/api/painel/corretores/pendentes');
+    req1.flush(null, { status: 500, statusText: 'Server Error' });
+    fixture.detectChanges();
+
+    expect(html(fixture).querySelector('.sem-pendentes')).toBeNull();
+    const erroBloco = html(fixture).querySelector('.erro-carregamento');
+    expect(erroBloco).toBeTruthy();
+    expect(erroBloco?.textContent).toContain('Não foi possível carregar os corretores pendentes.');
+    const botaoTentar = erroBloco?.querySelector<HTMLButtonElement>('button');
+    expect(botaoTentar?.textContent?.trim()).toBe('Tentar novamente');
+
+    botaoTentar?.click();
+    fixture.detectChanges();
+
+    const req2 = httpMock.expectOne('/api/painel/corretores/pendentes');
+    req2.flush(pendentes);
+    fixture.detectChanges();
+
+    expect(html(fixture).querySelector('.erro-carregamento')).toBeNull();
+    expect(linhas(fixture).length).toBe(2);
+  });
+
+  it('erro de rede no carregamento inicial mostra mensagem de erro e permite tentar novamente', () => {
+    TestBed.inject(SessaoStore).definir(sessaoSupervisor(2));
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    const req1 = httpMock.expectOne('/api/painel/corretores/pendentes');
+    req1.error(new ProgressEvent('error'), { status: 0 });
+    fixture.detectChanges();
+
+    expect(html(fixture).querySelector('.sem-pendentes')).toBeNull();
+    const erroBloco = html(fixture).querySelector('.erro-carregamento');
+    expect(erroBloco).toBeTruthy();
+    expect(erroBloco?.textContent).toContain('Não foi possível carregar os corretores pendentes.');
+
+    erroBloco?.querySelector<HTMLButtonElement>('button')?.click();
+    fixture.detectChanges();
+
+    const req2 = httpMock.expectOne('/api/painel/corretores/pendentes');
+    req2.flush([]);
+    fixture.detectChanges();
+
+    expect(html(fixture).querySelector('.erro-carregamento')).toBeNull();
+    expect(html(fixture).querySelector('.sem-pendentes')?.textContent)
+      .toContain('Nenhum corretor pendente no momento.');
+  });
+
   for (const tema of TEMAS) {
     it(`no tema ${tema}, Aprovar usa a marca e Recusar e avisar usa o erro do tema`, () => {
       aplicarTema(tema);
