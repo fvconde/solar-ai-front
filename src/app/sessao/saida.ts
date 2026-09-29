@@ -12,7 +12,10 @@ export class Saida {
   private readonly router = inject(Router);
 
   sair(): void {
-    this.sessao.sair().subscribe(() => this.concluir('Você saiu da sua conta'));
+    this.sessao.sair().subscribe({
+      next: () => this.concluir('Você saiu da sua conta'),
+      error: () => this.avisos.mostrar('Não foi possível sair agora. Tente de novo.'),
+    });
   }
 
   contaExcluida(): void {

@@ -1,5 +1,5 @@
 import { computed, inject, Injectable, signal } from '@angular/core';
-import { catchError, map, Observable, of, shareReplay, tap } from 'rxjs';
+import { catchError, map, Observable, of, shareReplay, tap, throwError } from 'rxjs';
 import { SessaoApi } from './sessao-api';
 import { Perfil, SessaoResponse, StatusCorretor, UsuarioSessao } from './sessao-contrato';
 
@@ -75,7 +75,12 @@ export class SessaoStore {
 
   sair(): Observable<void> {
     return this.api.encerrar().pipe(
-      catchError(() => of(undefined)),
+      catchError((erro: { status?: number }) => {
+        if (erro?.status === 401) {
+          return of(undefined);
+        }
+        return throwError(() => erro);
+      }),
       map(() => this.limpar()),
     );
   }

@@ -192,6 +192,54 @@ describe('MenuPerfil', () => {
     tick(5000);
   }));
 
+  it('500 ao sair não limpa a sessão, mostra falha e permite nova tentativa', fakeAsync(() => {
+    const navegou = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    const fixture = montar();
+    abrir(fixture);
+
+    itens(fixture)[2].click();
+    httpMock.expectOne('/api/sessao').flush(null, { status: 500, statusText: 'Server Error' });
+    tick();
+
+    expect(TestBed.inject(SessaoStore).ativa()).toBeTrue();
+    expect(TestBed.inject(Avisos).atual()).toBe('Não foi possível sair agora. Tente de novo.');
+    expect(navegou).not.toHaveBeenCalled();
+
+    abrir(fixture);
+    itens(fixture)[2].click();
+    httpMock.expectOne('/api/sessao').flush(null, { status: 204, statusText: 'No Content' });
+    tick();
+
+    expect(TestBed.inject(SessaoStore).ativa()).toBeFalse();
+    expect(TestBed.inject(Avisos).atual()).toBe('Você saiu da sua conta');
+    expect(navegou).toHaveBeenCalledWith(['/']);
+    tick(5000);
+  }));
+
+  it('erro de rede ao sair não limpa a sessão, mostra falha e permite nova tentativa', fakeAsync(() => {
+    const navegou = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
+    const fixture = montar();
+    abrir(fixture);
+
+    itens(fixture)[2].click();
+    httpMock.expectOne('/api/sessao').error(new ProgressEvent('error'), { status: 0 });
+    tick();
+
+    expect(TestBed.inject(SessaoStore).ativa()).toBeTrue();
+    expect(TestBed.inject(Avisos).atual()).toBe('Não foi possível sair agora. Tente de novo.');
+    expect(navegou).not.toHaveBeenCalled();
+
+    abrir(fixture);
+    itens(fixture)[2].click();
+    httpMock.expectOne('/api/sessao').flush(null, { status: 204, statusText: 'No Content' });
+    tick();
+
+    expect(TestBed.inject(SessaoStore).ativa()).toBeFalse();
+    expect(TestBed.inject(Avisos).atual()).toBe('Você saiu da sua conta');
+    expect(navegou).toHaveBeenCalledWith(['/']);
+    tick(5000);
+  }));
+
   for (const tema of TEMAS) {
     it(`no tema ${tema}, Sair usa a cor de erro do tema e o menu tem borda no lugar de sombra`, fakeAsync(() => {
       aplicarTema(tema);
