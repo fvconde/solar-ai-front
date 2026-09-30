@@ -86,6 +86,7 @@ describe('Painel do corretor em análise e aviso de aprovação', () => {
     expect(texto(fixture)).not.toContain('Você ainda não tem acesso à fila de supervisão.');
     expect(texto(fixture)).toContain('Conversar com a Lia');
     expect(texto(fixture)).toContain('Revisar minha conta');
+    expect((fixture.nativeElement as HTMLElement).querySelector('.selo')).toBeNull();
   });
 
   it('a trilha tem os três passos, com a conta criada feita e a análise em andamento', () => {

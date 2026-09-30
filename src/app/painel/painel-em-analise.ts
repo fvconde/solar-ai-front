@@ -19,7 +19,6 @@ import { diaCurto, horaDe } from '../conversa/horario';
     <main class="em-analise">
       <div class="conteudo">
         <section class="introducao" aria-labelledby="titulo-em-analise">
-          <span class="selo">em análise</span>
           <h1 id="titulo-em-analise" class="titulo">Seu cadastro está com a supervisão</h1>
           @if (conta()) {
             <p class="texto">
@@ -93,21 +92,8 @@ import { diaCurto, horaDe } from '../conversa/horario';
       margin: 0 auto;
     }
 
-    .introducao .selo {
-      display: inline-flex;
-      padding: 2px 7px;
-      border-radius: 3px;
-      background: color-mix(in srgb, var(--atencao) 14%, var(--superficie-elevada));
-      color: var(--atencao);
-      font-family: 'IBM Plex Mono', monospace;
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-    }
-
     .titulo {
-      margin: 12px 0 0;
+      margin: 0;
       font-size: 26px;
       font-weight: 600;
       letter-spacing: -0.01em;
