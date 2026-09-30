@@ -1,5 +1,7 @@
 <div class="painel-shell">
-  @if (acessoRestrito()) {
+  @if (emAnalise()) {
+    <app-painel-em-analise />
+  } @else if (acessoRestrito()) {
     <main class="bloco-acesso-restrito">
       <div class="cartao-restrito">
         <span class="badge-estado">
@@ -17,30 +19,100 @@
       </div>
     </main>
   } @else {
-    <div class="barra-fila">
-      <div class="grupo-esquerda-fila">
-        <span class="titulo-fila">Fila de leads</span>
-        @if (filtroFixo()) {
-          <span class="badge-filtro-fixo">Meus leads</span>
+    @if (corretorAprovado()) {
+      <app-aviso-aprovacao />
+    }
+    @if (perfil() === 'supervisor') {
+      <nav class="abas-supervisor" role="tablist" aria-label="Abas do painel">
+        @for (f of abasSupervisor(); track f) {
+          <button
+            type="button"
+            role="tab"
+            class="aba-supervisor"
+            [id]="'aba-' + f"
+            aria-controls="painel-fila-leads"
+            [attr.aria-selected]="!novosCorretoresAtivo() && filtroAtivo() === f"
+            [attr.tabindex]="!novosCorretoresAtivo() && filtroAtivo() === f ? 0 : -1"
+            (click)="selecionarFiltro(f)"
+            (keydown)="navegarAbasSupervisor($event)"
+          >
+            {{ rotulosFiltro[f] }}
+          </button>
         }
-        @if (temSeletor()) {
-          <nav class="seletor-filtros" aria-label="Filtros da fila">
-            @for (f of filtrosPermitidos(); track f) {
-              <button
-                type="button"
-                class="botao-filtro"
-                [class.ativo]="filtroAtivo() === f"
-                (click)="selecionarFiltro(f)"
-              >
-                {{ rotulosFiltro[f] }}
-              </button>
-            }
-          </nav>
-        }
-      </div>
-    </div>
+        <button
+          type="button"
+          role="tab"
+          id="aba-novos-corretores"
+          class="aba-supervisor"
+          aria-controls="painel-novos-corretores"
+          [attr.aria-selected]="novosCorretoresAtivo()"
+          [attr.aria-label]="
+            pendentesAprovacao() === 1
+              ? 'Novos corretores, 1 pendente'
+              : 'Novos corretores, ' + pendentesAprovacao() + ' pendentes'
+          "
+          [attr.tabindex]="novosCorretoresAtivo() ? 0 : -1"
+          (click)="selecionarNovosCorretores()"
+          (keydown)="navegarAbasSupervisor($event)"
+        >
+          <span>Novos corretores</span>
+          @if (pendentesAprovacao() > 0) {
+            <span class="contagem-pendentes">
+              <span class="contagem-desktop">{{ pendentesAprovacao() }} pendente{{
+                pendentesAprovacao() === 1 ? '' : 's'
+              }}</span>
+              <span class="contagem-celular" aria-hidden="true">{{ pendentesAprovacao() }}</span>
+            </span>
+          }
+        </button>
+      </nav>
 
-    <main class="corpo-painel" [class.detalhe-aberto]="!!leadSelecionadoId()">
+      <div
+        id="painel-novos-corretores"
+        class="painel-novos-corretores"
+        role="tabpanel"
+        aria-labelledby="aba-novos-corretores"
+        [class.oculto]="!novosCorretoresAtivo()"
+      >
+        <p class="instrucao-novos-corretores">
+          Toque em um corretor para ver os detalhes.
+        </p>
+        <app-fila-aprovacao />
+      </div>
+    }
+    <div
+      id="painel-fila-leads"
+      class="conteudo-fila-painel"
+      [class.oculto]="perfil() === 'supervisor' && novosCorretoresAtivo()"
+      [attr.role]="perfil() === 'supervisor' ? 'tabpanel' : null"
+      [attr.aria-labelledby]="perfil() === 'supervisor' ? abaAtivaId() : null"
+    >
+      @if (perfil() !== 'supervisor') {
+        <div class="barra-fila">
+          <div class="grupo-esquerda-fila">
+            <span class="titulo-fila">Fila de leads</span>
+            @if (filtroFixo()) {
+              <span class="badge-filtro-fixo">Meus leads</span>
+            }
+          @if (temSeletor() && perfil() !== 'supervisor') {
+              <nav class="seletor-filtros" aria-label="Filtros da fila">
+                @for (f of filtrosPermitidos(); track f) {
+                  <button
+                    type="button"
+                    class="botao-filtro"
+                    [class.ativo]="filtroAtivo() === f"
+                    (click)="selecionarFiltro(f)"
+                  >
+                    {{ rotulosFiltro[f] }}
+                  </button>
+                }
+              </nav>
+            }
+          </div>
+        </div>
+      }
+
+      <main class="corpo-painel" [class.detalhe-aberto]="!!leadSelecionadoId()">
       <section class="coluna-fila" aria-label="Lista de leads">
         @if (carregandoLeads()) {
           <div class="estado-feedback">Carregando fila de leads...</div>
@@ -294,7 +366,8 @@
           </div>
         }
       </section>
-    </main>
+      </main>
+    </div>
   }
 
   @if (modalQualificacaoAberto()) {

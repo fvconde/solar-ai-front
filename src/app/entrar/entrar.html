@@ -1,12 +1,12 @@
 <section class="tela-entrar">
   <div class="cartao">
     @switch (tela()) {
-      @case ('email') {
-        <h1 class="titulo">Entre ou cadastre-se</h1>
-        <p class="apoio">
-          Você vai poder aproveitar uma lista de possíveis leads já qualificados pela Lia para
-          atender.
-        </p>
+      @case ('entrar') {
+        <h1 class="titulo">Entrar na Solar</h1>
+
+        @if (conversaSemDono() && !enviando()) {
+          <p class="alerta info">A conversa que você começou com a Lia fica salva na sua conta.</p>
+        }
 
         <label class="rotulo" for="campo-email">E-mail</label>
         <input
@@ -15,100 +15,87 @@
           type="email"
           name="email"
           autocomplete="username"
-          placeholder="Endereço de e-mail"
-          [class.com-erro]="erroEmail()"
+          placeholder="seu@email.com"
+          [class.com-erro]="erroEntrar()"
+          [disabled]="enviando()"
           [ngModel]="email()"
           (ngModelChange)="email.set($event)"
-          (keyup.enter)="continuarComEmail()"
-        />
-        @if (erroEmail()) {
-          <p class="erro">{{ erroEmail() }}</p>
-        }
-
-        <button
-          class="botao-primario"
-          type="button"
-          [disabled]="!email().trim() || enviando()"
-          (click)="continuarComEmail()"
-        >
-          @if (enviando()) {
-            <span class="verificando" aria-label="Verificando"></span>
-          } @else {
-            Continuar
-          }
-        </button>
-      }
-
-      @case ('senha') {
-        <h1 class="titulo">Que bom ver você de novo</h1>
-        <p class="apoio">Encontramos seu cadastro. Digite sua senha para entrar na fila.</p>
-
-        <div class="linha-rotulo">
-          <span class="rotulo">E-mail</span>
-          <button class="link-mono" type="button" (click)="trocarEmail()">Trocar</button>
-        </div>
-        <p class="campo-travado">{{ email() }}</p>
-
-        <label class="rotulo" for="campo-senha">Senha</label>
-        <input
-          id="campo-senha"
-          class="campo"
-          type="password"
-          name="senha"
-          autocomplete="current-password"
-          placeholder="Digite sua senha"
-          [class.com-erro]="erroSenha()"
-          [disabled]="bloqueado()"
-          [ngModel]="senha()"
-          (ngModelChange)="senha.set($event)"
           (keyup.enter)="entrar()"
         />
 
-        @if (bloqueado()) {
-          <p class="campo-bloqueado">Bloqueado temporariamente</p>
-          @if (segundosBloqueado() === segundosDeBloqueio) {
-            <p class="erro">{{ erroSenha() }}</p>
-          } @else {
-            <p class="erro">Aguarde {{ contagemRegressiva() }}</p>
+        <div class="linha-rotulo">
+          <label class="rotulo" for="campo-senha">Senha</label>
+          @if (!bloqueado()) {
+            <button
+              class="link-mono link-recuperar-direcao-a"
+              type="button"
+              [disabled]="enviando()"
+              (click)="irParaRecuperacao()"
+            >
+              <span class="link-recuperar-direcao-a__texto">Esqueci minha senha</span>
+            </button>
           }
-        } @else if (erroSenha()) {
-          <p class="erro">{{ erroSenha() }}</p>
+        </div>
+        <div class="campo-com-acao">
+          <input
+            #campoSenha
+            id="campo-senha"
+            class="campo"
+            name="senha"
+            autocomplete="current-password"
+            [type]="senhaVisivel() ? 'text' : 'password'"
+            [placeholder]="bloqueado() ? 'Bloqueado temporariamente' : 'Digite sua senha'"
+            [class.com-erro]="erroEntrar()"
+            [disabled]="bloqueado() || enviando()"
+            [ngModel]="senha()"
+            (ngModelChange)="senha.set($event)"
+            (keyup.enter)="entrar()"
+          />
+          @if (!bloqueado() && !enviando()) {
+            <button
+              class="acao-campo"
+              type="button"
+              [attr.aria-pressed]="senhaVisivel()"
+              (click)="alternarSenhaVisivel()"
+            >
+              {{ senhaVisivel() ? 'Ocultar' : 'Mostrar' }}
+            </button>
+          }
+        </div>
+
+        @if (bloqueado()) {
+          <p class="alerta" role="alert">
+            Muitas tentativas seguidas. Tente de novo em
+            <b class="numero">{{ contagemRegressiva() }}</b> ou redefina a senha.
+          </p>
+        } @else if (erroEntrar()) {
+          <p class="erro" role="alert">{{ erroEntrar() }}</p>
         }
 
         <button
           class="botao-primario"
           type="button"
-          [disabled]="!senha() || bloqueado() || enviando()"
+          [class.enviando]="enviando()"
+          [disabled]="!podeEntrar()"
           (click)="entrar()"
         >
           @if (enviando()) {
-            <span class="verificando" aria-label="Verificando"></span>
+            <span class="verificando" aria-label="Entrando"></span>
           } @else {
             Entrar
           }
         </button>
 
-        <button class="link-mono link-rota" type="button" (click)="irParaRecuperacao()">
-          Esqueci minha senha
-        </button>
-      }
-
-      @case ('nao-encontrado') {
-        <div class="linha-rotulo">
-          <span class="rotulo">E-mail</span>
-          <button class="link-mono" type="button" (click)="trocarEmail()">Trocar</button>
-        </div>
-        <p class="campo-travado">{{ email() }}</p>
-
-        <h1 class="titulo">Não encontramos esse e-mail</h1>
-        <p class="apoio">
-          Não identificamos esse e-mail no cadastro de corretores da Solar. Um dos nossos
-          especialistas vai entrar em contato por e-mail para dar sequência.
-        </p>
-
-        <button class="botao-secundario" type="button" (click)="trocarEmail()">
-          Tentar outro e-mail
-        </button>
+        @if (bloqueado()) {
+          <button class="botao-secundario" type="button" (click)="irParaRecuperacao()">
+            Redefinir senha
+          </button>
+        } @else {
+          <p class="sem-conta" [class.apagado]="enviando()">
+            Ainda não tem conta?
+            <a routerLink="/cadastro" [attr.tabindex]="enviando() ? -1 : null">Cadastre-se</a>
+          </p>
+        }
       }
 
       @case ('recuperar') {
@@ -169,8 +156,7 @@
       @case ('nova-senha') {
         <h1 class="titulo">Crie uma nova senha</h1>
         <p class="apoio">
-          Escolha uma nova senha para {{ email() }}. Ao salvar, você entra direto no painel do
-          corretor.
+          Escolha uma nova senha para {{ email() }}. Ao salvar, você já entra na sua conta.
         </p>
 
         <label class="rotulo" for="campo-nova-senha">Nova senha</label>
@@ -231,4 +217,21 @@
       }
     }
   </div>
+
+  @if (tela() === 'entrar' && !bloqueado()) {
+    <a
+      class="faixa-corretor"
+      routerLink="/seja-corretor"
+      [class.apagado]="enviando()"
+      [attr.tabindex]="enviando() ? -1 : null"
+    >
+      <span class="faixa-texto">
+        <span class="faixa-titulo">É corretor de imóveis?</span>
+        <span class="faixa-apoio"
+          >Receba leads que a Lia já qualificou, na sua região e especialidade.</span
+        >
+      </span>
+      <span class="faixa-chamada">Venha para a Solar →</span>
+    </a>
+  }
 </section>

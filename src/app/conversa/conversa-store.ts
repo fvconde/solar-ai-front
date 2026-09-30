@@ -59,7 +59,17 @@ export class ConversaStore {
     }
   });
 
-  private conversaId = '';
+  readonly conversaAtual = signal('');
+  private versaoConsentidaNaConta: string | null = null;
+
+  private get conversaId(): string {
+    return this.conversaAtual();
+  }
+
+  private set conversaId(valor: string) {
+    this.conversaAtual.set(valor);
+  }
+
   private ultimoEnvio = '';
   private ultimoEnvioVisivel = false;
   private sequencia = 0;
@@ -71,6 +81,7 @@ export class ConversaStore {
     const salva = this.ler(CHAVE_CONVERSA);
     if (!salva) {
       this.estado.set('aceite-pendente');
+      await this.aceitarPelaConta();
       return;
     }
 
@@ -128,6 +139,30 @@ export class ConversaStore {
     this.estado.set('aceite-pendente');
   }
 
+  async definirConsentimentoDaConta(versao: string | null): Promise<void> {
+    this.versaoConsentidaNaConta = versao;
+    if (!this.conversaId && this.estado() === 'aceite-pendente') {
+      await this.aceitarPelaConta();
+    }
+  }
+
+  conversaGuardada(): string | null {
+    return this.ler(CHAVE_CONVERSA);
+  }
+
+  async abrirConversa(id: string): Promise<void> {
+    if (id === this.conversaId) {
+      return;
+    }
+    this.pararPolling();
+    this.gravar(CHAVE_CONVERSA, id);
+    this.conversaId = '';
+    this.totalMensagens = 0;
+    this.sequencia = 0;
+    this.itens.set([]);
+    await this.iniciar();
+  }
+
   async novaConversa(): Promise<void> {
     this.pararPolling();
     this.apagar(CHAVE_CONVERSA);
@@ -136,6 +171,7 @@ export class ConversaStore {
     this.sequencia = 0;
     this.itens.set([]);
     this.estado.set('aceite-pendente');
+    await this.aceitarPelaConta();
   }
 
   async enviar(texto: string): Promise<void> {
@@ -217,20 +253,21 @@ export class ConversaStore {
     }
   }
 
+  private async aceitarPelaConta(): Promise<void> {
+    if (this.versaoConsentidaNaConta === VERSAO_AVISO_PRIVACIDADE) {
+      await this.aceitar();
+    }
+  }
+
   private async abrir(): Promise<void> {
-    this.itens.set([
-      { tipo: 'divisor', id: this.proximoId(), rotulo: HOJE },
-    ]);
+    this.itens.set([{ tipo: 'divisor', id: this.proximoId(), rotulo: HOJE }]);
     this.ultimoEnvio = ABERTURA;
     this.ultimoEnvioVisivel = false;
     await this.turno();
   }
 
   private async retomarConversa(conversa: ConversaResponse): Promise<void> {
-    if (
-      !conversa.consentimentoEm ||
-      conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE
-    ) {
+    if (!conversa.consentimentoEm || conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE) {
       this.pararPolling();
       this.itens.set([]);
       this.estado.set('aceite-pendente');
@@ -361,8 +398,7 @@ export class ConversaStore {
           }
         }
       }
-    } catch {
-    }
+    } catch {}
   }
 
   private desfecho(

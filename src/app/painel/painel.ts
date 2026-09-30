@@ -15,15 +15,27 @@ import { CardImovel } from '../componentes/card-imovel';
 import { MensagemLia } from '../componentes/mensagem-lia';
 import { MensagemPessoa } from '../componentes/mensagem-pessoa';
 import { SessaoStore } from '../sessao/sessao-store';
+import { AvisoAprovacao } from './aviso-aprovacao';
+import { FilaAprovacao } from './fila-aprovacao';
 import { PainelApi } from './painel-api';
 import { LeadDetalheResponse, LeadPainelItem } from './painel-contrato';
+import { PainelEmAnalise } from './painel-em-analise';
 
 @Component({
   selector: 'app-painel',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, FormsModule, CardImovel, MensagemLia, MensagemPessoa],
+  imports: [
+    CommonModule,
+    FormsModule,
+    AvisoAprovacao,
+    CardImovel,
+    FilaAprovacao,
+    MensagemLia,
+    MensagemPessoa,
+    PainelEmAnalise,
+  ],
   templateUrl: './painel.html',
-  styleUrl: './painel.scss',
+  styleUrls: ['./painel.scss', './painel-detalhe.scss'],
 })
 export class Painel implements OnInit, OnDestroy {
   private readonly api = inject(PainelApi);
@@ -40,6 +52,7 @@ export class Painel implements OnInit, OnDestroy {
   readonly acessoRestrito = signal<boolean>(false);
 
   readonly filtroAtivo = signal<string>('meus_leads');
+  readonly novosCorretoresAtivo = signal(false);
   readonly intencaoAtiva = signal<string>('');
 
   readonly leadSelecionadoId = signal<string | null>(null);
@@ -50,9 +63,22 @@ export class Painel implements OnInit, OnDestroy {
 
   readonly modalQualificacaoAberto = signal<boolean>(false);
 
-  readonly usuarioNome = computed(() => this.sessao.corretor()?.nome ?? '');
+  readonly usuarioNome = computed(() => this.sessao.usuario()?.nome ?? '');
   readonly perfil = computed(() => this.sessao.perfil());
+  readonly emAnalise = computed(() => this.sessao.emAnalise());
+  readonly corretorAprovado = computed(
+    () => this.sessao.perfil() === 'corretor' && this.sessao.statusCorretor() === 'aprovado',
+  );
   readonly filtrosPermitidos = computed(() => this.sessao.filtrosPermitidos());
+  readonly abasSupervisor = computed(() =>
+    ['minha_fila', 'sem_corretor', 'visao_geral'].filter((filtro) =>
+      this.filtrosPermitidos().includes(filtro),
+    ),
+  );
+  readonly pendentesAprovacao = computed(() => this.sessao.pendentesAprovacao() ?? 0);
+  readonly abaAtivaId = computed(() =>
+    this.novosCorretoresAtivo() ? 'aba-novos-corretores' : `aba-${this.filtroAtivo()}`,
+  );
 
   readonly filtroFixo = computed(() => this.filtrosPermitidos().length === 1);
   readonly temSeletor = computed(() => this.filtrosPermitidos().length > 1);
@@ -100,6 +126,10 @@ export class Painel implements OnInit, OnDestroy {
   });
 
   ngOnInit(): void {
+    if (this.emAnalise()) {
+      return;
+    }
+
     this.subParams = this.route.paramMap.subscribe((params) => {
       const id = params.get('id');
       if (id) {
@@ -116,7 +146,14 @@ export class Painel implements OnInit, OnDestroy {
       queryFiltro || this.sessao.filtroInicial() || this.filtrosPermitidos()[0] || 'meus_leads';
     this.filtroAtivo.set(inicial);
 
-    this.carregarLeads();
+    const abrirNovosCorretores =
+      this.perfil() === 'supervisor' &&
+      !queryFiltro &&
+      !this.route.snapshot.paramMap.get('id');
+    this.novosCorretoresAtivo.set(abrirNovosCorretores);
+    if (!abrirNovosCorretores) {
+      this.carregarLeads();
+    }
   }
 
   ngOnDestroy(): void {
@@ -124,6 +161,7 @@ export class Painel implements OnInit, OnDestroy {
   }
 
   selecionarFiltro(filtro: string): void {
+    this.novosCorretoresAtivo.set(false);
     this.filtroAtivo.set(filtro);
     this.router.navigate([], {
       relativeTo: this.route,
@@ -131,6 +169,29 @@ export class Painel implements OnInit, OnDestroy {
       queryParamsHandling: 'merge',
     });
     this.carregarLeads();
+  }
+
+  selecionarNovosCorretores(): void {
+    if (this.perfil() !== 'supervisor') return;
+    this.novosCorretoresAtivo.set(true);
+    void this.router.navigate(['/painel'], { queryParams: { filtro: null } });
+  }
+
+  navegarAbasSupervisor(evento: KeyboardEvent): void {
+    const lista = (evento.currentTarget as HTMLElement).parentElement;
+    const abas = Array.from(lista?.querySelectorAll<HTMLButtonElement>('[role="tab"]') ?? []);
+    const atual = abas.indexOf(evento.currentTarget as HTMLButtonElement);
+    if (atual < 0 || abas.length === 0) return;
+
+    let proximo = atual;
+    if (evento.key === 'ArrowRight') proximo = (atual + 1) % abas.length;
+    else if (evento.key === 'ArrowLeft') proximo = (atual - 1 + abas.length) % abas.length;
+    else if (evento.key === 'Home') proximo = 0;
+    else if (evento.key === 'End') proximo = abas.length - 1;
+    else return;
+
+    evento.preventDefault();
+    abas[proximo].focus();
   }
 
   carregarLeads(): void {

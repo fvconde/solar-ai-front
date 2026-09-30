@@ -2,7 +2,7 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { provideRouter, Router } from '@angular/router';
-import { CorretorSessao } from '../entrar/entrar-contrato';
+import { UsuarioSessao } from '../sessao/sessao-contrato';
 import { SessaoStore } from '../sessao/sessao-store';
 import { Painel } from './painel';
 import { FilaLeadsResponse, LeadDetalheResponse } from './painel-contrato';
@@ -12,10 +12,10 @@ describe('Painel (S-21)', () => {
   let sessao: SessaoStore;
   let router: Router;
 
-  const corretorComum: CorretorSessao = {
+  const corretorComum: UsuarioSessao = {
     id: 'c-201',
     nome: 'Diego Marques',
-    especialidade: 'moradia',
+    email: 'corretor@solar.com.br',
   };
 
   const filaMock: FilaLeadsResponse = {
@@ -144,8 +144,10 @@ describe('Painel (S-21)', () => {
     router = TestBed.inject(Router);
 
     sessao.definir({
-      corretor: corretorComum,
+      usuario: corretorComum,
       perfil: 'corretor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: null,
       corretorId: 'c-201',
       vinculoAtivo: true,
       filtrosPermitidos: ['meus_leads'],
@@ -154,6 +156,8 @@ describe('Painel (S-21)', () => {
   });
 
   afterEach(() => {
+    httpMock.match('/api/conta');
+    httpMock.match('/api/painel/corretores/pendentes');
     httpMock.verify();
   });
 
@@ -301,8 +305,10 @@ describe('Painel (S-21)', () => {
 
   it('5. filtros são derivados exclusivamente de filtrosPermitidos', () => {
     sessao.definir({
-      corretor: { id: 's-1', nome: 'Helena Vasques', especialidade: 'moradia' },
+      usuario: { id: 's-1', nome: 'Helena Vasques', email: 'supervisor@solar.com.br' },
       perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 0,
       corretorId: 'c-201',
       vinculoAtivo: true,
       filtrosPermitidos: ['minha_fila', 'sem_corretor', 'visao_geral'],
@@ -312,22 +318,32 @@ describe('Painel (S-21)', () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
 
+    httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('#aba-minha_fila') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
     const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
     expect(req.request.params.get('filtro')).toBe('minha_fila');
     req.flush(filaMock);
     fixture.detectChanges();
 
     const html = fixture.nativeElement as HTMLElement;
-    const botoes = Array.from(html.querySelectorAll('.botao-filtro')).map((b) =>
+    expect(html.querySelectorAll('[role="tab"]').length).toBe(4);
+    expect(html.querySelector('.seletor-filtros')).toBeNull();
+    expect(html.querySelector('#aba-minha_fila')?.getAttribute('aria-selected')).toBe('true');
+    const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Minha fila', 'Sem corretor elegível', 'Visão geral']);
+    expect(botoes).toEqual(['Minha fila', 'Sem corretor elegível', 'Visão geral', 'Novos corretores']);
   });
 
   it('6. supervisor sem vínculo não renderiza "Minha fila" de forma alguma', () => {
     sessao.definir({
-      corretor: { id: 's-2', nome: 'Marcelo Tavares', especialidade: 'geral' },
+      usuario: { id: 's-2', nome: 'Marcelo Tavares', email: 'supervisor@solar.com.br' },
       perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 0,
       corretorId: null,
       vinculoAtivo: false,
       filtrosPermitidos: ['sem_corretor', 'visao_geral'],
@@ -335,6 +351,11 @@ describe('Painel (S-21)', () => {
     });
 
     const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+
+    httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('#aba-sem_corretor') as HTMLButtonElement).click();
     fixture.detectChanges();
 
     const req = httpMock.expectOne((r) => r.url === '/api/painel/leads');
@@ -346,10 +367,10 @@ describe('Painel (S-21)', () => {
     const textoTodo = html.textContent || '';
     expect(textoTodo).not.toContain('Minha fila');
 
-    const botoes = Array.from(html.querySelectorAll('.botao-filtro')).map((b) =>
+    const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Sem corretor elegível', 'Visão geral']);
+    expect(botoes).toEqual(['Sem corretor elegível', 'Visão geral', 'Novos corretores']);
   });
 
   it('7. estado de acesso restrito bloqueia antes de chamada de dados ou em 403', () => {
@@ -462,7 +483,7 @@ describe('Painel (S-21)', () => {
       .flush('Sessão inválida', { status: 401, statusText: 'Unauthorized' });
     fixture.detectChanges();
 
-    expect(sessao.corretor()).toBeNull();
+    expect(sessao.usuario()).toBeNull();
     expect(navegou).toHaveBeenCalledWith(['/entrar']);
   });
 
@@ -475,14 +496,20 @@ describe('Painel (S-21)', () => {
 
     // supervisor sem_corretor
     sessao.definir({
-      corretor: { id: 's-1', nome: 'Helena', especialidade: 'geral' },
+      usuario: { id: 's-1', nome: 'Helena', email: 'supervisor@solar.com.br' },
       perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 0,
       corretorId: null,
       vinculoAtivo: false,
       filtrosPermitidos: ['sem_corretor', 'visao_geral'],
       filtroInicial: 'sem_corretor',
     });
     const f2 = TestBed.createComponent(Painel);
+    f2.detectChanges();
+    httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
+    f2.detectChanges();
+    (f2.nativeElement.querySelector('#aba-sem_corretor') as HTMLButtonElement).click();
     f2.detectChanges();
     httpMock.expectOne((r) => r.url === '/api/painel/leads').flush({ total: 0, itens: [] });
     f2.detectChanges();

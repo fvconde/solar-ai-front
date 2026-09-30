@@ -1,35 +1,15 @@
-export interface CorretorSessao {
-  id: string;
-  nome: string;
-  especialidade: string;
-}
-
-export interface IdentificacaoResposta {
-  cadastrado: boolean;
-}
-
-export interface SessaoResposta {
-  corretor: CorretorSessao;
-  perfil?: 'corretor' | 'supervisor';
-  corretorId?: string | null;
-  vinculoAtivo?: boolean;
-  filtrosPermitidos?: string[];
-  filtroInicial?: string;
-}
+import { SessaoResponse } from '../sessao/sessao-contrato';
 
 export interface RecuperacaoResposta {
   email: string;
 }
 
-export type TelaEntrar =
-  | 'email'
-  | 'senha'
-  | 'nao-encontrado'
-  | 'recuperar'
-  | 'link-enviado'
-  | 'nova-senha'
-  | 'link-invalido';
+export type TelaEntrar = 'entrar' | 'recuperar' | 'link-enviado' | 'nova-senha' | 'link-invalido';
 
-export const TENTATIVAS_ATE_BLOQUEIO = 5;
-export const SEGUNDOS_DE_BLOQUEIO = 30;
 export const MINIMO_CARACTERES_SENHA = 8;
+export const SEGUNDOS_DE_BLOQUEIO = 30;
+export const FORMATO_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export function destinoDe(sessao: SessaoResponse): string[] {
+  return sessao.perfil === 'cliente' ? ['/'] : ['/painel'];
+}
