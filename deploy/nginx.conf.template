@@ -1,0 +1,74 @@
+worker_processes auto;
+pid /tmp/nginx.pid;
+# Sem logs de URLs, cookies ou headers (inclusive em erros de upstream).
+error_log /dev/null crit;
+events { worker_connections 1024; }
+http {
+    include /etc/nginx/mime.types;
+    default_type application/octet-stream;
+    access_log off;
+    server_tokens off;
+    client_body_temp_path /tmp/client_body;
+    proxy_temp_path /tmp/proxy;
+    fastcgi_temp_path /tmp/fastcgi;
+    uwsgi_temp_path /tmp/uwsgi;
+    scgi_temp_path /tmp/scgi;
+    # Lido de /etc/resolv.conf no boot; proxy_pass com variavel renova o DNS.
+    resolver @@RESOLVERS@@ valid=30s;
+    resolver_timeout 5s;
+    server {
+        listen @@PORT@@;
+        root /usr/share/nginx/html;
+        index index.html;
+        set $api_url "@@API_URL@@";
+
+        location = /_solar_identity {
+            internal;
+            proxy_pass http://127.0.0.1:8090/authorize;
+            proxy_pass_request_body off;
+            proxy_pass_request_headers off;
+            proxy_set_header Content-Length "";
+            proxy_set_header X-Proxy-Peer $remote_addr;
+            proxy_set_header X-Proxy-Xff $http_x_forwarded_for;
+            proxy_buffer_size 32k;
+            proxy_buffers 4 32k;
+            proxy_connect_timeout 2s;
+            proxy_read_timeout 5s;
+        }
+
+        location ~* ^/(?:openapi|swagger)(?:/|$) { return 404; }
+        location ~ ^/(?:api|conversas|turn|encaminhamentos|health)(?:/|$) {
+            auth_request /_solar_identity;
+            auth_request_set $identity $upstream_http_x_solar_identity;
+            auth_request_set $client_ip $upstream_http_x_solar_client_ip;
+            # IAM usa este header; Authorization do usuario permanece intacto.
+            proxy_set_header X-Serverless-Authorization $identity;
+            proxy_set_header X-Forwarded-For $client_ip;
+            proxy_set_header X-Real-IP $client_ip;
+            proxy_set_header Forwarded "";
+            proxy_set_header X-Forwarded-Host "";
+            proxy_set_header X-Forwarded-Proto "";
+            proxy_set_header X-Solar-Identity "";
+            proxy_set_header X-Solar-Client-IP "";
+            proxy_set_header X-Proxy-Peer "";
+            proxy_set_header X-Proxy-Xff "";
+            proxy_set_header Host @@API_AUTHORITY@@;
+            proxy_hide_header X-Serverless-Authorization;
+            proxy_hide_header X-Solar-Identity;
+            proxy_hide_header X-Solar-Client-IP;
+            proxy_hide_header Authorization;
+            proxy_ssl_server_name on;
+            proxy_ssl_name @@API_HOST@@;
+            proxy_ssl_verify on;
+            proxy_ssl_trusted_certificate /etc/ssl/certs/ca-certificates.crt;
+            proxy_ssl_protocols TLSv1.2 TLSv1.3;
+            proxy_http_version 1.1;
+            proxy_set_header Connection "";
+            proxy_connect_timeout 5s;
+            proxy_read_timeout 120s;
+            # URI original preservada, sem remover prefixo ou query string.
+            proxy_pass $api_url$request_uri;
+        }
+        location / { try_files $uri $uri/ /index.html; }
+    }
+}

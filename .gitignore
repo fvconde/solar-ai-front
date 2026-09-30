@@ -45,3 +45,7 @@ Thumbs.db
 # Ferramentas de agente, nunca versionadas
 .maestri/
 .serena/
+
+# Cache dos testes operacionais Python
+__pycache__/
+*.py[cod]
