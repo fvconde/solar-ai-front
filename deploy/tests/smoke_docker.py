@@ -1,8 +1,8 @@
 """Smoke stdlib local. Requer imagens front/API :s26-local e postgres:16-alpine.
 
 Usa HTTP por docker exec (nenhuma porta do host), rede Docker --internal
-e certificados ficticios temporarios. A etapa de gerar certificado instala
-openssl em container descartavel; nenhum container de aplicacao tem egress.
+e certificados ficticios temporarios. A etapa de gerar certificado usa
+openssl instalado no host; nenhum container de aplicacao tem egress.
 Postgres exclusivo, sem portas de host, com dados inteiramente ficticios.
 Nao le .env. Nao chama metadata real, Gemini, SMTP nem recursos de nuvem.
 """
@@ -10,6 +10,7 @@ import base64
 import csv
 import json
 import os
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -19,7 +20,7 @@ from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 import uuid
 
-IMAGE = 'solar-ai-front:s26-local'
+IMAGE = os.environ.get('S26_FRONT_SMOKE_IMAGE', 'solar-ai-front:s26-local')
 HERE = Path(__file__).resolve().parent
 
 
@@ -55,11 +56,21 @@ class DockerSmoke(unittest.TestCase):
         else:
             cls.tmp.chmod(0o700)
         fixtures = cls.tmp.as_posix()
-        docker('run', '--rm', '--user', 'root', '--entrypoint', 'sh',
-               '-v', fixtures + ':/fixtures', IMAGE, '-c',
-               'apk add --no-cache openssl >/dev/null && openssl req -x509 -newkey rsa:2048 -nodes '
-               '-keyout /fixtures/key.pem -out /fixtures/cert.pem -days 1 -subj /CN=api-stub '
-               '-addext subjectAltName=DNS:api-stub >/dev/null 2>&1 && chmod 644 /fixtures/key.pem')
+        openssl = shutil.which('openssl')
+        if openssl is None and os.name == 'nt':
+            candidato = Path(os.environ.get('ProgramFiles', 'C:/Program Files')) / 'Git/usr/bin/openssl.exe'
+            if candidato.is_file():
+                openssl = str(candidato)
+        if openssl is None:
+            raise RuntimeError('OpenSSL local necessario; nenhum pacote sera baixado.')
+        certificado = subprocess.run([
+            openssl, 'req', '-x509', '-newkey', 'rsa:2048', '-nodes',
+            '-keyout', str(cls.tmp / 'key.pem'), '-out', str(cls.tmp / 'cert.pem'),
+            '-days', '1', '-subj', '/CN=api-stub', '-addext', 'subjectAltName=DNS:api-stub'],
+            capture_output=True)
+        if certificado.returncode:
+            raise RuntimeError('Falha ao gerar certificado ficticio local.')
+        (cls.tmp / 'key.pem').chmod(0o644)
         docker('network', 'create', '--internal', cls.network)
         cls.subnet = json.loads(docker('network', 'inspect', cls.network))[0]['IPAM']['Config'][0]['Subnet']
         docker('run', '-d', '--name', cls.backend, '--network', cls.network, '--network-alias', 'api-stub',
@@ -124,6 +135,7 @@ class DockerSmoke(unittest.TestCase):
         for path in ('/api/painel/leads?x=1', '/conversas/123', '/turn', '/encaminhamentos', '/health'):
             status, headers, raw = self.request(path, b'{"falso":true}', {
                 'X-Forwarded-For': '1.1.1.1, 203.0.113.7', 'X-Serverless-Authorization': 'TOKEN_FORJADO',
+                'X-Solar-Client-IP': '192.0.2.200',
                 'Forwarded': 'for=1.1.1.1', 'Authorization': 'Bearer usuario-ficticio', 'Cookie': 'sessao=ficticia'})
             data = json.loads(raw)
             self.assertEqual(status, 200)
@@ -131,6 +143,7 @@ class DockerSmoke(unittest.TestCase):
             self.assertEqual(data['body'], '{"falso":true}')
             self.assertEqual(data['method'], 'POST')
             self.assertEqual(data['xff'], '203.0.113.7')
+            self.assertEqual(data['client_ip'], '203.0.113.7')
             self.assertTrue(data['identity_absent'])
             self.assertEqual(data['authorization'], 'Bearer usuario-ficticio')
             self.assertEqual(data['cookie'], 'sessao=ficticia')
@@ -140,11 +153,13 @@ class DockerSmoke(unittest.TestCase):
     def test_iam_sobrescreve_header_sem_vazar_token_no_browser_ou_logs(self):
         self.boot(iam=True)
         status, headers, raw = self.request('/api/prova', headers={
-            'X-Forwarded-For': 'falso, 203.0.113.8', 'X-Serverless-Authorization': 'TOKEN_FORJADO'})
+            'X-Forwarded-For': 'falso, 203.0.113.8', 'X-Serverless-Authorization': 'TOKEN_FORJADO',
+            'X-Solar-Client-IP': '192.0.2.200'})
         self.assertEqual(status, 200)
         data = json.loads(raw)
         self.assertTrue(data['iam'])
         self.assertEqual(data['xff'], '203.0.113.8')
+        self.assertEqual(data['client_ip'], '203.0.113.8')
         self.assertNotIn('X-Solar-Identity', headers)
         self.assertNotIn('X-Serverless-Authorization', headers)
         self.assertNotIn(b'SENTINELA', raw)
@@ -174,12 +189,27 @@ class DockerSmoke(unittest.TestCase):
 
     def test_peer_desconhecido_descarta_spoof(self):
         self.boot(trusted=False)
-        status, _, raw = self.request('/api/prova', headers={'X-Forwarded-For': '203.0.113.7'})
+        status, _, raw = self.request('/api/prova', headers={
+            'X-Forwarded-For': '203.0.113.7', 'X-Solar-Client-IP': '192.0.2.200'})
         self.assertEqual(status, 200)
         self.assertNotEqual(json.loads(raw)['xff'], '203.0.113.7')
         peer = json.loads(docker('inspect', '--format', '{{json .NetworkSettings.Networks}}',
                                  self.backend))[self.network]['IPAddress']
         self.assertEqual(json.loads(raw)['xff'], peer)
+        self.assertEqual(json.loads(raw)['client_ip'], peer)
+
+    def test_header_proprio_forjado_e_sobrescrito_em_ambos_modos(self):
+        for iam in (False, True):
+            self.boot(iam=iam)
+            for valor in ('192.0.2.200', 'falso', '192.0.2.200, 192.0.2.201'):
+                with self.subTest(iam=iam, valor=valor):
+                    status, _, raw = self.request('/api/prova', headers={
+                        'X-Forwarded-For': 'falso, 2001:0db8:0:0::7',
+                        'X-Solar-Client-IP': valor})
+                    self.assertEqual(status, 200)
+                    data = json.loads(raw)
+                    self.assertEqual(data['client_ip'], '2001:db8::7')
+                    self.assertEqual(data['xff'], data['client_ip'])
 
     def test_api_dotnet_real_painel_anonimo_health_sha_e_spa(self):
         # Credenciais exclusivamente ficticias, geradas para este container.

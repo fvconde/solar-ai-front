@@ -49,7 +49,7 @@ http {
             proxy_set_header X-Forwarded-Host "";
             proxy_set_header X-Forwarded-Proto "";
             proxy_set_header X-Solar-Identity "";
-            proxy_set_header X-Solar-Client-IP "";
+            proxy_set_header X-Solar-Client-IP $client_ip;
             proxy_set_header X-Proxy-Peer "";
             proxy_set_header X-Proxy-Xff "";
             proxy_set_header Host @@API_AUTHORITY@@;

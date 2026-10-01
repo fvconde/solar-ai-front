@@ -57,6 +57,13 @@ class ConfigurationTests(unittest.TestCase):
         with self.assertRaises(front.ConfigurationError):
             front.render(settings(), template, '')
 
+    def test_header_proprio_usa_apenas_IP_normalizado_sem_copiar_cliente(self):
+        template = Path(front.__file__).with_name('nginx.conf.template').read_text()
+        rendered = front.render(settings(), template, 'nameserver 127.0.0.11\n')
+        self.assertIn('proxy_set_header X-Solar-Client-IP $client_ip;', rendered)
+        self.assertNotIn('proxy_set_header X-Solar-Client-IP "";', rendered)
+        self.assertNotIn('$http_x_solar_client_ip', rendered)
+
 
 class ForwardedTests(unittest.TestCase):
     def test_prefixo_falso_descartado(self):

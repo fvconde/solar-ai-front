@@ -20,6 +20,7 @@ class Handler(BaseHTTPRequestHandler):
         identity = self.headers.get('X-Serverless-Authorization', '')
         data = json.dumps({'path': self.path, 'method': self.command, 'body': body,
                            'xff': self.headers.get('X-Forwarded-For'),
+                           'client_ip': self.headers.get('X-Solar-Client-IP'),
                            'authorization': self.headers.get('Authorization'),
                            'cookie': self.headers.get('Cookie'),
                            'forwarded': self.headers.get('Forwarded'),
