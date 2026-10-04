@@ -110,6 +110,13 @@ export interface ConversaResponse {
   versaoAvisoPrivacidade: string | null;
 }
 
+export interface ExclusaoTitularResponse {
+  leadExcluido: boolean;
+  removidoEm: string;
+  escopo: 'lead_e_vinculos' | 'apenas_conversa';
+  mensagem: string;
+}
+
 export const VERSAO_AVISO_PRIVACIDADE = '2026-09-11';
 
 export const LIMITE_MENSAGEM = 4000;

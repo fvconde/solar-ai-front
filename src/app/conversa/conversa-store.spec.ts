@@ -1,4 +1,4 @@
-import { provideHttpClient } from '@angular/common/http';
+import { HttpErrorResponse, provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
 import { TestBed } from '@angular/core/testing';
 import { ConversaApi } from './conversa-api';
@@ -6,10 +6,12 @@ import { ConversaStore } from './conversa-store';
 import {
   AgendamentoDaConversa,
   ConversaResponse,
+  ExclusaoTitularResponse,
   ImovelSugerido,
   MensagemDaConversa,
   PerfilLead,
   ProximaAcao,
+  VERSAO_AVISO_PRIVACIDADE,
 } from './contrato';
 import { ItemLia, ItemTrilha } from './trilha';
 
@@ -81,6 +83,7 @@ describe('ConversaStore ao retomar', () => {
       'enviarMensagem',
       'registrarContato',
       'registrarConsentimento',
+      'apagarConversa',
     ]);
 
     TestBed.configureTestingModule({
@@ -581,5 +584,371 @@ describe('ConversaStore ao retomar', () => {
     expect(itemLia.intencao).toBe('aluguel');
     expect(itemLia.imoveis.length).toBe(1);
     expect(itemLia.imoveis[0].precoAluguel).toBe(3500);
+  });
+});
+
+describe('ConversaStore exclusao titular', () => {
+  let store: ConversaStore;
+  let api: jasmine.SpyObj<ConversaApi>;
+
+  beforeEach(() => {
+    api = jasmine.createSpyObj<ConversaApi>('ConversaApi', [
+      'obterConversa',
+      'enviarMensagem',
+      'registrarContato',
+      'registrarConsentimento',
+      'apagarConversa',
+    ]);
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ConversaApi, useValue: api },
+      ],
+    });
+
+    localStorage.setItem('solar.conversaId', 'c1');
+    store = TestBed.inject(ConversaStore);
+  });
+
+  afterEach(() => localStorage.clear());
+
+  it('podeApagarConversa e verdadeiro somente quando existe id e ja passou pelo aceite', async () => {
+    localStorage.clear();
+    const storeNova = TestBed.inject(ConversaStore);
+    expect(storeNova.podeApagarConversa()).toBeFalse();
+
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    localStorage.setItem('solar.conversaId', 'c1');
+    await store.iniciar();
+    expect(store.podeApagarConversa()).toBeTrue();
+  });
+
+  it('ambos os escopos limpam somente a conversa local preservando preferencias e login', async () => {
+    localStorage.setItem('solar.outro', 'tema-escuro');
+    localStorage.setItem('solar.conta', 'token-ou-email');
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    const mockRespostaVinculos: ExclusaoTitularResponse = {
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    };
+    api.apagarConversa.and.resolveTo(mockRespostaVinculos);
+
+    const sucesso1 = await store.apagarConversa();
+    expect(sucesso1).toBeTrue();
+    expect(store.conversaApagada()).toBeTrue();
+    expect(store.conversaGuardada()).toBeNull();
+    expect(store.itens()).toEqual([]);
+    expect(localStorage.getItem('solar.conversaId')).toBeNull();
+    expect(localStorage.getItem('solar.outro')).toBe('tema-escuro');
+    expect(localStorage.getItem('solar.conta')).toBe('token-ou-email');
+
+    // Escopo apenas_conversa
+    localStorage.setItem('solar.conversaId', 'c2');
+    api.obterConversa.and.resolveTo({ ...conversa([]), conversaId: 'c2' });
+    await store.abrirConversa('c2');
+    const mockRespostaApenasConversa: ExclusaoTitularResponse = {
+      leadExcluido: false,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'apenas_conversa',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    };
+    api.apagarConversa.and.resolveTo(mockRespostaApenasConversa);
+
+    const sucesso2 = await store.apagarConversa();
+    expect(sucesso2).toBeTrue();
+    expect(store.conversaApagada()).toBeTrue();
+    expect(store.conversaGuardada()).toBeNull();
+
+    // DELETE 404 tambem resulta em sucesso
+    localStorage.setItem('solar.conversaId', 'c3');
+    api.obterConversa.and.resolveTo({ ...conversa([]), conversaId: 'c3' });
+    await store.abrirConversa('c3');
+    api.apagarConversa.and.rejectWith(new HttpErrorResponse({ status: 404 }));
+
+    const sucesso404 = await store.apagarConversa();
+    expect(sucesso404).toBeTrue();
+    expect(store.conversaApagada()).toBeTrue();
+    expect(store.conversaGuardada()).toBeNull();
+  });
+
+  it('403, 409 e 429 preservam estado com erro confirmada sem GET de verificacao', async () => {
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    for (const status of [403, 409, 429]) {
+      api.obterConversa.calls.reset();
+      api.apagarConversa.and.rejectWith(new HttpErrorResponse({ status }));
+
+      const sucesso = await store.apagarConversa();
+      expect(sucesso).toBeFalse();
+      expect(store.erroExclusao()).toBe('confirmada');
+      expect(store.conversaGuardada()).toBe('c1');
+      expect(store.itens().length).toBeGreaterThan(0);
+      expect(api.obterConversa).not.toHaveBeenCalled();
+    }
+  });
+
+  it('rede com status 0 trata GET 200 como confirmada, GET 404 como incerta e falha no GET como incerta', async () => {
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    // Rede + GET 200 -> confirmada
+    api.apagarConversa.and.rejectWith(new HttpErrorResponse({ status: 0 }));
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá')]));
+
+    const res1 = await store.apagarConversa();
+    expect(res1).toBeFalse();
+    expect(store.erroExclusao()).toBe('confirmada');
+    expect(store.conversaGuardada()).toBe('c1');
+
+    // Rede + GET 404 -> incerta (nao falso sucesso)
+    api.obterConversa.and.rejectWith(new HttpErrorResponse({ status: 404 }));
+
+    const res2 = await store.apagarConversa();
+    expect(res2).toBeFalse();
+    expect(store.erroExclusao()).toBe('incerta');
+    expect(store.conversaGuardada()).toBe('c1');
+
+    // Rede + GET falha -> incerta
+    api.obterConversa.and.rejectWith(new Error('conexao recusada'));
+
+    const res3 = await store.apagarConversa();
+    expect(res3).toBeFalse();
+    expect(store.erroExclusao()).toBe('incerta');
+    expect(store.conversaGuardada()).toBe('c1');
+
+    // Retry com DELETE 404 resolve como sucesso
+    api.apagarConversa.and.rejectWith(new HttpErrorResponse({ status: 404 }));
+    const retry = await store.apagarConversa();
+    expect(retry).toBeTrue();
+    expect(store.conversaApagada()).toBeTrue();
+    expect(store.conversaGuardada()).toBeNull();
+  });
+
+  it('dois cliques concorrentes emitem somente um DELETE e acoes mutantes sao barradas durante exclusao', async () => {
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    let resolverDelete!: (v: ExclusaoTitularResponse) => void;
+    api.apagarConversa.and.returnValue(
+      new Promise<ExclusaoTitularResponse>((resolve) => {
+        resolverDelete = resolve;
+      }),
+    );
+
+    const p1 = store.apagarConversa();
+    const p2 = store.apagarConversa();
+    expect(api.apagarConversa).toHaveBeenCalledTimes(1);
+
+    expect(store.apagando()).toBeTrue();
+    expect(store.envioDisponivel()).toBeFalse();
+
+    // Acoes mutantes nao tem efeito enquanto apagando
+    await store.enviar('mensagem ignorada');
+    await store.novaConversa();
+    await store.aceitar();
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+
+    resolverDelete({
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    });
+
+    const [r1, r2] = await Promise.all([p1, p2]);
+    expect(r1).toBeTrue();
+    expect(r2).toBeFalse();
+    expect(store.conversaApagada()).toBeTrue();
+  });
+
+  it('resposta tardia de turno e polling nao repoem trilha nem estado apos exclusao', async () => {
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    let resolverMensagem!: (v: any) => void;
+    api.enviarMensagem.and.returnValue(
+      new Promise((resolve) => {
+        resolverMensagem = resolve;
+      }),
+    );
+
+    void store.enviar('mensagem antes de apagar');
+    expect(store.estado()).toBe('preparando');
+
+    api.apagarConversa.and.resolveTo({
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    });
+
+    await store.apagarConversa();
+    expect(store.itens()).toEqual([]);
+    expect(store.estado()).toBe('aceite-pendente');
+
+    // Resposta tardia chega
+    resolverMensagem({
+      conversaId: 'c1',
+      resposta: 'Resposta tardia da Lia',
+      intencao: 'COMPRA',
+      proximaAcao: 'continuar_conversa',
+      perfilLead: PERFIL_VAZIO,
+      imoveisSugeridos: [],
+      corretor: null,
+      contatoPendente: false,
+      agendamento: null,
+    });
+    await Promise.resolve();
+
+    expect(store.itens()).toEqual([]);
+    expect(store.estado()).toBe('aceite-pendente');
+
+    // Polling tardio tambem nao repoe dados
+    api.obterConversa.and.resolveTo(conversa([fala('agente', 'Polling tardio')]));
+    await store.verificarNovasMensagens();
+    expect(store.itens()).toEqual([]);
+  });
+
+  it('anonimo volta para aceite-pendente e conta com consentimento vai para inicio-conta e cria id no primeiro envio', async () => {
+    // Caso 1: Anonimo
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+    api.apagarConversa.and.resolveTo({
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    });
+    await store.apagarConversa();
+    expect(store.estado()).toBe('aceite-pendente');
+
+    // Caso 2: Conta com consentimento atual
+    localStorage.setItem('solar.conversaId', 'c1');
+    await store.definirConsentimentoDaConta(VERSAO_AVISO_PRIVACIDADE);
+    await store.iniciar();
+
+    api.enviarMensagem.calls.reset();
+    api.registrarConsentimento.calls.reset();
+
+    await store.apagarConversa();
+    expect(store.estado()).toBe('inicio-conta');
+    expect(store.conversaGuardada()).toBeNull();
+    expect(store.itens()).toEqual([]);
+    expect(store.campoEditavel()).toBeTrue();
+    expect(store.envioDisponivel()).toBeTrue();
+    expect(store.podeApagarConversa()).toBeFalse();
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+    expect(api.registrarConsentimento).not.toHaveBeenCalled();
+
+    // Primeiro envio na conta registra consentimento e envia mensagem sem 'Olá'
+    api.registrarConsentimento.and.resolveTo({
+      conversaId: 'novo-uuid',
+      leadId: 'lead-uuid',
+      consentimentoEm: '2026-10-04T12:00:00Z',
+      versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+    });
+    api.enviarMensagem.and.resolveTo({
+      conversaId: 'novo-uuid',
+      resposta: 'Resposta da Lia para o envio novo',
+      intencao: 'COMPRA',
+      proximaAcao: 'continuar_conversa',
+      perfilLead: PERFIL_VAZIO,
+      imoveisSugeridos: [],
+      corretor: null,
+      contatoPendente: false,
+      agendamento: null,
+    });
+
+    await store.enviar('Quero comprar apartamento');
+    expect(api.registrarConsentimento).toHaveBeenCalledWith(
+      jasmine.any(String),
+      { versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE },
+    );
+    expect(api.enviarMensagem).toHaveBeenCalledWith(
+      jasmine.any(String),
+      'Quero comprar apartamento',
+    );
+    expect(store.estado()).toBe('conversando');
+    expect(store.conversaGuardada()).not.toBe('c1');
+  });
+
+  it('em inicio-conta se registro de consentimento falhar permite nova tentativa com mesmo UUID sem enviar mensagem', async () => {
+    localStorage.setItem('solar.conversaId', 'c1');
+    await store.definirConsentimentoDaConta(VERSAO_AVISO_PRIVACIDADE);
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    api.apagarConversa.and.resolveTo({
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    });
+    await store.apagarConversa();
+    expect(store.estado()).toBe('inicio-conta');
+
+    api.registrarConsentimento.calls.reset();
+    api.enviarMensagem.calls.reset();
+    api.registrarConsentimento.and.rejectWith(new Error('falha de rede no consentimento'));
+
+    await store.enviar('Mensagem de teste');
+    expect(api.registrarConsentimento).toHaveBeenCalledTimes(1);
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+    expect(store.estado()).toBe('falha');
+
+    const uuidGerado = store.conversaGuardada();
+    expect(uuidGerado).toBeTruthy();
+
+    // Tentar novamente com sucesso
+    api.registrarConsentimento.and.resolveTo({
+      conversaId: uuidGerado!,
+      leadId: 'lead-uuid',
+      consentimentoEm: '2026-10-04T12:00:00Z',
+      versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+    });
+    api.enviarMensagem.and.resolveTo({
+      conversaId: uuidGerado!,
+      resposta: 'Resposta apos retry',
+      intencao: 'COMPRA',
+      proximaAcao: 'continuar_conversa',
+      perfilLead: PERFIL_VAZIO,
+      imoveisSugeridos: [],
+      corretor: null,
+      contatoPendente: false,
+      agendamento: null,
+    });
+
+    await store.tentarNovamente();
+    expect(api.registrarConsentimento).toHaveBeenCalledWith(
+      uuidGerado!,
+      { versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE },
+    );
+    expect(api.enviarMensagem).toHaveBeenCalledWith(uuidGerado!, 'Mensagem de teste');
+    expect(store.estado()).toBe('conversando');
+  });
+
+  it('zera conversaApagada quando usuario aceitar, enviar, abrir ou criar nova conversa', async () => {
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    api.apagarConversa.and.resolveTo({
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    });
+    await store.apagarConversa();
+    expect(store.conversaApagada()).toBeTrue();
+
+    // Ao chamar novaConversa() zera conversaApagada
+    await store.novaConversa();
+    expect(store.conversaApagada()).toBeFalse();
   });
 });

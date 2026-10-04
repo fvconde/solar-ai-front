@@ -7,7 +7,8 @@ export type EstadoConversa =
   | 'preparando'
   | 'espera-prolongada'
   | 'falha'
-  | 'encerrada';
+  | 'encerrada'
+  | 'inicio-conta';
 
 export type VarianteEvento = 'neutro' | 'sucesso' | 'atencao' | 'erro';
 
