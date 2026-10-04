@@ -27,7 +27,7 @@ describe('Layout real das métricas por viewport (S-22)', () => {
   for (const perfil of ['supervisor', 'corretor'] as const) {
     for (const tema of ['claro', 'escuro'] as const) {
       for (const [largura, altura] of [[1440, 900], [861, 600], [390, 844], [390, 568]]) {
-        it(`${perfil}, tema ${tema}, ${largura}×${altura}: expansão ocupa no máximo 40%, fila visível e extras rolam internamente`, async () => {
+        it(`${perfil}, tema ${tema}, ${largura}×${altura}: rolagem única até Privacidade, faixa até 40% e fila visível`, async () => {
           TestBed.inject(SessaoStore).definir({
             usuario: { id: 'teste-layout', nome: 'Conta', email: 'conta@solar.com.br' },
             perfil, statusCorretor: 'aprovado', corretorId: perfil === 'corretor' ? 'c1' : null,
@@ -74,42 +74,63 @@ describe('Layout real das métricas por viewport (S-22)', () => {
           const faixa = doc.querySelector<HTMLElement>('.metricas')!;
           const fila = doc.querySelector<HTMLElement>('.corpo-painel')!;
           const miolo = doc.querySelector<HTMLElement>('.miolo')!;
+          const extras = doc.querySelector<HTMLElement>('.extras')!;
           expect(win.innerWidth).toBe(largura);
           expect(win.innerHeight).toBe(altura);
           expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(altura * .4 + 1);
           expect(faixa.getBoundingClientRect().height).toBeGreaterThan(100);
           expect(fila.getBoundingClientRect().height).toBeGreaterThan(0);
           expect(fila.getBoundingClientRect().top).toBeLessThan(altura);
-          expect(win.getComputedStyle(miolo).overflowY).toBe('auto');
+          expect(win.getComputedStyle(faixa).overflowY).toBe('auto');
+          expect(faixa.scrollHeight).toBeGreaterThan(faixa.clientHeight);
+          expect(win.getComputedStyle(miolo).overflowY).toBe('visible');
+          expect(win.getComputedStyle(extras).overflowY).toBe('visible');
+          const rolaveis = [faixa, ...Array.from(faixa.querySelectorAll<HTMLElement>('*'))]
+            .filter(elemento => ['auto', 'scroll'].includes(win.getComputedStyle(elemento).overflowY)
+              && elemento.scrollHeight > elemento.clientHeight);
+          expect(rolaveis).toEqual([faixa]);
+          faixa.focus();
+          expect(doc.activeElement).toBe(faixa);
           if (largura <= 860) {
             expect(doc.querySelector('.alternar')!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
             expect(win.getComputedStyle(doc.querySelector('.resumo-celular')!).display).toBe('grid');
-            expect(miolo.scrollHeight).toBeGreaterThan(miolo.clientHeight);
           } else {
             const cards = Array.from(doc.querySelectorAll<HTMLElement>('.principais > .cartao'));
             expect(cards.length).toBe(perfil === 'supervisor' ? 4 : 3);
             for (const card of cards) {
               expect(card.getBoundingClientRect().width).toBeGreaterThanOrEqual(240);
             }
-            const extras = doc.querySelector<HTMLElement>('.extras')!;
-            expect(win.getComputedStyle(extras).overflowY).toBe('auto');
-            expect(extras.scrollHeight).toBeGreaterThan(extras.clientHeight);
             if (perfil === 'supervisor' && largura === 861) {
               const equipe = doc.querySelector<HTMLElement>('.principais > .equipe')!;
               expect(equipe.getBoundingClientRect().top).toBeGreaterThan(cards[0].getBoundingClientRect().top);
-              expect(miolo.scrollHeight).toBeGreaterThan(miolo.clientHeight);
-              equipe.scrollIntoView({ block: 'nearest' });
-              const pendentes = equipe.querySelector<HTMLButtonElement>('.pendentes')!;
-              pendentes.focus();
-              await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
-              expect(doc.activeElement).toBe(pendentes);
-              expect(pendentes.getBoundingClientRect().top).toBeGreaterThanOrEqual(miolo.getBoundingClientRect().top);
-              expect(pendentes.getBoundingClientRect().bottom).toBeLessThanOrEqual(miolo.getBoundingClientRect().bottom);
-              expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(altura * .4 + 1);
-              expect(fila.getBoundingClientRect().height).toBeGreaterThan(0);
-              expect(fila.getBoundingClientRect().top).toBeLessThan(altura);
             }
           }
+          if (perfil === 'supervisor') {
+            const pendentes = doc.querySelector<HTMLButtonElement>('.principais > .equipe .pendentes')!;
+            pendentes.focus();
+            await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
+            expect(doc.activeElement).toBe(pendentes);
+            expect(pendentes.getBoundingClientRect().top).toBeGreaterThanOrEqual(faixa.getBoundingClientRect().top);
+            expect(pendentes.getBoundingClientRect().bottom).toBeLessThanOrEqual(faixa.getBoundingClientRect().bottom);
+          }
+          const privacidade = extras.querySelector<HTMLElement>('.grade-extras > .cartao:last-child')!;
+          const titulo = privacidade.querySelector<HTMLElement>('h3')!;
+          expect(titulo.textContent).toContain('Privacidade');
+          titulo.scrollIntoView({ block: 'start' });
+          await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
+          expect(titulo.getBoundingClientRect().top).toBeGreaterThanOrEqual(faixa.getBoundingClientRect().top);
+          expect(titulo.getBoundingClientRect().bottom).toBeLessThanOrEqual(faixa.getBoundingClientRect().bottom);
+          const ultimoTexto = privacidade.querySelector<HTMLElement>('p:last-child')!;
+          ultimoTexto.scrollIntoView({ block: 'end' });
+          await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
+          expect(ultimoTexto.getBoundingClientRect().top).toBeGreaterThanOrEqual(faixa.getBoundingClientRect().top);
+          expect(ultimoTexto.getBoundingClientRect().bottom).toBeLessThanOrEqual(faixa.getBoundingClientRect().bottom);
+          expect(faixa.scrollTop).toBeGreaterThan(0);
+          expect(miolo.scrollTop).toBe(0);
+          expect(extras.scrollTop).toBe(0);
+          expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(altura * .4 + 1);
+          expect(fila.getBoundingClientRect().height).toBeGreaterThan(0);
+          expect(fila.getBoundingClientRect().top).toBeLessThan(altura);
           expect(win.getComputedStyle(doc.querySelector('.cartao')!).backgroundColor)
             .toBe(tema === 'claro' ? 'rgb(255, 255, 255)' : 'rgb(36, 35, 29)');
           expect(win.getComputedStyle(doc.querySelector('.numero')!).fontVariantNumeric).toBe('tabular-nums');

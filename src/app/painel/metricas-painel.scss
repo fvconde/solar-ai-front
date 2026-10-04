@@ -8,7 +8,7 @@
 }
 .metricas {
   position: relative; box-sizing: border-box; max-height: 40dvh; padding: 14px 40px 16px;
-  display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+  display: flex; flex-direction: column; gap: 12px; overflow: auto;
   background: var(--superficie-barra); border-block: 1px solid var(--borda-estrutura);
   &.expandida { height: 40dvh; }
 }
@@ -21,7 +21,7 @@ h3 { font-size: 12.5px; line-height: 1.3; font-weight: 500; color: var(--texto-s
 .alternar, .tentar { border: 1px solid var(--borda-componente); border-radius: 999px; background: var(--superficie-elevada); color: var(--texto-primario); font: 500 13.5px 'Libre Franklin', sans-serif; cursor: pointer; padding: 0 14px; min-height: 36px; }
 .alternar { position: absolute; top: 14px; right: 40px; display: flex; gap: 8px; align-items: center; }
 .rotulo-celular, .resumo-celular, .pendentes-celular { display: none; }
-.miolo { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+.miolo { display: flex; flex-direction: column; gap: 12px; flex: none; overflow: visible; }
 .principais, .carregamento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; flex: none; }
 .principais { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
 .cartao { position: relative; min-width: 0; background: var(--superficie-elevada); border: 1px solid var(--borda-divisor-card); border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.4; }
@@ -41,7 +41,7 @@ ul, ol { list-style: none; margin: 0; padding: 0; }
 .coluna span { width: 100%; background: var(--marca); }
 .aguardando { color: var(--atencao); }
 .pendentes, .pendentes-celular { border: 0; background: transparent; color: var(--atencao); font: inherit; text-align: left; padding: 0; cursor: pointer; text-decoration: underline; }
-.extras { min-height: 80px; overflow: auto; flex: 1; }
+.extras { overflow: visible; flex: none; }
 .extras[hidden] { display: none; }
 .titulo-extras { margin-bottom: 10px; padding: 0; }
 .grade-extras { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }

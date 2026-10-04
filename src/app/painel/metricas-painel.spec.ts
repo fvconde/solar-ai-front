@@ -215,15 +215,18 @@ describe('Faixa de métricas (S-22)', () => {
     expect(criterio).toContain('mensagens automáticas não renovam');
     expect(criterio).not.toContain('12 meses');
   });
-  it('faixa inteira fechada e expandida respeita 40% da viewport e possui rolagem interna', () => {
+  it('faixa inteira fechada e expandida respeita 40% da viewport e tem uma única rolagem vertical', () => {
     const html = montar();
     const faixa = html.querySelector<HTMLElement>('.metricas')!;
     expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(window.innerHeight * .4 + 1);
     expandir();
     expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(window.innerHeight * .4 + 1);
     const miolo = html.querySelector<HTMLElement>('.miolo')!;
-    expect(getComputedStyle(miolo).overflowY).toBe('auto');
-    expect(miolo.scrollHeight).toBeGreaterThan(miolo.clientHeight);
+    expect(getComputedStyle(faixa).overflowY).toBe('auto');
+    expect(faixa.scrollHeight).toBeGreaterThan(faixa.clientHeight);
+    expect(faixa.getAttribute('tabindex')).toBe('0');
+    expect(getComputedStyle(miolo).overflowY).toBe('visible');
+    expect(getComputedStyle(html.querySelector('.extras')!).overflowY).toBe('visible');
     if (window.innerWidth <= 860) {
       expect(html.querySelector('.alternar')!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
       expect(getComputedStyle(html.querySelector('.resumo-celular')!).display).toBe('grid');

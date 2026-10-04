@@ -1,4 +1,4 @@
-<section class="metricas" [class.expandida]="expandido()" [attr.aria-busy]="carregando()" aria-labelledby="titulo-metricas">
+<section class="metricas" [class.expandida]="expandido()" [attr.aria-busy]="carregando()" aria-labelledby="titulo-metricas" tabindex="0">
   <header class="cabecalho">
     <h2 id="titulo-metricas">{{ supervisor() ? 'Métricas da imobiliária' : 'Suas métricas' }}</h2>
     <span class="periodo">Últimos {{ f.plural(dados()?.periodo?.dias ?? 30, 'dia', 'dias') }}</span>
@@ -12,7 +12,7 @@
     <span class="rotulo-celular">{{ expandido() ? 'Ver menos métricas' : 'Ver todas as métricas' }}</span>
     <span aria-hidden="true">{{ expandido() ? '⌃' : '⌄' }}</span>
   </button>
-  <div class="miolo" tabindex="0" aria-label="Métricas; área com rolagem">
+  <div class="miolo">
     @if (carregando()) {
       <div class="carregamento" role="status" aria-label="Carregando métricas">
         @for (n of [1, 2, 3]; track n) { <div class="cartao"><span class="esqueleto"></span><span class="apoio">Carregando métricas…</span></div> }
@@ -70,7 +70,7 @@
           </article>
         }
       </div>
-      <div id="extras-metricas" class="extras" [hidden]="!expandido()" tabindex="0" aria-label="Mais métricas; área com rolagem">
+      <div id="extras-metricas" class="extras" [hidden]="!expandido()">
         <h3 class="titulo-extras">Mais métricas</h3>
         <div class="grade-extras">
           <article class="cartao">
