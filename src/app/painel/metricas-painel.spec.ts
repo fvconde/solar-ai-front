@@ -202,7 +202,7 @@ describe('Faixa de métricas (S-22)', () => {
     expect(comp.criterio('intencao')).toContain('independentemente dos últimos 30 dias');
     expect(comp.criterio('score')).toContain('sem janela de dias');
     expect(comp.criterio('regioes')).toContain('sem janela de dias');
-    expect(comp.criterio('equipe')).toContain('vínculo ativo e status em análise');
+    expect(comp.criterio('equipe')).toContain('perfil corretor, corretor ativo e status em análise');
     expect(comp.criterio('horarios')).toContain('além dos próximos 7 dias');
   });
   it('retenção usa configuração e fallback fiel, sem hardcode de 12 meses', () => {

@@ -86,9 +86,29 @@ describe('Layout real das métricas por viewport (S-22)', () => {
             expect(win.getComputedStyle(doc.querySelector('.resumo-celular')!).display).toBe('grid');
             expect(miolo.scrollHeight).toBeGreaterThan(miolo.clientHeight);
           } else {
+            const cards = Array.from(doc.querySelectorAll<HTMLElement>('.principais > .cartao'));
+            expect(cards.length).toBe(perfil === 'supervisor' ? 4 : 3);
+            for (const card of cards) {
+              expect(card.getBoundingClientRect().width).toBeGreaterThanOrEqual(240);
+            }
             const extras = doc.querySelector<HTMLElement>('.extras')!;
             expect(win.getComputedStyle(extras).overflowY).toBe('auto');
             expect(extras.scrollHeight).toBeGreaterThan(extras.clientHeight);
+            if (perfil === 'supervisor' && largura === 861) {
+              const equipe = doc.querySelector<HTMLElement>('.principais > .equipe')!;
+              expect(equipe.getBoundingClientRect().top).toBeGreaterThan(cards[0].getBoundingClientRect().top);
+              expect(miolo.scrollHeight).toBeGreaterThan(miolo.clientHeight);
+              equipe.scrollIntoView({ block: 'nearest' });
+              const pendentes = equipe.querySelector<HTMLButtonElement>('.pendentes')!;
+              pendentes.focus();
+              await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
+              expect(doc.activeElement).toBe(pendentes);
+              expect(pendentes.getBoundingClientRect().top).toBeGreaterThanOrEqual(miolo.getBoundingClientRect().top);
+              expect(pendentes.getBoundingClientRect().bottom).toBeLessThanOrEqual(miolo.getBoundingClientRect().bottom);
+              expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(altura * .4 + 1);
+              expect(fila.getBoundingClientRect().height).toBeGreaterThan(0);
+              expect(fila.getBoundingClientRect().top).toBeLessThan(altura);
+            }
           }
           expect(win.getComputedStyle(doc.querySelector('.cartao')!).backgroundColor)
             .toBe(tema === 'claro' ? 'rgb(255, 255, 255)' : 'rgb(36, 35, 29)');
