@@ -9,6 +9,7 @@ import {
   ExclusaoTitularResponse,
   ImovelSugerido,
   MensagemDaConversa,
+  MensagemResponse,
   PerfilLead,
   ProximaAcao,
   VERSAO_AVISO_PRIVACIDADE,
@@ -648,7 +649,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(localStorage.getItem('solar.outro')).toBe('tema-escuro');
     expect(localStorage.getItem('solar.conta')).toBe('token-ou-email');
 
-    // Escopo apenas_conversa
     localStorage.setItem('solar.conversaId', 'c2');
     api.obterConversa.and.resolveTo({ ...conversa([]), conversaId: 'c2' });
     await store.abrirConversa('c2');
@@ -665,7 +665,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.conversaApagada()).toBeTrue();
     expect(store.conversaGuardada()).toBeNull();
 
-    // DELETE 404 tambem resulta em sucesso
     localStorage.setItem('solar.conversaId', 'c3');
     api.obterConversa.and.resolveTo({ ...conversa([]), conversaId: 'c3' });
     await store.abrirConversa('c3');
@@ -698,7 +697,6 @@ describe('ConversaStore exclusao titular', () => {
     api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
     await store.iniciar();
 
-    // Rede + GET 200 -> confirmada
     api.apagarConversa.and.rejectWith(new HttpErrorResponse({ status: 0 }));
     api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá')]));
 
@@ -707,7 +705,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.erroExclusao()).toBe('confirmada');
     expect(store.conversaGuardada()).toBe('c1');
 
-    // Rede + GET 404 -> incerta (nao falso sucesso)
     api.obterConversa.and.rejectWith(new HttpErrorResponse({ status: 404 }));
 
     const res2 = await store.apagarConversa();
@@ -715,7 +712,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.erroExclusao()).toBe('incerta');
     expect(store.conversaGuardada()).toBe('c1');
 
-    // Rede + GET falha -> incerta
     api.obterConversa.and.rejectWith(new Error('conexao recusada'));
 
     const res3 = await store.apagarConversa();
@@ -723,7 +719,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.erroExclusao()).toBe('incerta');
     expect(store.conversaGuardada()).toBe('c1');
 
-    // Retry com DELETE 404 resolve como sucesso
     api.apagarConversa.and.rejectWith(new HttpErrorResponse({ status: 404 }));
     const retry = await store.apagarConversa();
     expect(retry).toBeTrue();
@@ -749,7 +744,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.apagando()).toBeTrue();
     expect(store.envioDisponivel()).toBeFalse();
 
-    // Acoes mutantes nao tem efeito enquanto apagando
     await store.enviar('mensagem ignorada');
     await store.novaConversa();
     await store.aceitar();
@@ -768,13 +762,23 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.conversaApagada()).toBeTrue();
   });
 
-  it('resposta tardia de turno e polling nao repoem trilha nem estado apos exclusao', async () => {
+  it('resposta tardia de turno e polling em andamento nao repoem trilha nem estado apos exclusao', async () => {
     api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
     await store.iniciar();
 
-    let resolverMensagem!: (v: any) => void;
+    let resolverPolling!: (v: ConversaResponse) => void;
+    api.obterConversa.and.returnValue(
+      new Promise<ConversaResponse>((resolve) => {
+        resolverPolling = resolve;
+      }),
+    );
+
+    void store.verificarNovasMensagens();
+    expect(api.obterConversa).toHaveBeenCalledWith('c1');
+
+    let resolverMensagem!: (v: MensagemResponse) => void;
     api.enviarMensagem.and.returnValue(
-      new Promise((resolve) => {
+      new Promise<MensagemResponse>((resolve) => {
         resolverMensagem = resolve;
       }),
     );
@@ -793,7 +797,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.itens()).toEqual([]);
     expect(store.estado()).toBe('aceite-pendente');
 
-    // Resposta tardia chega
     resolverMensagem({
       conversaId: 'c1',
       resposta: 'Resposta tardia da Lia',
@@ -810,14 +813,133 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.itens()).toEqual([]);
     expect(store.estado()).toBe('aceite-pendente');
 
-    // Polling tardio tambem nao repoe dados
-    api.obterConversa.and.resolveTo(conversa([fala('agente', 'Polling tardio')]));
-    await store.verificarNovasMensagens();
+    resolverPolling({
+      ...conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa'), fala('agente', 'Polling tardio')]),
+      conversaId: 'c1',
+    });
+    await Promise.resolve();
+
     expect(store.itens()).toEqual([]);
+    expect(store.estado()).toBe('aceite-pendente');
+  });
+
+  it('resposta tardia de A apos exclusao nao cancela espera prolongada de B nem altera trilha de B', async () => {
+    jasmine.clock().install();
+    try {
+      api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+      await store.iniciar();
+
+      let resolverMensagemA!: (v: MensagemResponse) => void;
+      api.enviarMensagem.and.returnValue(
+        new Promise<MensagemResponse>((resolve) => {
+          resolverMensagemA = resolve;
+        }),
+      );
+
+      void store.enviar('mensagem da conversa A');
+      expect(store.estado()).toBe('preparando');
+
+      api.apagarConversa.and.resolveTo({
+        leadExcluido: true,
+        removidoEm: '2026-10-04T12:00:00Z',
+        escopo: 'lead_e_vinculos',
+        mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+      });
+      await store.apagarConversa();
+
+      api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá B'), fala('agente', 'Oi B', 'continuar_conversa')]));
+      await store.abrirConversa('c2');
+
+      let resolverMensagemB!: (v: MensagemResponse) => void;
+      api.enviarMensagem.and.returnValue(
+        new Promise<MensagemResponse>((resolve) => {
+          resolverMensagemB = resolve;
+        }),
+      );
+
+      void store.enviar('mensagem da conversa B');
+      expect(store.estado()).toBe('preparando');
+
+      resolverMensagemA({
+        conversaId: 'c1',
+        resposta: 'Resposta velha de A',
+        intencao: 'COMPRA',
+        proximaAcao: 'continuar_conversa',
+        perfilLead: PERFIL_VAZIO,
+        imoveisSugeridos: [],
+        corretor: null,
+        contatoPendente: false,
+        agendamento: null,
+      });
+      await Promise.resolve();
+
+      expect(store.estado()).toBe('preparando');
+      const itensAntes = store.itens();
+      expect(itensAntes.some((it) => it.tipo === 'lia' && it.texto === 'Resposta velha de A')).toBeFalse();
+
+      jasmine.clock().tick(8001);
+
+      expect(store.estado()).toBe('espera-prolongada');
+      expect(store.itens()).toEqual(itensAntes);
+    } finally {
+      jasmine.clock().uninstall();
+    }
+  });
+
+  it('rejeicao tardia de A apos exclusao nao cancela espera prolongada de B nem altera trilha de B', async () => {
+    jasmine.clock().install();
+    try {
+      api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+      await store.iniciar();
+
+      let rejeitarMensagemA!: (e: any) => void;
+      api.enviarMensagem.and.returnValue(
+        new Promise<MensagemResponse>((_resolve, reject) => {
+          rejeitarMensagemA = reject;
+        }),
+      );
+
+      void store.enviar('mensagem da conversa A');
+      expect(store.estado()).toBe('preparando');
+
+      api.apagarConversa.and.resolveTo({
+        leadExcluido: true,
+        removidoEm: '2026-10-04T12:00:00Z',
+        escopo: 'lead_e_vinculos',
+        mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+      });
+      await store.apagarConversa();
+
+      api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá B'), fala('agente', 'Oi B', 'continuar_conversa')]));
+      await store.abrirConversa('c2');
+
+      let resolverMensagemB!: (v: MensagemResponse) => void;
+      api.enviarMensagem.and.returnValue(
+        new Promise<MensagemResponse>((resolve) => {
+          resolverMensagemB = resolve;
+        }),
+      );
+
+      void store.enviar('mensagem da conversa B');
+      expect(store.estado()).toBe('preparando');
+
+      rejeitarMensagemA(new Error('falha antiga'));
+      await Promise.resolve();
+
+      expect(store.estado()).toBe('preparando');
+      const itensAntes = store.itens();
+      expect(itensAntes.some((it) => it.tipo === 'evento' && it.variante === 'erro')).toBeFalse();
+
+      jasmine.clock().tick(8001);
+
+      expect(store.estado()).toBe('espera-prolongada');
+      expect(store.itens()).toEqual(itensAntes);
+    } finally {
+      jasmine.clock().uninstall();
+    }
   });
 
   it('anonimo volta para aceite-pendente e conta com consentimento vai para inicio-conta e cria id no primeiro envio', async () => {
-    // Caso 1: Anonimo
     api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
     await store.iniciar();
     api.apagarConversa.and.resolveTo({
@@ -829,7 +951,6 @@ describe('ConversaStore exclusao titular', () => {
     await store.apagarConversa();
     expect(store.estado()).toBe('aceite-pendente');
 
-    // Caso 2: Conta com consentimento atual
     localStorage.setItem('solar.conversaId', 'c1');
     await store.definirConsentimentoDaConta(VERSAO_AVISO_PRIVACIDADE);
     await store.iniciar();
@@ -847,7 +968,6 @@ describe('ConversaStore exclusao titular', () => {
     expect(api.enviarMensagem).not.toHaveBeenCalled();
     expect(api.registrarConsentimento).not.toHaveBeenCalled();
 
-    // Primeiro envio na conta registra consentimento e envia mensagem sem 'Olá'
     api.registrarConsentimento.and.resolveTo({
       conversaId: 'novo-uuid',
       leadId: 'lead-uuid',
@@ -879,7 +999,7 @@ describe('ConversaStore exclusao titular', () => {
     expect(store.conversaGuardada()).not.toBe('c1');
   });
 
-  it('em inicio-conta se registro de consentimento falhar permite nova tentativa com mesmo UUID sem enviar mensagem', async () => {
+  it('em inicio-conta novo envio ou retry apos falha de consentimento registra consentimento com mesmo UUID sem enviar mensagem se falhar', async () => {
     localStorage.setItem('solar.conversaId', 'c1');
     await store.definirConsentimentoDaConta(VERSAO_AVISO_PRIVACIDADE);
     api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
@@ -896,17 +1016,33 @@ describe('ConversaStore exclusao titular', () => {
 
     api.registrarConsentimento.calls.reset();
     api.enviarMensagem.calls.reset();
-    api.registrarConsentimento.and.rejectWith(new Error('falha de rede no consentimento'));
+    api.registrarConsentimento.and.rejectWith(new Error('falha de rede no consentimento 1'));
 
-    await store.enviar('Mensagem de teste');
+    await store.enviar('Mensagem 1');
     expect(api.registrarConsentimento).toHaveBeenCalledTimes(1);
     expect(api.enviarMensagem).not.toHaveBeenCalled();
     expect(store.estado()).toBe('falha');
+    expect(store.consentimentoPendente()).toBeTrue();
 
     const uuidGerado = store.conversaGuardada();
     expect(uuidGerado).toBeTruthy();
 
-    // Tentar novamente com sucesso
+    api.registrarConsentimento.calls.reset();
+    api.enviarMensagem.calls.reset();
+    api.registrarConsentimento.and.rejectWith(new Error('falha de rede no consentimento 2'));
+
+    await store.enviar('texto novo');
+    expect(api.registrarConsentimento).toHaveBeenCalledWith(
+      uuidGerado!,
+      { versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE },
+    );
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+    expect(store.estado()).toBe('falha');
+    expect(store.consentimentoPendente()).toBeTrue();
+    expect(store.conversaGuardada()).toBe(uuidGerado);
+
+    api.registrarConsentimento.calls.reset();
+    api.enviarMensagem.calls.reset();
     api.registrarConsentimento.and.resolveTo({
       conversaId: uuidGerado!,
       leadId: 'lead-uuid',
@@ -915,7 +1051,7 @@ describe('ConversaStore exclusao titular', () => {
     });
     api.enviarMensagem.and.resolveTo({
       conversaId: uuidGerado!,
-      resposta: 'Resposta apos retry',
+      resposta: 'Resposta apos sucesso',
       intencao: 'COMPRA',
       proximaAcao: 'continuar_conversa',
       perfilLead: PERFIL_VAZIO,
@@ -930,8 +1066,99 @@ describe('ConversaStore exclusao titular', () => {
       uuidGerado!,
       { versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE },
     );
-    expect(api.enviarMensagem).toHaveBeenCalledWith(uuidGerado!, 'Mensagem de teste');
+    expect(api.enviarMensagem).toHaveBeenCalledWith(uuidGerado!, 'texto novo');
     expect(store.estado()).toBe('conversando');
+    expect(store.consentimentoPendente()).toBeFalse();
+  });
+
+  it('registro de consentimento pendente ou falho impede exclusao e confirmacao reabilita exclusao durante turno', async () => {
+    localStorage.setItem('solar.conversaId', 'c1');
+    await store.definirConsentimentoDaConta(VERSAO_AVISO_PRIVACIDADE);
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Olá'), fala('agente', 'Oi', 'continuar_conversa')]));
+    await store.iniciar();
+
+    api.apagarConversa.and.resolveTo({
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    });
+    await store.apagarConversa();
+    expect(store.estado()).toBe('inicio-conta');
+
+    let rejeitarConsentimento!: (e: any) => void;
+    api.registrarConsentimento.and.returnValue(
+      new Promise((_resolve, reject) => {
+        rejeitarConsentimento = reject;
+      }),
+    );
+    api.apagarConversa.calls.reset();
+
+    void store.enviar('primeira mensagem');
+    expect(store.estado()).toBe('preparando');
+    expect(store.consentimentoPendente()).toBeTrue();
+    expect(store.podeApagarConversa()).toBeFalse();
+
+    const resultadoPendente = await store.apagarConversa();
+    expect(resultadoPendente).toBeFalse();
+    expect(api.apagarConversa).not.toHaveBeenCalled();
+
+    rejeitarConsentimento(new Error('falha no consentimento'));
+    await Promise.resolve();
+
+    expect(store.estado()).toBe('falha');
+    expect(store.consentimentoPendente()).toBeTrue();
+    expect(store.podeApagarConversa()).toBeFalse();
+
+    const resultadoFalho = await store.apagarConversa();
+    expect(resultadoFalho).toBeFalse();
+    expect(api.apagarConversa).not.toHaveBeenCalled();
+
+    const uuid = store.conversaGuardada()!;
+    let resolverMensagem!: (v: MensagemResponse) => void;
+    api.enviarMensagem.and.returnValue(
+      new Promise<MensagemResponse>((resolve) => {
+        resolverMensagem = resolve;
+      }),
+    );
+    api.registrarConsentimento.and.resolveTo({
+      conversaId: uuid,
+      leadId: 'lead-uuid',
+      consentimentoEm: '2026-10-04T12:00:00Z',
+      versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+    });
+
+    void store.tentarNovamente();
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(store.consentimentoPendente()).toBeFalse();
+    expect(store.estado()).toBe('preparando');
+    expect(store.podeApagarConversa()).toBeTrue();
+
+    api.apagarConversa.and.resolveTo({
+      leadExcluido: true,
+      removidoEm: '2026-10-04T12:00:00Z',
+      escopo: 'lead_e_vinculos',
+      mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
+    });
+    const apagou = await store.apagarConversa();
+    expect(apagou).toBeTrue();
+    expect(api.apagarConversa).toHaveBeenCalledWith(uuid);
+
+    resolverMensagem({
+      conversaId: uuid,
+      resposta: 'Tardia',
+      intencao: 'COMPRA',
+      proximaAcao: 'continuar_conversa',
+      perfilLead: PERFIL_VAZIO,
+      imoveisSugeridos: [],
+      corretor: null,
+      contatoPendente: false,
+      agendamento: null,
+    });
+    await Promise.resolve();
+    expect(store.itens()).toEqual([]);
   });
 
   it('zera conversaApagada quando usuario aceitar, enviar, abrir ou criar nova conversa', async () => {
@@ -947,7 +1174,6 @@ describe('ConversaStore exclusao titular', () => {
     await store.apagarConversa();
     expect(store.conversaApagada()).toBeTrue();
 
-    // Ao chamar novaConversa() zera conversaApagada
     await store.novaConversa();
     expect(store.conversaApagada()).toBeFalse();
   });

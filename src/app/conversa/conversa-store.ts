@@ -36,9 +36,14 @@ export class ConversaStore {
   readonly apagando = signal(false);
   readonly conversaApagada = signal(false);
   readonly erroExclusao = signal<'confirmada' | 'incerta' | null>(null);
+  readonly consentimentoPendente = signal(false);
 
   readonly podeApagarConversa = computed(
-    () => !!this.conversaAtual() && this.emConversa() && this.estado() !== 'inicio-conta',
+    () =>
+      !!this.conversaAtual() &&
+      this.emConversa() &&
+      this.estado() !== 'inicio-conta' &&
+      !this.consentimentoPendente(),
   );
   readonly aguardando = computed(
     () => this.estado() === 'preparando' || this.estado() === 'espera-prolongada',
@@ -87,7 +92,6 @@ export class ConversaStore {
   private sequencia = 0;
   private totalMensagens = 0;
   private geracao = 0;
-  private consentimentoPendente = false;
   private cronometro: ReturnType<typeof setTimeout> | undefined;
   private cronometroPolling: ReturnType<typeof setInterval> | undefined;
 
@@ -205,7 +209,7 @@ export class ConversaStore {
     this.pararPolling();
     this.pararCronometro();
     this.geracao++;
-    this.consentimentoPendente = false;
+    this.consentimentoPendente.set(false);
     this.gravar(CHAVE_CONVERSA, id);
     this.conversaId = '';
     this.totalMensagens = 0;
@@ -222,7 +226,7 @@ export class ConversaStore {
     this.pararPolling();
     this.pararCronometro();
     this.geracao++;
-    this.consentimentoPendente = false;
+    this.consentimentoPendente.set(false);
     this.apagar(CHAVE_CONVERSA);
     this.conversaId = '';
     this.totalMensagens = 0;
@@ -245,7 +249,7 @@ export class ConversaStore {
       this.removerEventoFinal();
     }
 
-    if (this.estado() === 'inicio-conta') {
+    if (this.estado() === 'inicio-conta' || this.consentimentoPendente()) {
       if (!this.conversaId) {
         this.conversaId = crypto.randomUUID();
         this.gravar(CHAVE_CONVERSA, this.conversaId);
@@ -261,42 +265,7 @@ export class ConversaStore {
       });
       this.ultimoEnvio = limpo;
       this.ultimoEnvioVisivel = true;
-      this.consentimentoPendente = true;
-      this.estado.set('preparando');
-      this.armarCronometro();
-
-      const g = this.geracao;
-      try {
-        await this.api.registrarConsentimento(this.conversaId, {
-          versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
-        });
-        if (g !== this.geracao) {
-          return;
-        }
-        this.consentimentoPendente = false;
-      } catch {
-        this.pararCronometro();
-        if (g !== this.geracao) {
-          return;
-        }
-        this.registrarFalha();
-        return;
-      }
-
-      try {
-        const resposta = await this.api.enviarMensagem(this.conversaId, this.ultimoEnvio);
-        this.pararCronometro();
-        if (g !== this.geracao) {
-          return;
-        }
-        this.aplicar(resposta);
-      } catch {
-        this.pararCronometro();
-        if (g !== this.geracao) {
-          return;
-        }
-        this.registrarFalha();
-      }
+      await this.executarTurnoComConsentimentoPendente();
       return;
     }
 
@@ -355,50 +324,56 @@ export class ConversaStore {
       return;
     }
     this.removerEventoFinal();
-    const g = this.geracao;
 
-    if (this.consentimentoPendente) {
-      this.estado.set('preparando');
-      this.armarCronometro();
-      try {
-        await this.api.registrarConsentimento(this.conversaId, {
-          versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
-        });
-        if (g !== this.geracao) {
-          return;
-        }
-        this.consentimentoPendente = false;
-      } catch {
-        this.pararCronometro();
-        if (g !== this.geracao) {
-          return;
-        }
-        this.registrarFalha();
-        return;
-      }
-
-      try {
-        const resposta = await this.api.enviarMensagem(this.conversaId, this.ultimoEnvio);
-        this.pararCronometro();
-        if (g !== this.geracao) {
-          return;
-        }
-        this.aplicar(resposta);
-      } catch {
-        this.pararCronometro();
-        if (g !== this.geracao) {
-          return;
-        }
-        this.registrarFalha();
-      }
+    if (this.consentimentoPendente()) {
+      await this.executarTurnoComConsentimentoPendente();
       return;
     }
 
     await this.turno();
   }
 
+  private async executarTurnoComConsentimentoPendente(): Promise<void> {
+    this.consentimentoPendente.set(true);
+    this.estado.set('preparando');
+    this.armarCronometro();
+    const g = this.geracao;
+
+    try {
+      await this.api.registrarConsentimento(this.conversaId, {
+        versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+      });
+      if (g !== this.geracao) {
+        return;
+      }
+      this.consentimentoPendente.set(false);
+    } catch {
+      if (g !== this.geracao) {
+        return;
+      }
+      this.pararCronometro();
+      this.registrarFalha();
+      return;
+    }
+
+    try {
+      const resposta = await this.api.enviarMensagem(this.conversaId, this.ultimoEnvio);
+      if (g !== this.geracao) {
+        return;
+      }
+      this.pararCronometro();
+      this.aplicar(resposta);
+    } catch {
+      if (g !== this.geracao) {
+        return;
+      }
+      this.pararCronometro();
+      this.registrarFalha();
+    }
+  }
+
   async apagarConversa(): Promise<boolean> {
-    if (this.apagando() || !this.podeApagarConversa()) {
+    if (this.apagando() || this.consentimentoPendente() || !this.podeApagarConversa()) {
       return false;
     }
     const id = this.conversaId;
@@ -468,7 +443,7 @@ export class ConversaStore {
     this.aceiteErro.set(null);
     this.aceiteEnviando.set(false);
     this.erroExclusao.set(null);
-    this.consentimentoPendente = false;
+    this.consentimentoPendente.set(false);
     this.conversaApagada.set(true);
 
     if (this.versaoConsentidaNaConta === VERSAO_AVISO_PRIVACIDADE) {
@@ -543,16 +518,16 @@ export class ConversaStore {
     const g = this.geracao;
     try {
       const resposta = await this.api.enviarMensagem(this.conversaId, this.ultimoEnvio);
-      this.pararCronometro();
       if (g !== this.geracao) {
         return;
       }
+      this.pararCronometro();
       this.aplicar(resposta);
     } catch {
-      this.pararCronometro();
       if (g !== this.geracao) {
         return;
       }
+      this.pararCronometro();
       this.registrarFalha();
     }
   }
