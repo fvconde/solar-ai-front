@@ -3,7 +3,12 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { ContaResponse, ConversaResumo } from '../conta/conta-contrato';
-import { VERSAO_AVISO_PRIVACIDADE } from '../conversa/contrato';
+import {
+  ExclusaoTitularResponse,
+  MensagemDaConversa,
+  ProximaAcao,
+  VERSAO_AVISO_PRIVACIDADE,
+} from '../conversa/contrato';
 import { ConversaStore } from '../conversa/conversa-store';
 import { horaDe } from '../conversa/horario';
 import { SessaoStore } from '../sessao/sessao-store';
@@ -33,6 +38,45 @@ const conversas: ConversaResumo[] = [
     estado: 'encerrada',
   },
 ];
+
+function mockSucessoExclusao(
+  escopo: 'lead_e_vinculos' | 'apenas_conversa' = 'apenas_conversa',
+): ExclusaoTitularResponse {
+  return {
+    leadExcluido: escopo === 'lead_e_vinculos',
+    removidoEm: '2026-10-04T14:00:00Z',
+    escopo,
+    mensagem: 'Conversa excluída com sucesso.',
+  };
+}
+
+function conversaComMensagens(id: string, mensagens?: MensagemDaConversa[]) {
+  return {
+    conversaId: id,
+    perfilLead: null,
+    mensagens: mensagens ?? [
+      {
+        papel: 'lead' as const,
+        texto: 'Olá, busco apartamento.',
+        em: '2026-09-22T14:08:00Z',
+        proximaAcao: null,
+        corretor: null,
+        agendamento: null,
+      },
+      {
+        papel: 'agente' as const,
+        texto: 'Olá! Encontrei ótimas opções.',
+        em: '2026-09-22T14:08:05Z',
+        proximaAcao: 'continuar_conversa' as ProximaAcao,
+        corretor: null,
+        agendamento: null,
+      },
+    ],
+    contatoPendente: false,
+    consentimentoEm: '2026-09-22T14:08:00Z',
+    versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+  };
+}
 
 function conta(versao: string | null): ContaResponse {
   return {
@@ -361,6 +405,7 @@ describe('Chat', () => {
       const nav = html(fixture).querySelector('app-composer nav[aria-label="Seus dados"]');
       expect(nav).toBeTruthy();
       expect(html(fixture).querySelector('app-composer .botao-apagar')).toBeNull();
+      httpMock.verify();
     });
 
     it('sem conta, após consentimento e conversa ativa, exibe o botão Apagar conversa com aria-haspopup="dialog"', () => {
@@ -375,48 +420,67 @@ describe('Chat', () => {
       expect(botao).toBeTruthy();
       expect(botao?.textContent?.trim()).toBe('Apagar conversa');
       expect(botao?.getAttribute('aria-haspopup')).toBe('dialog');
+      httpMock.verify();
     });
 
     it('com conta no início sem conversa ativa, não exibe o botão Apagar conversa', () => {
       const fixture = montarCliente(null);
       expect(html(fixture).querySelector('app-composer .botao-apagar')).toBeNull();
+      httpMock.verify();
     });
 
     it('com conta e conversa encerrada com composer recolhido, o botão Apagar conversa continua visível e acessível', fakeAsync(() => {
-      const fixture = montarCliente(null);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[2].click();
-      httpMock.expectOne('/conversas/conv-encerrada').flush({
-        ...conversaVazia('conv-encerrada'),
-        estado: 'encerrada',
+      localStorage.setItem('solar.conversaId', 'conv-encerrada');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
+      const req = httpMock.expectOne('/conversas/conv-encerrada');
+      expect(req.request.withCredentials).toBeTrue();
+      req.flush({
+        conversaId: 'conv-encerrada',
+        perfilLead: null,
         mensagens: [
           {
-            papel: 'agente',
-            texto: 'Atendimento finalizado.',
-            em: '2025-08-28T15:00:00Z',
+            papel: 'lead',
+            texto: 'Não tenho mais interesse, obrigado.',
+            em: '2025-08-28T14:59:00Z',
             proximaAcao: null,
             corretor: null,
             agendamento: null,
           },
+          {
+            papel: 'agente',
+            texto: 'Atendimento finalizado. Qualquer dúvida estamos à disposição.',
+            em: '2025-08-28T15:00:00Z',
+            proximaAcao: 'encerrar',
+            corretor: null,
+            agendamento: null,
+          },
         ],
+        contatoPendente: false,
+        consentimentoEm: '2026-09-22T14:08:00Z',
+        versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
       });
       tick();
       fixture.detectChanges();
 
-      expect(TestBed.inject(ConversaStore).composerRemovido()).toBeTrue();
+      const store = TestBed.inject(ConversaStore);
+      expect(store.composerRemovido()).toBeTrue();
+      expect(store.podeApagarConversa()).toBeTrue();
       expect(html(fixture).querySelector('app-composer textarea')).toBeNull();
       const botao = html(fixture).querySelector<HTMLButtonElement>('app-composer .botao-apagar');
       expect(botao).toBeTruthy();
       expect(botao?.getAttribute('aria-haspopup')).toBe('dialog');
-      httpMock.match(() => true);
-      TestBed.inject(ConversaStore).pararPolling();
+      store.pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('clicar em Apagar conversa abre o alertdialog com foco em Cancelar, e Cancelar fecha sem enviar DELETE devolvendo o foco ao gatilho', fakeAsync(() => {
-      const fixture = montarCliente(null);
+      localStorage.setItem('solar.conversaId', 'conv-hoje');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
       document.body.appendChild(fixture.nativeElement);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[0].click();
-      httpMock.expectOne('/conversas/conv-hoje').flush(conversaVazia('conv-hoje'));
+      const reqConv = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-hoje'));
       tick();
       fixture.detectChanges();
 
@@ -447,15 +511,17 @@ describe('Chat', () => {
       expect(document.activeElement).toBe(gatilho);
 
       document.body.removeChild(fixture.nativeElement);
-      httpMock.match(() => true);
       TestBed.inject(ConversaStore).pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('durante a requisição de exclusão exibe spinner e loading, desativa cancelamento, ignora segundo clique e impede troca de conversa', fakeAsync(() => {
-      const fixture = montarCliente(null);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[0].click();
-      httpMock.expectOne('/conversas/conv-hoje').flush(conversaVazia('conv-hoje'));
+      localStorage.setItem('solar.conversaId', 'conv-hoje');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
+      const reqConv = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-hoje'));
       tick();
       fixture.detectChanges();
 
@@ -463,26 +529,32 @@ describe('Chat', () => {
       fixture.detectChanges();
       tick();
 
-      const botaoDestrutivo = html(fixture).querySelector<HTMLButtonElement>(
+      const botaoAcao = html(fixture).querySelector<HTMLButtonElement>(
         'app-confirmacao-exclusao .botao-destrutivo',
       )!;
-      botaoDestrutivo.click();
+      botaoAcao.click();
       fixture.detectChanges();
 
-      const deleteReq = httpMock.expectOne('/conversas/conv-hoje');
+      const deleteReq = httpMock.expectOne('/conversas/conv-hoje/titular');
       expect(deleteReq.request.method).toBe('DELETE');
+      expect(deleteReq.request.withCredentials).toBeTrue();
 
       const painel = html(fixture).querySelector('app-confirmacao-exclusao .painel')!;
       expect(painel.getAttribute('aria-busy')).toBe('true');
       expect(painel.querySelector<HTMLButtonElement>('.botao-cancelar')?.disabled).toBeTrue();
-      expect(botaoDestrutivo.getAttribute('aria-disabled')).toBe('true');
-      expect(botaoDestrutivo.textContent).toContain('Apagando…');
-      expect(botaoDestrutivo.querySelector('.spinner')).toBeTruthy();
+
+      const botaoCarregando = html(fixture).querySelector<HTMLButtonElement>(
+        'app-confirmacao-exclusao .botao-destrutivo.carregando',
+      )!;
+      expect(botaoCarregando).toBeTruthy();
+      expect(botaoCarregando.getAttribute('aria-disabled')).toBe('true');
+      expect(botaoCarregando.textContent).toContain('Apagando…');
+      expect(botaoCarregando.querySelector('.spinner')).toBeTruthy();
       expect(painel.querySelector('p[role="status"]')?.textContent?.trim()).toBe('Apagando a conversa…');
 
-      botaoDestrutivo.click();
+      botaoCarregando.click();
       fixture.detectChanges();
-      httpMock.expectNone('/conversas/conv-hoje');
+      httpMock.expectNone('/conversas/conv-hoje/titular');
 
       const dialog = html(fixture).querySelector('app-confirmacao-exclusao dialog')!;
       dialog.dispatchEvent(new Event('cancel', { cancelable: true }));
@@ -492,20 +564,22 @@ describe('Chat', () => {
       fixture.detectChanges();
       httpMock.expectNone((r) => r.url.endsWith('/consentimento'));
 
-      deleteReq.flush(null, { status: 204, statusText: 'No Content' });
+      deleteReq.flush(mockSucessoExclusao('apenas_conversa'));
       tick();
       fixture.detectChanges();
 
-      httpMock.match(() => true);
       TestBed.inject(ConversaStore).pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('falha confirmada na exclusão (403) mantém o modal aberto com alerta, foco em Tentar de novo, e permite reenvio bem-sucedido', fakeAsync(() => {
-      const fixture = montarCliente(null);
+      localStorage.setItem('solar.conversaId', 'conv-hoje');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
       document.body.appendChild(fixture.nativeElement);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[0].click();
-      httpMock.expectOne('/conversas/conv-hoje').flush(conversaVazia('conv-hoje'));
+      const reqConv = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-hoje'));
       tick();
       fixture.detectChanges();
 
@@ -516,7 +590,9 @@ describe('Chat', () => {
       html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
       fixture.detectChanges();
 
-      const req = httpMock.expectOne('/conversas/conv-hoje');
+      const req = httpMock.expectOne('/conversas/conv-hoje/titular');
+      expect(req.request.method).toBe('DELETE');
+      expect(req.request.withCredentials).toBeTrue();
       req.flush({ erro: 'conversa_com_corretor' }, { status: 403, statusText: 'Forbidden' });
       tick();
       fixture.detectChanges();
@@ -533,23 +609,28 @@ describe('Chat', () => {
 
       retryBtn.click();
       fixture.detectChanges();
-      const req2 = httpMock.expectOne('/conversas/conv-hoje');
-      req2.flush(null, { status: 204, statusText: 'No Content' });
+      const req2 = httpMock.expectOne('/conversas/conv-hoje/titular');
+      expect(req2.request.method).toBe('DELETE');
+      expect(req2.request.withCredentials).toBeTrue();
+      req2.flush(mockSucessoExclusao('apenas_conversa'));
       tick();
       fixture.detectChanges();
 
       expect(html(fixture).querySelector('app-confirmacao-exclusao .painel')).toBeNull();
 
       document.body.removeChild(fixture.nativeElement);
-      httpMock.match(() => true);
       TestBed.inject(ConversaStore).pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('falha incerta de rede mantém o modal com mensagem específica sem negrito e permite retry', fakeAsync(() => {
-      const fixture = montarCliente(null);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[0].click();
-      httpMock.expectOne('/conversas/conv-hoje').flush(conversaVazia('conv-hoje'));
+      localStorage.setItem('solar.conversaId', 'conv-hoje');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
+      document.body.appendChild(fixture.nativeElement);
+      const reqConv = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-hoje'));
       tick();
       fixture.detectChanges();
 
@@ -560,8 +641,16 @@ describe('Chat', () => {
       html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
       fixture.detectChanges();
 
-      const req = httpMock.expectOne('/conversas/conv-hoje');
-      req.error(new ProgressEvent('error'));
+      const reqDelete = httpMock.expectOne('/conversas/conv-hoje/titular');
+      expect(reqDelete.request.method).toBe('DELETE');
+      expect(reqDelete.request.withCredentials).toBeTrue();
+      reqDelete.error(new ProgressEvent('error'));
+      tick();
+
+      const reqVerificacao = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqVerificacao.request.method).toBe('GET');
+      expect(reqVerificacao.request.withCredentials).toBeTrue();
+      reqVerificacao.flush(null, { status: 404, statusText: 'Not Found' });
       tick();
       fixture.detectChanges();
 
@@ -574,26 +663,33 @@ describe('Chat', () => {
 
       const retryBtn = html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!;
       expect(retryBtn.textContent?.trim()).toBe('Tentar de novo');
+      expect(document.activeElement).toBe(retryBtn);
 
       retryBtn.click();
       fixture.detectChanges();
-      const req2 = httpMock.expectOne('/conversas/conv-hoje');
-      req2.flush(null, { status: 204, statusText: 'No Content' });
+      const reqRetry = httpMock.expectOne('/conversas/conv-hoje/titular');
+      expect(reqRetry.request.method).toBe('DELETE');
+      expect(reqRetry.request.withCredentials).toBeTrue();
+      reqRetry.flush(null, { status: 404, statusText: 'Not Found' });
       tick();
       fixture.detectChanges();
 
       expect(html(fixture).querySelector('app-confirmacao-exclusao .painel')).toBeNull();
+      expect(html(fixture).querySelector('.banner-apagada')).toBeTruthy();
 
-      httpMock.match(() => true);
+      document.body.removeChild(fixture.nativeElement);
       TestBed.inject(ConversaStore).pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('exclusão bem-sucedida em conta de cliente limpa o composer, remove apenas a conversa apagada da lista e exibe banner com role status e foco', fakeAsync(() => {
-      const fixture = montarCliente(null);
+      localStorage.setItem('solar.conversaId', 'conv-hoje');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
       document.body.appendChild(fixture.nativeElement);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[0].click();
-      httpMock.expectOne('/conversas/conv-hoje').flush(conversaVazia('conv-hoje'));
+      const reqConv = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-hoje'));
       tick();
       fixture.detectChanges();
 
@@ -609,7 +705,10 @@ describe('Chat', () => {
       html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
       fixture.detectChanges();
 
-      httpMock.expectOne('/conversas/conv-hoje').flush(null, { status: 204, statusText: 'No Content' });
+      const reqDelete = httpMock.expectOne('/conversas/conv-hoje/titular');
+      expect(reqDelete.request.method).toBe('DELETE');
+      expect(reqDelete.request.withCredentials).toBeTrue();
+      reqDelete.flush(mockSucessoExclusao('apenas_conversa'));
       tick();
       fixture.detectChanges();
 
@@ -641,15 +740,17 @@ describe('Chat', () => {
       expect(store.conversaAtual()).toBeNull();
 
       document.body.removeChild(fixture.nativeElement);
-      httpMock.match(() => true);
       store.pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('DELETE retornando 404 é tratado como sucesso, exibindo banner e fechando modal', fakeAsync(() => {
-      const fixture = montarCliente(null);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[1].click();
-      httpMock.expectOne('/conversas/conv-antiga').flush(conversaVazia('conv-antiga'));
+      localStorage.setItem('solar.conversaId', 'conv-antiga');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
+      const reqConv = httpMock.expectOne('/conversas/conv-antiga');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-antiga'));
       tick();
       fixture.detectChanges();
 
@@ -660,15 +761,18 @@ describe('Chat', () => {
       html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
       fixture.detectChanges();
 
-      httpMock.expectOne('/conversas/conv-antiga').flush(null, { status: 404, statusText: 'Not Found' });
+      const reqDelete = httpMock.expectOne('/conversas/conv-antiga/titular');
+      expect(reqDelete.request.method).toBe('DELETE');
+      expect(reqDelete.request.withCredentials).toBeTrue();
+      reqDelete.flush(null, { status: 404, statusText: 'Not Found' });
       tick();
       fixture.detectChanges();
 
       expect(html(fixture).querySelector('app-confirmacao-exclusao .painel')).toBeNull();
       expect(html(fixture).querySelector('.banner-apagada')).toBeTruthy();
 
-      httpMock.match(() => true);
       TestBed.inject(ConversaStore).pararPolling();
+      httpMock.verify();
       flush();
     }));
 
@@ -693,7 +797,10 @@ describe('Chat', () => {
       html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
       fixture.detectChanges();
 
-      httpMock.expectOne('/conversas/conv-anonima').flush(null, { status: 204, statusText: 'No Content' });
+      const reqDelete = httpMock.expectOne('/conversas/conv-anonima/titular');
+      expect(reqDelete.request.method).toBe('DELETE');
+      expect(reqDelete.request.withCredentials).toBeTrue();
+      reqDelete.flush(mockSucessoExclusao('lead_e_vinculos'));
       tick();
       fixture.detectChanges();
 
@@ -712,20 +819,23 @@ describe('Chat', () => {
       expect(localStorage.getItem('outra.preferencia')).toBe('valor-mantido');
       localStorage.removeItem('outra.preferencia');
 
-      httpMock.match(() => true);
       store.pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('resposta tardia de consulta à lista iniciada antes da exclusão não recoloca o id apagado na lista', fakeAsync(() => {
-      const fixture = montarCliente(null);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[0].click();
-      httpMock.expectOne('/conversas/conv-hoje').flush(conversaVazia('conv-hoje'));
+      localStorage.setItem('solar.conversaId', 'conv-hoje');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
+      const reqConv = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-hoje'));
       tick();
       fixture.detectChanges();
 
       (fixture.componentInstance as unknown as { carregarConversas: () => void }).carregarConversas();
       const reqListaAntiga = httpMock.expectOne('/api/conta/conversas');
+      expect(reqListaAntiga.request.withCredentials).toBeTrue();
 
       html(fixture).querySelector<HTMLButtonElement>('app-composer .botao-apagar')!.click();
       fixture.detectChanges();
@@ -734,7 +844,10 @@ describe('Chat', () => {
       html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
       fixture.detectChanges();
 
-      httpMock.expectOne('/conversas/conv-hoje').flush(null, { status: 204, statusText: 'No Content' });
+      const reqDelete = httpMock.expectOne('/conversas/conv-hoje/titular');
+      expect(reqDelete.request.method).toBe('DELETE');
+      expect(reqDelete.request.withCredentials).toBeTrue();
+      reqDelete.flush(mockSucessoExclusao('apenas_conversa'));
       tick();
       fixture.detectChanges();
 
@@ -746,15 +859,17 @@ describe('Chat', () => {
       expect(ids).not.toContain('conv-hoje');
       expect(ids.length).toBe(2);
 
-      httpMock.match(() => true);
       TestBed.inject(ConversaStore).pararPolling();
+      httpMock.verify();
       flush();
     }));
 
     it('banner de conversa apagada desaparece na próxima ação explícita', fakeAsync(() => {
-      const fixture = montarCliente(null);
-      html(fixture).querySelectorAll<HTMLButtonElement>('.coluna-historico .conversa')[0].click();
-      httpMock.expectOne('/conversas/conv-hoje').flush(conversaVazia('conv-hoje'));
+      localStorage.setItem('solar.conversaId', 'conv-hoje');
+      const fixture = montarCliente(VERSAO_AVISO_PRIVACIDADE);
+      const reqConv = httpMock.expectOne('/conversas/conv-hoje');
+      expect(reqConv.request.withCredentials).toBeTrue();
+      reqConv.flush(conversaComMensagens('conv-hoje'));
       tick();
       fixture.detectChanges();
 
@@ -765,7 +880,10 @@ describe('Chat', () => {
       html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
       fixture.detectChanges();
 
-      httpMock.expectOne('/conversas/conv-hoje').flush(null, { status: 204, statusText: 'No Content' });
+      const reqDelete = httpMock.expectOne('/conversas/conv-hoje/titular');
+      expect(reqDelete.request.method).toBe('DELETE');
+      expect(reqDelete.request.withCredentials).toBeTrue();
+      reqDelete.flush(mockSucessoExclusao('apenas_conversa'));
       tick();
       fixture.detectChanges();
 
@@ -773,14 +891,18 @@ describe('Chat', () => {
 
       html(fixture).querySelector<HTMLButtonElement>('.coluna-historico .nova')!.click();
       tick();
-      httpMock.expectOne((r) => r.url.endsWith('/consentimento')).flush({});
+      const reqConsent = httpMock.expectOne((r) => r.method === 'POST' && r.url.endsWith('/consentimento'));
+      reqConsent.flush({});
       tick();
-      httpMock.match(() => true);
+      const newId = reqConsent.request.url.split('/')[2];
+      httpMock.expectOne(`/conversas/${newId}`).flush(conversaComMensagens(newId));
+      tick();
       fixture.detectChanges();
 
       expect(html(fixture).querySelector('.banner-apagada')).toBeNull();
 
       TestBed.inject(ConversaStore).pararPolling();
+      httpMock.verify();
       flush();
     }));
   });
