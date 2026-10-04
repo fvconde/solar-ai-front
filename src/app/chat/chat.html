@@ -28,6 +28,15 @@
     }
     <main #palco class="palco" [attr.aria-live]="store.emConversa() ? 'polite' : null">
       <div class="coluna">
+        @if (store.conversaApagada()) {
+          <div #bannerApagada role="status" tabindex="-1" class="banner-apagada">
+            <app-evento-sistema
+              variante="sucesso"
+              rotulo="Conversa apagada"
+              texto="A conversa e suas mensagens foram apagadas definitivamente."
+            />
+          </div>
+        }
         @switch (store.estado()) {
           @case ('aceite-pendente') {
             <app-aviso-consentimento
@@ -111,15 +120,22 @@
       </div>
     </main>
 
-    @if (store.composerRemovido()) {
-      <div class="barra-recolhida"></div>
-    } @else {
-      <app-composer
-        [envioDisponivel]="store.envioDisponivel()"
-        [campoEditavel]="store.campoEditavel()"
-        [motivo]="store.motivoEnvio()"
-        (enviar)="enviar($event)"
-      />
-    }
+    <app-composer
+      #composer
+      [recolhido]="store.composerRemovido()"
+      [envioDisponivel]="store.envioDisponivel()"
+      [campoEditavel]="store.campoEditavel()"
+      [motivo]="store.motivoEnvio()"
+      [podeApagar]="store.podeApagarConversa()"
+      (enviar)="enviar($event)"
+      (apagar)="abrirConfirmacao($event)"
+    />
   }
 </div>
+
+<app-confirmacao-exclusao
+  #confirmacao
+  [apagando]="store.apagando()"
+  [erro]="store.erroExclusao()"
+  (confirmarExclusao)="confirmarExclusao()"
+/>

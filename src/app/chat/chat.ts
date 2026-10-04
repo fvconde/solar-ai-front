@@ -14,6 +14,7 @@ import {
 import { RouterLink } from '@angular/router';
 import { AvisoConsentimento } from '../componentes/aviso-consentimento';
 import { Composer } from '../componentes/composer';
+import { ConfirmacaoExclusao } from '../componentes/confirmacao-exclusao';
 import { DivisorData } from '../componentes/divisor-data';
 import { EventoSistema } from '../componentes/evento-sistema';
 import { FormularioContato } from '../componentes/formulario-contato';
@@ -44,6 +45,7 @@ const CHAVE_CONVITE_DISPENSADO = 'solar.conviteDispensado';
     Composer,
     HistoricoConversas,
     RouterLink,
+    ConfirmacaoExclusao,
   ],
   templateUrl: './chat.html',
   styleUrl: './chat.scss',
@@ -54,11 +56,15 @@ export class Chat implements OnInit {
   private readonly contaApi = inject(ContaApi);
 
   private readonly palco = viewChild<ElementRef<HTMLElement>>('palco');
+  private readonly bannerApagada = viewChild<ElementRef<HTMLElement>>('bannerApagada');
+  private readonly modalConfirmacao = viewChild<ConfirmacaoExclusao>('confirmacao');
+  private readonly composer = viewChild<Composer>('composer');
 
   readonly cliente = computed(() => this.sessao.perfil() === 'cliente');
   readonly conversas = signal<ConversaResumo[]>([]);
   readonly listaAberta = signal(false);
   private readonly conviteDispensadoEm = signal(lerLocal(CHAVE_CONVITE_DISPENSADO));
+  private geracaoConversas = 0;
 
   readonly mostrarConvite = computed(() => {
     if (this.sessao.ativa() || !this.store.emConversa()) {
@@ -75,7 +81,12 @@ export class Chat implements OnInit {
     afterRenderEffect(() => {
       this.store.itens();
       this.store.estado();
+      const apagada = this.store.conversaApagada();
       const elemento = this.palco()?.nativeElement;
+      if (apagada) {
+        this.bannerApagada()?.nativeElement.focus();
+        return;
+      }
       if (elemento) {
         elemento.scrollTop = elemento.scrollHeight;
       }
@@ -126,11 +137,17 @@ export class Chat implements OnInit {
   }
 
   protected abrirConversa(id: string): void {
+    if (this.store.apagando()) {
+      return;
+    }
     this.listaAberta.set(false);
     void this.store.abrirConversa(id);
   }
 
   protected novaConversa(): void {
+    if (this.store.apagando()) {
+      return;
+    }
     this.listaAberta.set(false);
     void this.store.novaConversa();
   }
@@ -145,10 +162,47 @@ export class Chat implements OnInit {
     }
   }
 
+  protected abrirConfirmacao(gatilho?: HTMLElement): void {
+    this.modalConfirmacao()?.abrir(gatilho);
+  }
+
+  protected async confirmarExclusao(): Promise<void> {
+    const idApagado = this.store.conversaAtual();
+    const sucesso = await this.store.apagarConversa();
+    if (sucesso) {
+      this.geracaoConversas++;
+      this.modalConfirmacao()?.fechar();
+      this.composer()?.limpar();
+      if (idApagado) {
+        this.conversas.update((lista) => lista.filter((c) => c.id !== idApagado));
+        if (this.conviteDispensadoEm() === idApagado || lerLocal(CHAVE_CONVITE_DISPENSADO) === idApagado) {
+          this.conviteDispensadoEm.set(null);
+          try {
+            localStorage.removeItem(CHAVE_CONVITE_DISPENSADO);
+          } catch {}
+        }
+      }
+      setTimeout(() => {
+        this.bannerApagada()?.nativeElement.focus();
+      }, 0);
+    }
+  }
+
   private carregarConversas(): void {
+    const g = ++this.geracaoConversas;
     this.contaApi.listarConversas().subscribe({
-      next: (conversas) => this.conversas.set(conversas),
-      error: () => this.conversas.set([]),
+      next: (conversas) => {
+        if (g !== this.geracaoConversas) {
+          return;
+        }
+        this.conversas.set(conversas);
+      },
+      error: () => {
+        if (g !== this.geracaoConversas) {
+          return;
+        }
+        this.conversas.set([]);
+      },
     });
   }
 }
