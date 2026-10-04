@@ -10,7 +10,9 @@
     (click)="alternar()">
     <span class="rotulo-desktop">{{ expandido() ? 'Ver menos' : 'Ver mais métricas' }}</span>
     <span class="rotulo-celular">{{ expandido() ? 'Ver menos métricas' : 'Ver todas as métricas' }}</span>
-    <span aria-hidden="true">{{ expandido() ? '⌃' : '⌄' }}</span>
+    <svg class="seta" [class.recolher]="expandido()" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+      <path d="M3 5L7 9L11 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
   </button>
   <div class="miolo">
     @if (carregando()) {

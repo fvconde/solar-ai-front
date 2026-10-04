@@ -335,7 +335,7 @@ describe('Painel (S-21)', () => {
     const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Minha fila', 'Sem corretor elegível', 'Visão geral', 'Novos corretores']);
+    expect(botoes).toEqual(['Visão geral', 'Minha fila', 'Sem corretor elegível', 'Novos corretores']);
   });
 
   it('6. supervisor sem vínculo não renderiza "Minha fila" de forma alguma', () => {
@@ -370,7 +370,7 @@ describe('Painel (S-21)', () => {
     const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Sem corretor elegível', 'Visão geral', 'Novos corretores']);
+    expect(botoes).toEqual(['Visão geral', 'Sem corretor elegível', 'Novos corretores']);
   });
 
   it('7. estado de acesso restrito bloqueia antes de chamada de dados ou em 403', () => {

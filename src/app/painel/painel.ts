@@ -73,7 +73,7 @@ export class Painel implements OnInit, OnDestroy {
   );
   readonly filtrosPermitidos = computed(() => this.sessao.filtrosPermitidos());
   readonly abasSupervisor = computed(() =>
-    ['minha_fila', 'sem_corretor', 'visao_geral'].filter((filtro) =>
+    ['visao_geral', 'minha_fila', 'sem_corretor'].filter((filtro) =>
       this.filtrosPermitidos().includes(filtro),
     ),
   );

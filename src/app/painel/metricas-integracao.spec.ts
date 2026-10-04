@@ -1,7 +1,7 @@
 import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { DeferBlockBehavior, DeferBlockState, TestBed } from '@angular/core/testing';
-import { provideRouter } from '@angular/router';
+import { provideRouter, Router } from '@angular/router';
 import { SessaoStore } from '../sessao/sessao-store';
 import { Painel } from './painel';
 import { metricasParaTeste } from './metricas-painel.fixture';
@@ -35,6 +35,42 @@ describe('Integração das métricas com as abas e fila (S-22)', () => {
     expect(fixture.nativeElement.querySelector('app-metricas-painel')).toBeNull();
     http.expectNone(r => r.url === '/api/painel/metricas');
   });
+  it('ordena as abas do supervisor e mantém escolha inicial e navegação por teclado', () => {
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+    const abas = Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
+    expect(abas.map(aba => aba.textContent!.trim())).toEqual([
+      'Visão geral', 'Minha fila', 'Sem corretor elegível', 'Novos corretores',
+    ]);
+    expect(fixture.componentInstance.filtroAtivo()).toBe('visao_geral');
+    expect(fixture.componentInstance.novosCorretoresAtivo()).toBeTrue();
+    expect(abas[3].getAttribute('tabindex')).toBe('0');
+    for (const [origem, tecla, destino] of [
+      [3, 'Home', 0], [0, 'ArrowRight', 1], [1, 'ArrowRight', 2],
+      [2, 'End', 3], [3, 'ArrowRight', 0], [0, 'ArrowLeft', 3],
+    ] as const) {
+      const evento = new KeyboardEvent('keydown', { key: tecla, bubbles: true, cancelable: true });
+      abas[origem].dispatchEvent(evento);
+      expect(evento.defaultPrevented).toBeTrue();
+      expect(document.activeElement).toBe(abas[destino]);
+    }
+    expect(fixture.componentInstance.novosCorretoresAtivo()).toBeTrue();
+    http.expectNone(r => r.url === '/api/painel/leads');
+  });
+  it('a nova ordem mantém somente filtros permitidos e Novos corretores por último', () => {
+    sessao.definir({
+      usuario: { id: 'teste-integracao', nome: 'Supervisor', email: 's@solar.com.br' },
+      perfil: 'supervisor', statusCorretor: null, corretorId: null, vinculoAtivo: true,
+      filtrosPermitidos: ['sem_corretor', 'minha_fila'], filtroInicial: 'sem_corretor', pendentesAprovacao: 0,
+    });
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+    const abas = Array.from(fixture.nativeElement.querySelectorAll('[role="tab"]')) as HTMLButtonElement[];
+    expect(abas.map(aba => aba.id)).toEqual(['aba-minha_fila', 'aba-sem_corretor', 'aba-novos-corretores']);
+    expect(fixture.componentInstance.filtroAtivo()).toBe('sem_corretor');
+    expect(fixture.componentInstance.novosCorretoresAtivo()).toBeTrue();
+    http.expectNone(r => r.url === '/api/painel/leads');
+  });
   it('faixa fica entre abas e fila e a expansão mantém a fila visível', async () => {
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
@@ -58,6 +94,7 @@ describe('Integração das métricas com as abas e fila (S-22)', () => {
     expect(getComputedStyle(fila).display).not.toBe('none');
   });
   it('falha e retry de métricas preservam a fila sem repetir sua consulta', async () => {
+    const navegar = spyOn(TestBed.inject(Router), 'navigate').and.resolveTo(true);
     const fixture = TestBed.createComponent(Painel);
     fixture.detectChanges();
     fixture.componentInstance.selecionarFiltro('visao_geral');
@@ -77,5 +114,6 @@ describe('Integração das métricas com as abas e fila (S-22)', () => {
     fixture.componentInstance.selecionarNovosCorretores();
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('app-metricas-painel')).toBeNull();
+    expect(navegar).toHaveBeenCalledWith(['/painel'], { queryParams: { filtro: null } });
   });
 });

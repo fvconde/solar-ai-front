@@ -54,8 +54,6 @@ describe('Layout real das métricas por viewport (S-22)', () => {
           if (perfil === 'corretor') dados.equipe = null;
           http.expectOne('/api/painel/metricas?dias=30').flush(dados);
           fixture.detectChanges();
-          fixture.nativeElement.querySelector('.alternar').click();
-          fixture.detectChanges();
           const quadro = document.createElement('iframe');
           quadros.push(quadro);
           quadro.style.cssText = `width:${largura}px;height:${altura}px;border:0;position:fixed;left:0;top:0;`;
@@ -71,6 +69,45 @@ describe('Layout real das métricas por viewport (S-22)', () => {
           doc.close();
           await new Promise<void>(resolve => quadro.contentWindow!.requestAnimationFrame(() => resolve()));
           const win = quadro.contentWindow!;
+          const verificarAlternar = (expandido: boolean) => {
+            const faixa = doc.querySelector<HTMLElement>('.metricas')!;
+            const botao = doc.querySelector<HTMLButtonElement>('.alternar')!;
+            const seta = botao.querySelector<SVGSVGElement>('svg')!;
+            const rotulo = botao.querySelector<HTMLElement>(largura <= 860 ? '.rotulo-celular' : '.rotulo-desktop')!;
+            const centro = (elemento: Element) => {
+              const caixa = elemento.getBoundingClientRect();
+              return caixa.top + caixa.height / 2;
+            };
+            expect(botao.getAttribute('aria-expanded')).toBe(String(expandido));
+            expect(seta.getAttribute('aria-hidden')).toBe('true');
+            expect(seta.getAttribute('focusable')).toBe('false');
+            expect(seta.classList.contains('recolher')).toBe(expandido);
+            expect(Math.abs(centro(seta) - centro(rotulo))).toBeLessThanOrEqual(.5);
+            expect(win.getComputedStyle(botao).marginBottom).toBe('8px');
+            expect(win.getComputedStyle(botao).position).toBe('static');
+            botao.focus();
+            expect(doc.activeElement).toBe(botao);
+            if (largura <= 860) {
+              expect(botao.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+              const borda = parseFloat(win.getComputedStyle(faixa).borderTopWidth);
+              const fimBotao = botao.getBoundingClientRect().bottom - faixa.getBoundingClientRect().top - borda + faixa.scrollTop;
+              const espacoInferior = faixa.scrollHeight - fimBotao;
+              expect(espacoInferior).toBeGreaterThanOrEqual(8 + parseFloat(win.getComputedStyle(faixa).paddingBottom) - 1);
+            } else {
+              const miolo = doc.querySelector<HTMLElement>('.miolo')!;
+              expect(miolo.getBoundingClientRect().top - botao.getBoundingClientRect().bottom).toBeGreaterThanOrEqual(20 - 1);
+            }
+            expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(altura * .4 + 1);
+            const fila = doc.querySelector<HTMLElement>('.corpo-painel')!;
+            expect(fila.getBoundingClientRect().height).toBeGreaterThan(0);
+            expect(fila.getBoundingClientRect().top).toBeLessThan(altura);
+          };
+          verificarAlternar(false);
+          fixture.nativeElement.querySelector('.alternar').click();
+          fixture.detectChanges();
+          doc.body.innerHTML = fixture.nativeElement.outerHTML;
+          await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
+          verificarAlternar(true);
           const faixa = doc.querySelector<HTMLElement>('.metricas')!;
           const fila = doc.querySelector<HTMLElement>('.corpo-painel')!;
           const miolo = doc.querySelector<HTMLElement>('.miolo')!;
