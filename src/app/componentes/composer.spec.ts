@@ -45,15 +45,19 @@ describe('Composer', () => {
     const nav = el().querySelector('nav[aria-label="Seus dados"]');
     const botaoApagar = nav?.querySelector<HTMLButtonElement>('.botao-apagar');
     expect(botaoApagar).toBeTruthy();
-    expect(botaoApagar?.textContent?.trim()).toBe('Apagar conversa');
-    expect(botaoApagar?.getAttribute('aria-haspopup')).toBe('dialog');
+    if (!botaoApagar) {
+      fail('Botão apagar não encontrado');
+      return;
+    }
+    expect(botaoApagar.textContent?.trim()).toBe('Apagar conversa');
+    expect(botaoApagar.getAttribute('aria-haspopup')).toBe('dialog');
 
     let emitido: HTMLElement | undefined;
     component.apagar.subscribe((elemento) => {
       emitido = elemento;
     });
 
-    botaoApagar?.click();
+    botaoApagar.click();
     expect(emitido).toBe(botaoApagar);
   });
 
