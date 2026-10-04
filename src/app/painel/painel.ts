@@ -20,6 +20,7 @@ import { FilaAprovacao } from './fila-aprovacao';
 import { PainelApi } from './painel-api';
 import { LeadDetalheResponse, LeadPainelItem } from './painel-contrato';
 import { PainelEmAnalise } from './painel-em-analise';
+import { MetricasPainel } from './metricas-painel';
 
 @Component({
   selector: 'app-painel',
@@ -33,9 +34,10 @@ import { PainelEmAnalise } from './painel-em-analise';
     MensagemLia,
     MensagemPessoa,
     PainelEmAnalise,
+    MetricasPainel,
   ],
   templateUrl: './painel.html',
-  styleUrls: ['./painel.scss', './painel-detalhe.scss'],
+  styleUrls: ['./painel.scss', './painel-detalhe.scss', './metricas-aguardando.scss'],
 })
 export class Painel implements OnInit, OnDestroy {
   private readonly api = inject(PainelApi);
@@ -71,7 +73,7 @@ export class Painel implements OnInit, OnDestroy {
   );
   readonly filtrosPermitidos = computed(() => this.sessao.filtrosPermitidos());
   readonly abasSupervisor = computed(() =>
-    ['minha_fila', 'sem_corretor', 'visao_geral'].filter((filtro) =>
+    ['visao_geral', 'minha_fila', 'sem_corretor'].filter((filtro) =>
       this.filtrosPermitidos().includes(filtro),
     ),
   );

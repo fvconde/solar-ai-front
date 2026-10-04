@@ -87,6 +87,13 @@
       [attr.role]="perfil() === 'supervisor' ? 'tabpanel' : null"
       [attr.aria-labelledby]="perfil() === 'supervisor' ? abaAtivaId() : null"
     >
+      @if (!novosCorretoresAtivo()) {
+        @defer (on immediate) {
+          <app-metricas-painel (abrirPendentes)="selecionarNovosCorretores()" />
+        } @placeholder {
+          <div class="metricas-aguardando" role="status">Carregando métricas…</div>
+        }
+      }
       @if (perfil() !== 'supervisor') {
         <div class="barra-fila">
           <div class="grupo-esquerda-fila">

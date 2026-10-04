@@ -1,0 +1,13 @@
+.metricas-aguardando {
+  box-sizing: border-box;
+  max-height: 40dvh;
+  flex: none;
+  padding: 14px 40px 16px;
+  border-block: 1px solid var(--borda-estrutura);
+  background: var(--superficie-barra);
+  color: var(--texto-secundario);
+  font: 400 13px/1.4 'Libre Franklin', sans-serif;
+}
+@media (max-width: 860px) {
+  .metricas-aguardando { padding: 12px 16px 14px; }
+}
