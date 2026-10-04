@@ -1,6 +1,7 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { MetricasPainelResponse } from './metricas-contrato';
 import {
   CorretorPendente,
   FilaLeadsResponse,
@@ -11,6 +12,13 @@ import {
 @Injectable({ providedIn: 'root' })
 export class PainelApi {
   private readonly http = inject(HttpClient);
+
+  obterMetricas(dias = 30): Observable<MetricasPainelResponse> {
+    return this.http.get<MetricasPainelResponse>('/api/painel/metricas', {
+      params: new HttpParams().set('dias', dias),
+      withCredentials: true,
+    });
+  }
 
   listarLeads(filtro?: string | null, intencao?: string | null): Observable<FilaLeadsResponse> {
     let params = new HttpParams();

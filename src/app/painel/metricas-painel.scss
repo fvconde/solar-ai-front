@@ -1,0 +1,84 @@
+:host {
+  --metrica-alugar: color-mix(in srgb, var(--marca) 45%, var(--superficie-elevada));
+  --metrica-frio: color-mix(in srgb, var(--marca) 30%, var(--superficie-elevada));
+  --metrica-morno: color-mix(in srgb, var(--marca) 65%, var(--superficie-elevada));
+  --metrica-sem-intencao: repeating-linear-gradient(135deg, var(--inativo-borda) 0 3px, var(--fundo-conversa) 3px 6px);
+  display: block; flex: none; min-height: 0; max-height: 40dvh;
+  font-family: 'Libre Franklin', sans-serif; color: var(--texto-primario);
+}
+.metricas {
+  position: relative; box-sizing: border-box; max-height: 40dvh; padding: 14px 40px 16px;
+  display: flex; flex-direction: column; gap: 12px; overflow: hidden;
+  background: var(--superficie-barra); border-block: 1px solid var(--borda-estrutura);
+  &.expandida { height: 40dvh; }
+}
+.cabecalho { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; padding-right: 155px; flex: none; }
+h2, h3, p { margin: 0; }
+h2, .titulo-extras { font-size: 12.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--texto-secundario); }
+h3 { font-size: 12.5px; line-height: 1.3; font-weight: 500; color: var(--texto-secundario); padding-right: 28px; }
+.periodo { display: inline-flex; height: 24px; align-items: center; padding: 0 10px; border-radius: 999px; border: 1px solid var(--borda-componente); background: var(--superficie-elevada); font-size: 12.5px; font-weight: 500; white-space: nowrap; }
+.escopo { font-size: 13px; line-height: 1.4; color: var(--texto-secundario); }
+.alternar, .tentar { border: 1px solid var(--borda-componente); border-radius: 999px; background: var(--superficie-elevada); color: var(--texto-primario); font: 500 13.5px 'Libre Franklin', sans-serif; cursor: pointer; padding: 0 14px; min-height: 36px; }
+.alternar { position: absolute; top: 14px; right: 40px; display: flex; gap: 8px; align-items: center; }
+.rotulo-celular, .resumo-celular, .pendentes-celular { display: none; }
+.miolo { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; }
+.principais, .carregamento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; flex: none; }
+.principais.com-equipe { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.cartao { position: relative; min-width: 0; background: var(--superficie-elevada); border: 1px solid var(--borda-divisor-card); border-radius: 12px; padding: 12px 16px; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.4; }
+.mono, .numero { font-family: 'IBM Plex Mono', monospace; font-variant-numeric: tabular-nums; }
+.numero { font-size: 24px; font-weight: 600; line-height: 1.15; }
+.apoio { color: var(--texto-secundario); }
+.barra-intencao { display: flex; gap: 2px; height: 10px; background: var(--inativo-borda); border-radius: 4px; overflow: hidden; flex: none; }
+.barra-intencao span { min-width: 0; height: 100%; }
+ul, ol { list-style: none; margin: 0; padding: 0; }
+.legenda { display: flex; flex-direction: column; gap: 4px; }
+.legenda li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; color: var(--texto-secundario); }
+.legenda strong { margin-left: auto; color: var(--texto-primario); }
+.marcador { width: 10px; height: 10px; border-radius: 2px; flex: none; }
+.carga { display: flex; gap: 8px; overflow-x: auto; }
+.carga li { display: flex; flex-direction: column; align-items: center; gap: 2px; font-size: 11.5px; color: var(--texto-secundario); flex: none; min-width: 25px; }
+.coluna { display: flex; align-items: flex-end; height: 28px; width: 16px; border-bottom: 1px solid var(--borda-componente); }
+.coluna span { width: 100%; background: var(--marca); }
+.aguardando { color: var(--atencao); }
+.pendentes, .pendentes-celular { border: 0; background: transparent; color: var(--atencao); font: inherit; text-align: left; padding: 0; cursor: pointer; text-decoration: underline; }
+.extras { min-height: 80px; overflow: auto; flex: 1; }
+.extras[hidden] { display: none; }
+.titulo-extras { margin-bottom: 10px; padding: 0; }
+.grade-extras { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr)); gap: 12px; }
+.grade-extras .cartao { gap: 8px; }
+.score { display: flex; gap: 16px; align-items: center; }
+.donut { position: relative; width: 88px; height: 88px; border-radius: 50%; flex: none; }
+.donut > span { position: absolute; inset: 16px; border-radius: 50%; background: var(--superficie-elevada); display: flex; align-items: center; justify-content: center; flex-direction: column; line-height: 1.1; }
+.donut strong { font-size: 20px; }
+.donut small { font-size: 11px; color: var(--texto-secundario); }
+.ranking, .horarios { display: flex; flex-direction: column; gap: 6px; }
+.ranking li { display: grid; grid-template-columns: minmax(0, 1fr) 90px 20px; align-items: center; gap: 8px; font-size: 13px; }
+.ranking.imoveis li { grid-template-columns: minmax(64px, auto) minmax(0, 1fr) 70px 20px; }
+.codigo, .bairro { overflow-wrap: anywhere; }
+.trilho { display: block; height: 6px; background: var(--inativo-borda); border-radius: 3px; overflow: hidden; }
+.trilho > span { display: block; height: 100%; background: var(--marca); }
+.consentimento > span, .confirmado { background: var(--sucesso); }
+.horarios li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; }
+.horarios li > span:last-child { margin-left: auto; color: var(--texto-secundario); }
+.estado { font-size: 13px; display: flex; gap: 12px; align-items: center; }
+.esqueleto { display: block; width: 40px; height: 24px; border-radius: 4px; background: var(--inativo-borda); }
+button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--marca); outline-offset: -2px; }
+@media (max-width: 860px) {
+  .metricas { padding: 12px 16px 14px; gap: 10px; }
+  .cabecalho { padding: 0; justify-content: space-between; gap: 8px; }
+  h2 { font-size: 12px; }
+  .periodo { font-size: 12px; }
+  .escopo, .rotulo-desktop { display: none; }
+  .alternar { position: static; order: 3; min-height: 44px; flex: none; justify-content: center; font-size: 14px; }
+  .rotulo-celular { display: inline; }
+  .miolo { display: block; }
+  .resumo-celular { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .resumo-celular .cartao { padding: 8px 10px; gap: 2px; font-size: 12px; line-height: 1.3; }
+  .resumo-celular .numero { font-size: 22px; }
+  .pendentes-celular { display: block; font-size: 12px; margin-top: 6px; min-height: 24px; }
+  .principais { display: none; }
+  .expandida .principais, .expandida .principais.com-equipe { display: grid; grid-template-columns: 1fr; margin-top: 12px; }
+  .extras { overflow: visible; margin-top: 12px; }
+  .estado { flex-wrap: wrap; }
+  .vazio { margin-bottom: 8px; }
+}
