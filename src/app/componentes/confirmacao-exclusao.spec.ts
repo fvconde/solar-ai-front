@@ -212,4 +212,150 @@ describe('ConfirmacaoExclusao', () => {
     expect(cancelado).toBeFalse();
     expect(component.aberto()).toBeTrue();
   }));
+
+  it('ciclo normal Tab aplica preventDefault e alterna foco entre Cancelar e Apagar conversa', fakeAsync(() => {
+    component.abrir();
+    fixture.detectChanges();
+    tick();
+
+    const dialog = el().querySelector('dialog')!;
+    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    const botaoAcao = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+
+    expect(document.activeElement).toBe(botaoCancelar);
+
+    const eventoTab1 = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoTab1);
+    fixture.detectChanges();
+
+    expect(eventoTab1.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoAcao);
+
+    const eventoTab2 = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoTab2);
+    fixture.detectChanges();
+
+    expect(eventoTab2.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoCancelar);
+  }));
+
+  it('ciclo inverso Shift+Tab aplica preventDefault e alterna foco de forma reversa', fakeAsync(() => {
+    component.abrir();
+    fixture.detectChanges();
+    tick();
+
+    const dialog = el().querySelector('dialog')!;
+    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    const botaoAcao = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+
+    expect(document.activeElement).toBe(botaoCancelar);
+
+    const eventoShiftTab1 = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoShiftTab1);
+    fixture.detectChanges();
+
+    expect(eventoShiftTab1.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoAcao);
+
+    const eventoShiftTab2 = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoShiftTab2);
+    fixture.detectChanges();
+
+    expect(eventoShiftTab2.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoCancelar);
+  }));
+
+  it('ciclo Tab alterna entre Cancelar e Tentar de novo quando erro esta ativo', fakeAsync(() => {
+    component.abrir();
+    fixture.detectChanges();
+    tick();
+
+    fixture.componentRef.setInput('erro', 'confirmada');
+    fixture.detectChanges();
+    tick();
+
+    const dialog = el().querySelector('dialog')!;
+    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    const botaoAcao = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+
+    expect(document.activeElement).toBe(botaoAcao);
+
+    const eventoTab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoTab);
+    fixture.detectChanges();
+
+    expect(eventoTab.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoCancelar);
+
+    const eventoShiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoShiftTab);
+    fixture.detectChanges();
+
+    expect(eventoShiftTab.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoAcao);
+  }));
+
+  it('durante busy ignora cancelar disabled e mantem foco no unico destrutivo carregando sem disparar clique', fakeAsync(() => {
+    component.abrir();
+    fixture.componentRef.setInput('apagando', true);
+    fixture.detectChanges();
+    tick();
+
+    const dialog = el().querySelector('dialog')!;
+    const botaoCarregando = el().querySelector<HTMLButtonElement>('.botao-destrutivo.carregando')!;
+    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+
+    expect(botaoCancelar.disabled).toBeTrue();
+    expect(document.activeElement).toBe(botaoCarregando);
+
+    let confirmacoes = 0;
+    let cancelamentos = 0;
+    component.confirmarExclusao.subscribe(() => {
+      confirmacoes++;
+    });
+    component.cancelou.subscribe(() => {
+      cancelamentos++;
+    });
+
+    const eventoTab = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoTab);
+    fixture.detectChanges();
+
+    expect(eventoTab.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoCarregando);
+
+    const eventoShiftTab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    dialog.dispatchEvent(eventoShiftTab);
+    fixture.detectChanges();
+
+    expect(eventoShiftTab.defaultPrevented).toBeTrue();
+    expect(document.activeElement).toBe(botaoCarregando);
+
+    expect(confirmacoes).toBe(0);
+    expect(cancelamentos).toBe(0);
+  }));
+
+  it('mantem o foco preso no dialog impedindo que elementos do fundo recebam foco', fakeAsync(() => {
+    const botaoFundo = document.createElement('button');
+    botaoFundo.id = 'botao-fundo';
+    document.body.appendChild(botaoFundo);
+
+    component.abrir();
+    fixture.detectChanges();
+    tick();
+
+    const dialog = el().querySelector('dialog')!;
+    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    const botaoAcao = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+
+    for (let i = 0; i < 6; i++) {
+      const ev = new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true });
+      dialog.dispatchEvent(ev);
+      fixture.detectChanges();
+      expect(document.activeElement === botaoCancelar || document.activeElement === botaoAcao).toBeTrue();
+      expect(document.activeElement).not.toBe(botaoFundo);
+    }
+
+    document.body.removeChild(botaoFundo);
+  }));
 });

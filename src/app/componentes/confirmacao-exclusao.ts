@@ -19,6 +19,7 @@ import {
       class="dialog-confirmacao"
       (click)="aoClicarDialog($event)"
       (cancel)="aoCancelarDialog($event)"
+      (keydown)="aoTeclarDialog($event)"
     >
       @if (aberto()) {
         <div
@@ -62,6 +63,7 @@ import {
 
             @if (apagando()) {
               <button
+                #botaoCarregando
                 type="button"
                 class="botao-destrutivo carregando"
                 aria-disabled="true"
@@ -307,6 +309,7 @@ export class ConfirmacaoExclusao {
   private readonly painel = viewChild<ElementRef<HTMLElement>>('painel');
   private readonly botaoCancelar = viewChild<ElementRef<HTMLButtonElement>>('botaoCancelar');
   private readonly botaoAcao = viewChild<ElementRef<HTMLButtonElement>>('botaoAcao');
+  private readonly botaoCarregando = viewChild<ElementRef<HTMLButtonElement>>('botaoCarregando');
 
   private elementoGatilho: HTMLElement | null = null;
 
@@ -317,6 +320,20 @@ export class ConfirmacaoExclusao {
         untracked(() => {
           setTimeout(() => {
             this.botaoAcao()?.nativeElement.focus();
+          });
+        });
+      }
+    });
+
+    effect(() => {
+      const apagandoAtual = this.apagando();
+      if (apagandoAtual && this.aberto()) {
+        untracked(() => {
+          setTimeout(() => {
+            const destrutivo =
+              this.botaoCarregando()?.nativeElement ??
+              this.painel()?.nativeElement.querySelector<HTMLButtonElement>('.botao-destrutivo');
+            destrutivo?.focus();
           });
         });
       }
@@ -412,6 +429,45 @@ export class ConfirmacaoExclusao {
       evento.clientY > rect.bottom;
     if (clicouFora) {
       this.cancelar();
+    }
+  }
+
+  protected aoTeclarDialog(evento: KeyboardEvent): void {
+    if (evento.key !== 'Tab' || !this.aberto()) {
+      return;
+    }
+
+    evento.preventDefault();
+
+    if (this.apagando()) {
+      const destrutivo =
+        this.botaoCarregando()?.nativeElement ??
+        this.painel()?.nativeElement.querySelector<HTMLButtonElement>('.botao-destrutivo');
+      if (destrutivo && document.activeElement !== destrutivo) {
+        destrutivo.focus();
+      }
+      return;
+    }
+
+    const cancelar = this.botaoCancelar()?.nativeElement;
+    const acao = this.botaoAcao()?.nativeElement;
+    if (!cancelar || !acao) {
+      return;
+    }
+
+    const focoAtual = document.activeElement;
+    if (evento.shiftKey) {
+      if (focoAtual === acao) {
+        cancelar.focus();
+      } else {
+        acao.focus();
+      }
+    } else {
+      if (focoAtual === cancelar) {
+        acao.focus();
+      } else {
+        cancelar.focus();
+      }
     }
   }
 }
