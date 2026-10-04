@@ -46,7 +46,7 @@ function mockSucessoExclusao(
     leadExcluido: escopo === 'lead_e_vinculos',
     removidoEm: '2026-10-04T14:00:00Z',
     escopo,
-    mensagem: 'Conversa excluída com sucesso.',
+    mensagem: 'A conversa e suas mensagens foram apagadas definitivamente.',
   };
 }
 
@@ -596,6 +596,7 @@ describe('Chat', () => {
       req.flush({ erro: 'conversa_com_corretor' }, { status: 403, statusText: 'Forbidden' });
       tick();
       fixture.detectChanges();
+      tick();
 
       expect(html(fixture).querySelector('app-confirmacao-exclusao .painel')).toBeTruthy();
       const alerta = html(fixture).querySelector('app-confirmacao-exclusao [role="alert"]')!;
@@ -653,6 +654,7 @@ describe('Chat', () => {
       reqVerificacao.flush(null, { status: 404, statusText: 'Not Found' });
       tick();
       fixture.detectChanges();
+      tick();
 
       const alerta = html(fixture).querySelector('app-confirmacao-exclusao [role="alert"]')!;
       expect(alerta).toBeTruthy();
@@ -737,7 +739,7 @@ describe('Chat', () => {
 
       const store = TestBed.inject(ConversaStore);
       expect(store.estado()).toBe('inicio-conta');
-      expect(store.conversaAtual()).toBeNull();
+      expect(store.conversaAtual()).toBe('');
 
       document.body.removeChild(fixture.nativeElement);
       store.pararPolling();
@@ -807,7 +809,7 @@ describe('Chat', () => {
       expect(html(fixture).querySelector('app-confirmacao-exclusao .painel')).toBeNull();
       expect(html(fixture).querySelector('.banner-apagada')).toBeTruthy();
       expect(store.estado()).toBe('aceite-pendente');
-      expect(store.conversaAtual()).toBeNull();
+      expect(store.conversaAtual()).toBe('');
 
       const consentimento = html(fixture).querySelector('app-aviso-consentimento')!;
       expect(consentimento).toBeTruthy();
@@ -896,6 +898,15 @@ describe('Chat', () => {
       tick();
       const newId = reqConsent.request.url.split('/')[2];
       httpMock.expectOne(`/conversas/${newId}`).flush(conversaComMensagens(newId));
+      tick();
+      fixture.detectChanges();
+
+      const reqListaAtualizada = httpMock.expectOne('/api/conta/conversas');
+      expect(reqListaAtualizada.request.withCredentials).toBeTrue();
+      reqListaAtualizada.flush([
+        ...conversas.filter((c) => c.id !== 'conv-hoje'),
+        { id: newId, titulo: 'Nova conversa', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
       tick();
       fixture.detectChanges();
 

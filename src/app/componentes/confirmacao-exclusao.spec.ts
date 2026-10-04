@@ -188,4 +188,28 @@ describe('ConfirmacaoExclusao', () => {
     fixture.detectChanges();
     expect(component.aberto()).toBeFalse();
   }));
+
+  it('ativação do botão de confirmação via click sem coordenadas emite exatamente uma confirmação e mantém modal aberto mesmo antes de propagar input busy sem cancelou', fakeAsync(() => {
+    component.abrir();
+    fixture.detectChanges();
+    tick();
+
+    let confirmacoes = 0;
+    component.confirmarExclusao.subscribe(() => {
+      confirmacoes++;
+    });
+
+    let cancelado = false;
+    component.cancelou.subscribe(() => {
+      cancelado = true;
+    });
+
+    const botaoAcao = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+    botaoAcao.click();
+    fixture.detectChanges();
+
+    expect(confirmacoes).toBe(1);
+    expect(cancelado).toBeFalse();
+    expect(component.aberto()).toBeTrue();
+  }));
 });

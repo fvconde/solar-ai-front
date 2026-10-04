@@ -396,6 +396,10 @@ export class ConfirmacaoExclusao {
     if (this.apagando()) {
       return;
     }
+    const dialogEl = this.dialogRef()?.nativeElement;
+    if (evento.target !== dialogEl) {
+      return;
+    }
     const painelEl = this.painel()?.nativeElement;
     if (!painelEl) {
       return;
