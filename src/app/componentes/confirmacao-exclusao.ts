@@ -36,7 +36,7 @@ import {
             Esta conversa e suas mensagens serão apagadas definitivamente. Não é possível desfazer.
           </p>
 
-          @if (erro(); as tipoErro) {
+          @if (erroTentativa(); as tipoErro) {
             <div role="alert" class="alerta-erro">
               <span aria-hidden="true" class="marca-erro"></span>
               <p class="texto-erro">
@@ -79,7 +79,7 @@ import {
                 class="botao-destrutivo"
                 (click)="confirmar()"
               >
-                {{ erro() ? 'Tentar de novo' : 'Apagar conversa' }}
+                {{ erroTentativa() ? 'Tentar de novo' : 'Apagar conversa' }}
               </button>
             }
           </div>
@@ -304,6 +304,7 @@ export class ConfirmacaoExclusao {
   readonly cancelou = output<void>();
 
   readonly aberto = signal(false);
+  readonly erroTentativa = signal<'confirmada' | 'incerta' | null>(null);
 
   private readonly dialogRef = viewChild<ElementRef<HTMLDialogElement>>('dialog');
   private readonly painel = viewChild<ElementRef<HTMLElement>>('painel');
@@ -319,9 +320,14 @@ export class ConfirmacaoExclusao {
       const estaAberto = untracked(() => this.aberto());
       if (erroAtual && estaAberto) {
         untracked(() => {
+          this.erroTentativa.set(erroAtual);
           setTimeout(() => {
             this.botaoAcao()?.nativeElement.focus();
           });
+        });
+      } else if (!erroAtual) {
+        untracked(() => {
+          this.erroTentativa.set(null);
         });
       }
     });
@@ -344,6 +350,7 @@ export class ConfirmacaoExclusao {
 
   abrir(gatilho?: HTMLElement): void {
     this.elementoGatilho = gatilho ?? (document.activeElement as HTMLElement | null);
+    this.erroTentativa.set(null);
     this.aberto.set(true);
     const dialog = this.dialogRef()?.nativeElement;
     if (dialog) {
@@ -365,6 +372,7 @@ export class ConfirmacaoExclusao {
   }
 
   fechar(): void {
+    this.erroTentativa.set(null);
     this.aberto.set(false);
     const dialog = this.dialogRef()?.nativeElement;
     if (dialog && dialog.open) {
@@ -387,6 +395,7 @@ export class ConfirmacaoExclusao {
     if (this.apagando()) {
       return;
     }
+    this.erroTentativa.set(null);
     this.fechar();
     this.cancelou.emit();
   }

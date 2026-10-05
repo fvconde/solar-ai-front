@@ -359,7 +359,7 @@ describe('ConfirmacaoExclusao', () => {
     document.body.removeChild(botaoFundo);
   }));
 
-  it('apos erro fecha e reabre mantendo foco inicial em Cancelar e preservando alerta, e move foco para Tentar em nova falha', fakeAsync(() => {
+  it('apos falha o cancelamento descarta alerta e reabre sem rolealert com botao Apagar e foco em Cancelar, exibindo alerta e Tentar em nova falha', fakeAsync(() => {
     component.abrir();
     fixture.detectChanges();
     tick();
@@ -373,7 +373,8 @@ describe('ConfirmacaoExclusao', () => {
     expect(document.activeElement).toBe(botaoAcao);
     expect(el().querySelector('[role="alert"]')).toBeTruthy();
 
-    component.fechar();
+    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    botaoCancelar.click();
     fixture.detectChanges();
     tick();
     expect(component.aberto()).toBeFalse();
@@ -383,9 +384,11 @@ describe('ConfirmacaoExclusao', () => {
     tick();
     expect(component.aberto()).toBeTrue();
 
-    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
-    expect(document.activeElement).toBe(botaoCancelar);
-    expect(el().querySelector('[role="alert"]')).toBeTruthy();
+    expect(el().querySelector('[role="alert"]')).toBeNull();
+    const botaoAcaoReaberto = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+    expect(botaoAcaoReaberto.textContent?.trim()).toBe('Apagar conversa');
+    const botaoCancelarReaberto = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    expect(document.activeElement).toBe(botaoCancelarReaberto);
 
     fixture.componentRef.setInput('erro', null);
     fixture.detectChanges();
@@ -395,8 +398,9 @@ describe('ConfirmacaoExclusao', () => {
     fixture.detectChanges();
     tick();
 
-    const botaoAcaoNovo = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
-    expect(botaoAcaoNovo.textContent?.trim()).toBe('Tentar de novo');
-    expect(document.activeElement).toBe(botaoAcaoNovo);
+    const botaoAcaoNovaFalha = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+    expect(botaoAcaoNovaFalha.textContent?.trim()).toBe('Tentar de novo');
+    expect(document.activeElement).toBe(botaoAcaoNovaFalha);
+    expect(el().querySelector('[role="alert"]')).toBeTruthy();
   }));
 });
