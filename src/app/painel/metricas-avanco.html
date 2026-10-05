@@ -1,0 +1,134 @@
+@if (compacto()) {
+  <div class="compacto-container">
+    <span class="compacto-titulo">Avanço das conversas no chat</span>
+    <div class="compacto-area-barras">
+      <ol
+        [attr.aria-label]="ariaAvanco()"
+        class="compacto-lista"
+        [style.grid-template-columns]="'repeat(' + etapas().length + ', minmax(0, 1fr))'"
+      >
+        @for (item of etapas(); track item.etapa; let i = $index) {
+          <li class="compacto-item">
+            <button
+              #botaoBarra
+              type="button"
+              class="compacto-botao"
+              [attr.aria-label]="ariaEtapa(item, i)"
+              [attr.aria-describedby]="indiceAtivo() === i ? idCaixa() : null"
+              [style.opacity]="indiceAtivo() !== null && indiceAtivo() !== i ? 0.45 : 1"
+              (mouseenter)="abrir(i)"
+              (mouseleave)="agendarFechamento()"
+              (focus)="abrir(i)"
+              (blur)="fechar()"
+              (click)="abrir(i)"
+            >
+              <span
+                #barraAlvo
+                class="compacto-barra"
+                [style.height]="alturaCompacta(item.conversas)"
+                [style.background]="corBarra(item.conversas, i)"
+              ></span>
+            </button>
+          </li>
+        }
+      </ol>
+    </div>
+    <span class="compacto-frase">{{ fraseResumo() }}</span>
+  </div>
+} @else {
+  <div class="grade-completa">
+    <div class="eixo" aria-hidden="true">
+      @for (t of escala().ticks; track t.rotulo) {
+        <span class="marca-eixo" [style.bottom]="t.pos">{{ t.rotulo }}</span>
+      }
+    </div>
+
+    <div class="area-grafico">
+      @for (t of escala().ticks; track t.rotulo) {
+        <span aria-hidden="true" class="linha-grade" [style.bottom]="t.pos"></span>
+      }
+      <ol
+        [attr.aria-label]="ariaAvanco()"
+        class="lista-barras"
+        [style.grid-template-columns]="'repeat(' + etapas().length + ', minmax(0, 1fr))'"
+      >
+        @for (item of etapas(); track item.etapa; let i = $index) {
+          <li class="item-barra">
+            <button
+              #botaoBarra
+              type="button"
+              class="botao-barra"
+              [attr.aria-label]="ariaEtapa(item, i)"
+              [attr.aria-describedby]="indiceAtivo() === i ? idCaixa() : null"
+              [style.opacity]="indiceAtivo() !== null && indiceAtivo() !== i ? 0.45 : 1"
+              (mouseenter)="abrir(i)"
+              (mouseleave)="agendarFechamento()"
+              (focus)="abrir(i)"
+              (blur)="fechar()"
+              (click)="abrir(i)"
+            >
+              <span
+                #barraAlvo
+                class="barra"
+                [style.height]="alturaBarra(item.conversas)"
+                [style.background]="corBarra(item.conversas, i)"
+              >
+                <span class="valor-topo">{{ formatador.numero(item.conversas) }}</span>
+              </span>
+            </button>
+          </li>
+        }
+      </ol>
+    </div>
+
+    <span aria-hidden="true"></span>
+
+    <div
+      aria-hidden="true"
+      class="area-rotulos"
+      [style.grid-template-columns]="'repeat(' + etapas().length + ', minmax(0, 1fr))'"
+    >
+      @for (item of etapas(); track item.etapa; let i = $index) {
+        <div class="bloco-rotulo">
+          <span class="rotulo-etapa">{{ formatador.tituloEtapa(item.etapa) }}</span>
+          <span class="percentual-etapa">{{ percentualAbaixo(item.conversas, i) }}</span>
+        </div>
+      }
+    </div>
+  </div>
+}
+
+<div
+  #caixa
+  popover="manual"
+  role="tooltip"
+  [id]="idCaixa()"
+  class="caixa-detalhe"
+  (mouseenter)="cancelarFechamento()"
+  (mouseleave)="agendarFechamento()"
+>
+  @if (itemAtivo(); as item) {
+    <span class="dica-titulo">{{ formatador.tituloEtapa(item.etapa) }}</span>
+    <span class="dica-explicacao">{{ formatador.explicacaoEtapa(item.etapa) }}</span>
+    <span class="dica-contagem">{{ formatador.plural(item.conversas, 'conversa', 'conversas') }}</span>
+    <span class="dica-linha">
+      @if (indiceAtivo() === 0) {
+        Grupo de referência do período
+      } @else {
+        {{ formatador.percentual(item.conversas, base()) }} {{ etapas()[0]?.etapa === 'atribuidas' ? 'das conversas atribuídas' : 'das conversas iniciadas' }}
+      }
+    </span>
+    @if (indiceAtivo() !== 0) {
+      <span class="dica-linha">{{ formatador.faltamEtapa(item.conversas, base()) }}</span>
+    }
+    @if ((item.semEssenciais ?? 0) > 0) {
+      <span class="dica-nota">{{ formatador.notaEncaminhamento(item.semEssenciais!) }}</span>
+    }
+    <span
+      class="dica-seta"
+      [class.seta-acima]="setaAbaixo()"
+      [class.seta-abaixo]="!setaAbaixo()"
+      [style.left.px]="setaLeftPx()"
+    ></span>
+  }
+</div>
