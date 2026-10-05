@@ -316,7 +316,8 @@ export class ConfirmacaoExclusao {
   constructor() {
     effect(() => {
       const erroAtual = this.erro();
-      if (erroAtual && this.aberto()) {
+      const estaAberto = untracked(() => this.aberto());
+      if (erroAtual && estaAberto) {
         untracked(() => {
           setTimeout(() => {
             this.botaoAcao()?.nativeElement.focus();
@@ -327,7 +328,8 @@ export class ConfirmacaoExclusao {
 
     effect(() => {
       const apagandoAtual = this.apagando();
-      if (apagandoAtual && this.aberto()) {
+      const estaAberto = untracked(() => this.aberto());
+      if (apagandoAtual && estaAberto) {
         untracked(() => {
           setTimeout(() => {
             const destrutivo =

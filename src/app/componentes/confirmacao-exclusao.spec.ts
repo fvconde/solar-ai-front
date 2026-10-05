@@ -358,4 +358,45 @@ describe('ConfirmacaoExclusao', () => {
 
     document.body.removeChild(botaoFundo);
   }));
+
+  it('apos erro fecha e reabre mantendo foco inicial em Cancelar e preservando alerta, e move foco para Tentar em nova falha', fakeAsync(() => {
+    component.abrir();
+    fixture.detectChanges();
+    tick();
+
+    fixture.componentRef.setInput('erro', 'confirmada');
+    fixture.detectChanges();
+    tick();
+
+    const botaoAcao = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+    expect(botaoAcao.textContent?.trim()).toBe('Tentar de novo');
+    expect(document.activeElement).toBe(botaoAcao);
+    expect(el().querySelector('[role="alert"]')).toBeTruthy();
+
+    component.fechar();
+    fixture.detectChanges();
+    tick();
+    expect(component.aberto()).toBeFalse();
+
+    component.abrir();
+    fixture.detectChanges();
+    tick();
+    expect(component.aberto()).toBeTrue();
+
+    const botaoCancelar = el().querySelector<HTMLButtonElement>('.botao-cancelar')!;
+    expect(document.activeElement).toBe(botaoCancelar);
+    expect(el().querySelector('[role="alert"]')).toBeTruthy();
+
+    fixture.componentRef.setInput('erro', null);
+    fixture.detectChanges();
+    tick();
+
+    fixture.componentRef.setInput('erro', 'confirmada');
+    fixture.detectChanges();
+    tick();
+
+    const botaoAcaoNovo = el().querySelector<HTMLButtonElement>('.botao-destrutivo')!;
+    expect(botaoAcaoNovo.textContent?.trim()).toBe('Tentar de novo');
+    expect(document.activeElement).toBe(botaoAcaoNovo);
+  }));
 });
