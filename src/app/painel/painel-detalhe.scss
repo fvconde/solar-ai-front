@@ -1,0 +1,344 @@
+.conteudo-detalhe {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+  max-width: 680px;
+}
+
+.cabecalho-detalhe {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+
+  .nome-detalhe {
+    margin: 0;
+    font-size: 26px;
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    color: var(--texto-primario);
+  }
+
+  .pedido-detalhe {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--texto-secundario);
+  }
+}
+
+.rotulo-secao {
+  font-size: 12.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-secundario);
+}
+
+.card-secao {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: var(--superficie-elevada);
+  border: 1px solid var(--borda-componente);
+  border-radius: var(--raio-card);
+  padding: 20px 22px;
+}
+
+.grade-situacao,
+.grade-contato {
+  display: grid;
+  grid-template-columns: 160px minmax(0, 1fr);
+  gap: 12px 16px;
+  align-items: center;
+
+  .rotulo-campo {
+    font-size: 14px;
+    color: var(--texto-secundario);
+  }
+
+  .valor-campo,
+  .valor-contato {
+    font-size: 15px;
+    color: var(--texto-primario);
+  }
+}
+
+.frase-ausencia-simples {
+  font-size: 15px;
+  color: var(--texto-secundario);
+}
+
+.linha-corretor {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--texto-primario);
+  padding-top: 12px;
+  border-top: 1px solid var(--borda-divisor-card);
+}
+
+.linha-score {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+
+  .numero-score {
+    font-size: 34px;
+    font-weight: 600;
+    color: var(--texto-primario);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .sufixo-score {
+    font-size: 15px;
+    color: var(--texto-secundario);
+  }
+}
+
+.botao-link-qualificacao {
+  align-self: flex-start;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--marca);
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--marca);
+  padding: 0;
+  cursor: pointer;
+}
+
+.frase-ausencia {
+  margin: 0;
+  font-size: 16px;
+  line-height: 1.5;
+  color: var(--texto-secundario);
+}
+
+.subsecao-resumo {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--borda-divisor-card);
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+
+  .subtitulo-resumo {
+    font-size: 12.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--texto-secundario);
+    font-weight: 500;
+  }
+
+  .texto-resumo {
+    margin: 0;
+    font-size: 15px;
+    line-height: 1.5;
+    color: var(--texto-primario);
+  }
+}
+
+.botao-gerar-resumo {
+  align-self: flex-start;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 8px 16px;
+  border-radius: var(--raio-acao-evento);
+  border: 1px solid var(--borda-componente);
+  background: var(--superficie-barra);
+  color: var(--texto-primario);
+  cursor: pointer;
+
+  &:hover:not(:disabled) {
+    background: var(--superficie-elevada);
+    border-color: var(--marca);
+  }
+
+  &:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.pilha-imoveis {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.linha-agendamento {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .data-agendamento {
+    font-size: 16px;
+    font-weight: 500;
+    color: var(--texto-primario);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.pilha-transcricao {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-top: 8px;
+}
+
+.bloco-acesso-restrito {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 40px;
+}
+
+.cartao-restrito {
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-start;
+
+  .titulo-restrito {
+    margin: 0;
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--texto-primario);
+  }
+
+  .frase-restrito {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--texto-secundario);
+  }
+
+  .link-voltar-meus {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--marca);
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--marca);
+    padding: 0;
+    cursor: pointer;
+  }
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: color-mix(in srgb, var(--fundo-conversa) 80%, black);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  z-index: 1000;
+}
+
+.modal-conteudo {
+  width: 640px;
+  max-width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  background: var(--superficie-elevada);
+  border: 1px solid var(--borda-componente);
+  border-radius: var(--raio-card);
+  padding: 28px 30px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.modal-cabecalho {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+
+  .modal-titulo {
+    margin: 0;
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--texto-primario);
+  }
+
+  .modal-descricao {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.5;
+    color: var(--texto-primario);
+  }
+}
+
+.modal-tabela {
+  display: flex;
+  flex-direction: column;
+  border-top: 1px solid var(--borda-divisor-card);
+}
+
+.tabela-cabecalho {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 140px;
+  gap: 14px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--borda-divisor-card);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--texto-secundario);
+}
+
+.tabela-linha {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 70px 140px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--borda-divisor-card);
+
+  .fator-rotulo {
+    font-size: 15px;
+    color: var(--texto-primario);
+  }
+
+  .fator-peso {
+    font-size: 15px;
+    font-weight: 500;
+    color: var(--texto-primario);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .fator-estado {
+    font-size: 13.5px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--texto-secundario);
+  }
+}
+
+.modal-total {
+  margin: 0;
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--texto-primario);
+}
+
+.botao-fechar-modal {
+  align-self: flex-start;
+  font-size: 16px;
+  font-weight: 600;
+  padding: 11px 20px;
+  border-radius: var(--raio-acao-evento);
+  border: 1px solid var(--borda-componente);
+  background: var(--superficie-elevada);
+  color: var(--texto-primario);
+  cursor: pointer;
+
+  &:hover {
+    background: var(--superficie-barra);
+  }
+}

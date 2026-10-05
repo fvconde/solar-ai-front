@@ -3,19 +3,26 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { ComponentFixture, fakeAsync, TestBed, tick } from '@angular/core/testing';
 import { ActivatedRoute, convertToParamMap, provideRouter, Router } from '@angular/router';
 import { SessaoStore } from '../sessao/sessao-store';
+import {
+  aplicarTema,
+  limparTema,
+  MARCA_POR_TEMA,
+  sessaoCliente,
+  sessaoCorretor,
+  sessaoSupervisor,
+  TEMAS,
+} from '../sessao/sessao-teste';
 import { Entrar } from './entrar';
-import { CorretorSessao, SessaoResposta } from './entrar-contrato';
+
+const FUNDO_TRAVADO_POR_TEMA = {
+  claro: 'rgb(236, 230, 220)',
+  escuro: 'rgb(36, 35, 29)',
+} as const;
 
 describe('Entrar', () => {
   let httpMock: HttpTestingController;
 
-  const corretor: CorretorSessao = {
-    id: '3f6b9c21-4d0a-4c7e-9a11-000000000001',
-    nome: 'Helena Braga',
-    especialidade: 'moradia',
-  };
-
-  async function configurar(token: string | null = null) {
+  async function configurar(parametros: Record<string, string> = {}) {
     await TestBed.configureTestingModule({
       imports: [Entrar],
       providers: [
@@ -24,7 +31,7 @@ describe('Entrar', () => {
         provideRouter([]),
         {
           provide: ActivatedRoute,
-          useValue: { snapshot: { queryParamMap: convertToParamMap(token ? { token } : {}) } },
+          useValue: { snapshot: { queryParamMap: convertToParamMap(parametros) } },
         },
       ],
     }).compileComponents();
@@ -32,19 +39,30 @@ describe('Entrar', () => {
     httpMock = TestBed.inject(HttpTestingController);
   }
 
-  function texto(fixture: ComponentFixture<Entrar>): string {
-    return (fixture.nativeElement as HTMLElement).textContent ?? '';
+  function montar(): ComponentFixture<Entrar> {
+    const fixture = TestBed.createComponent(Entrar);
+    fixture.detectChanges();
+    return fixture;
   }
 
-  function irParaSenha(fixture: ComponentFixture<Entrar>, email = 'renata.costa@solar.com.br') {
-    fixture.componentInstance.email.set(email);
-    fixture.componentInstance.continuarComEmail();
-    httpMock.expectOne('/api/painel/identificacao').flush({ cadastrado: true });
+  function texto(fixture: ComponentFixture<Entrar>): string {
+    return ((fixture.nativeElement as HTMLElement).textContent ?? '').replace(/\s+/g, ' ');
+  }
+
+  function elemento<T extends HTMLElement>(fixture: ComponentFixture<Entrar>, seletor: string) {
+    return (fixture.nativeElement as HTMLElement).querySelector<T>(seletor);
+  }
+
+  function preencher(fixture: ComponentFixture<Entrar>, senha = 'senha-correta-123') {
+    fixture.componentInstance.email.set('marina.couto@email.com');
+    fixture.componentInstance.senha.set(senha);
     fixture.detectChanges();
   }
 
   afterEach(() => {
     httpMock.verify();
+    localStorage.removeItem('solar.conversaId');
+    limparTema();
   });
 
   describe('sem token na URL', () => {
@@ -52,334 +70,541 @@ describe('Entrar', () => {
       await configurar();
     });
 
-    it('Tela 1 abre pedindo só o e-mail, sem campo de senha e com Continuar desabilitado', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
+    it('padrão: e-mail e senha na mesma tela, sem passo de identificação', () => {
+      aplicarTema('claro');
+      const fixture = montar();
 
-      const html = fixture.nativeElement as HTMLElement;
-      expect(texto(fixture)).toContain('Entre ou cadastre-se');
-      expect(html.querySelector('#campo-email')).toBeTruthy();
-      expect(html.querySelector('#campo-senha')).toBeNull();
-      expect(html.querySelector<HTMLButtonElement>('.botao-primario')?.disabled).toBeTrue();
-      httpMock.expectNone('/api/painel/identificacao');
-    });
-
-    it('e-mail mal formatado mostra a mensagem do handoff sem chamar a API', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-
-      fixture.componentInstance.email.set('renata.costa@');
-      fixture.componentInstance.continuarComEmail();
-      fixture.detectChanges();
-
-      expect(texto(fixture)).toContain('Verifique o formato do e-mail.');
-      httpMock.expectNone('/api/painel/identificacao');
-    });
-
-    it('Tela 2 aparece para e-mail cadastrado, com e-mail travado e link Trocar', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-      irParaSenha(fixture);
-
-      const html = fixture.nativeElement as HTMLElement;
-      expect(texto(fixture)).toContain('Que bom ver você de novo');
-      expect(texto(fixture)).toContain(
-        'Encontramos seu cadastro. Digite sua senha para entrar na fila.',
+      expect(texto(fixture)).toContain('Entrar na Solar');
+      expect(texto(fixture)).not.toContain(
+        'Use o mesmo acesso para conversar com a Lia ou abrir seu painel.',
       );
-      expect(html.querySelector('.campo-travado')?.textContent).toContain(
-        'renata.costa@solar.com.br',
-      );
-      expect(html.querySelector('#campo-senha')).toBeTruthy();
+      expect(elemento(fixture, '#campo-email')).toBeTruthy();
+      expect(elemento(fixture, '#campo-senha')).toBeTruthy();
       expect(texto(fixture)).toContain('Esqueci minha senha');
+      const esqueci = elemento<HTMLButtonElement>(fixture, '.link-recuperar-direcao-a')!;
+      const textoEsqueci = elemento<HTMLElement>(fixture, '.link-recuperar-direcao-a__texto')!;
+      const linhaSenha = elemento(fixture, '.linha-rotulo')!;
+      const estiloEsqueci = getComputedStyle(esqueci);
+      expect(esqueci.type).toBe('button');
+      expect(esqueci.closest('.linha-rotulo')).toBe(linhaSenha);
+      expect(linhaSenha.querySelector('label')?.textContent?.trim()).toBe('Senha');
+      expect(getComputedStyle(linhaSenha).justifyContent).toBe('space-between');
+      expect(estiloEsqueci.fontFamily).toContain('Instrument Sans');
+      expect(estiloEsqueci.fontSize).toBe('13px');
+      expect(estiloEsqueci.fontWeight).toBe('600');
+      expect(estiloEsqueci.color).toBe(MARCA_POR_TEMA.claro);
+      expect(estiloEsqueci.textDecorationLine).toBe('none');
+      expect(getComputedStyle(textoEsqueci).textDecorationLine).toBe('underline');
+      expect(texto(fixture)).toContain('Ainda não tem conta? Cadastre-se');
+      expect(texto(fixture)).toContain('É corretor de imóveis?');
+      expect(texto(fixture)).not.toContain('ainda sem conta');
+      expect(elemento(fixture, '.divisor')).toBeNull();
+      expect(texto(fixture)).not.toContain('Não encontramos esse e-mail');
+      expect(elemento<HTMLButtonElement>(fixture, '.botao-primario')?.disabled).toBeTrue();
+      httpMock.expectNone(() => true);
     });
 
-    it('Tela 3 aparece para e-mail não cadastrado, sem autocadastro', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
+    it('dentro do cartão, depois do Entrar, fica só a linha "Ainda não tem conta? Cadastre-se"', () => {
+      const fixture = montar();
+      const linha = elemento(fixture, '.cartao .sem-conta')!;
+      const link = linha.querySelector('a')!;
 
-      fixture.componentInstance.email.set('diego.freitas@imoveis.com');
-      fixture.componentInstance.continuarComEmail();
-      httpMock.expectOne('/api/painel/identificacao').flush({ cadastrado: false });
-      fixture.detectChanges();
-
-      expect(texto(fixture)).toContain('Não encontramos esse e-mail');
-      expect(texto(fixture)).toContain('Um dos nossos especialistas vai entrar em contato');
-      expect(texto(fixture)).toContain('Tentar outro e-mail');
-      expect((fixture.nativeElement as HTMLElement).querySelector('#campo-senha')).toBeNull();
+      expect(linha.textContent?.replace(/\s+/g, ' ').trim()).toBe(
+        'Ainda não tem conta? Cadastre-se',
+      );
+      expect(link.getAttribute('href')).toBe('/cadastro');
+      expect(getComputedStyle(link).fontWeight).toBe('600');
+      expect(getComputedStyle(linha).justifyContent).toBe('center');
+      expect(parseFloat(getComputedStyle(linha).minHeight)).toBeGreaterThanOrEqual(44);
+      expect(elemento(fixture, '.botao-primario')!.nextElementSibling).toBe(linha);
+      expect(elemento(fixture, '.cartao')!.querySelectorAll('a').length).toBe(1);
+      expect(linha.textContent).not.toContain('para conversar');
     });
 
-    it('login válido grava a sessão e vai para o painel sem expor identidade em header', () => {
-      const fixture = TestBed.createComponent(Entrar);
+    it('fora e abaixo do cartão, a faixa inteira é um link para /seja-corretor', () => {
+      const fixture = montar();
+      const faixa = elemento<HTMLAnchorElement>(fixture, '.faixa-corretor')!;
+      const estilo = getComputedStyle(faixa);
+
+      expect(faixa.closest('.cartao')).toBeNull();
+      expect(elemento(fixture, '.cartao')!.nextElementSibling).toBe(faixa);
+      expect(faixa.getAttribute('href')).toBe('/seja-corretor');
+      expect(faixa.querySelector('.faixa-titulo')?.textContent).toBe('É corretor de imóveis?');
+      expect(faixa.querySelector('.faixa-apoio')?.textContent).toBe(
+        'Receba leads que a Lia já qualificou, na sua região e especialidade.',
+      );
+      expect(faixa.querySelector('.faixa-chamada')?.textContent).toBe('Venha para a Solar →');
+      expect(estilo.borderTopStyle).toBe('none');
+      expect(estilo.borderTopLeftRadius).toBe('12px');
+      expect(estilo.padding).toBe('18px 20px');
+      expect(getComputedStyle(elemento(fixture, '.tela-entrar')!).rowGap).toBe('16px');
+      expect(faixa.getBoundingClientRect().width).toBe(
+        elemento(fixture, '.cartao')!.getBoundingClientRect().width,
+      );
+      expect(getComputedStyle(faixa.querySelector('.faixa-titulo')!).fontSize).toBe('15px');
+      expect(getComputedStyle(faixa.querySelector('.faixa-titulo')!).fontWeight).toBe('600');
+      expect(getComputedStyle(faixa.querySelector('.faixa-apoio')!).fontSize).toBe('13px');
+      expect(getComputedStyle(faixa.querySelector('.faixa-chamada')!).fontSize).toBe('14px');
+    });
+
+    it('no celular a chamada da faixa desce para baixo do texto', () => {
+      montar();
+      const regra = Array.from(document.styleSheets)
+        .flatMap((folha) => Array.from(folha.cssRules))
+        .filter(
+          (r): r is CSSMediaRule =>
+            r instanceof CSSMediaRule && r.conditionText.replace(/\s/g, '') === '(max-width:640px)',
+        )
+        .flatMap((r) => Array.from(r.cssRules))
+        .find(
+          (r): r is CSSStyleRule =>
+            r instanceof CSSStyleRule && /\.faixa-corretor(?![\w-])/.test(r.selectorText),
+        );
+
+      expect(regra?.style.flexDirection).toBe('column');
+    });
+
+    it('a faixa some nas telas de redefinir senha', () => {
+      const fixture = montar();
+      fixture.componentInstance.irParaRecuperacao();
       fixture.detectChanges();
-      irParaSenha(fixture);
 
-      const router = TestBed.inject(Router);
-      const navegou = spyOn(router, 'navigate');
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
+      expect(elemento(fixture, '.sem-conta')).toBeNull();
+    });
 
-      fixture.componentInstance.senha.set('senha-correta-123');
+    it('os rótulos de campo do login e da recuperação usam IBM Plex Mono com peso 600', () => {
+      const fixture = montar();
+      const pesos = () =>
+        Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('.rotulo')).map(
+          (r) => getComputedStyle(r).fontWeight,
+        );
+      expect(pesos()).toEqual(['600', '600']);
+      const rotulo = elemento(fixture, '.rotulo')!;
+      expect(getComputedStyle(rotulo).fontFamily).toContain('IBM Plex Mono');
+      expect(getComputedStyle(rotulo).fontSize).toBe('10px');
+      expect(getComputedStyle(rotulo).textTransform).toBe('uppercase');
+
+      fixture.componentInstance.irParaRecuperacao();
+      fixture.detectChanges();
+      expect(pesos()).toEqual(['600']);
+    });
+
+    it('Mostrar alterna a senha entre oculta e visível', () => {
+      const fixture = montar();
+      const campo = elemento<HTMLInputElement>(fixture, '#campo-senha')!;
+      expect(campo.type).toBe('password');
+
+      elemento<HTMLButtonElement>(fixture, '.acao-campo')!.click();
+      fixture.detectChanges();
+
+      expect(campo.type).toBe('text');
+      expect(elemento(fixture, '.acao-campo')?.textContent?.trim()).toBe('Ocultar');
+    });
+
+    it('sem conversa guardada no navegador, o aviso da conversa não aparece e o corpo não leva conversaId', () => {
+      const fixture = montar();
+      expect(texto(fixture)).not.toContain('A conversa que você começou com a Lia');
+
+      preencher(fixture);
       fixture.componentInstance.entrar();
 
-      const req = httpMock.expectOne('/api/painel/sessoes');
+      const req = httpMock.expectOne('/api/sessoes');
+      expect(req.request.body).toEqual({
+        email: 'marina.couto@email.com',
+        senha: 'senha-correta-123',
+      });
+      req.flush(sessaoCliente());
+    });
+
+    it('com conversa sem dono no navegador, mostra o aviso e manda o conversaId no login', () => {
+      localStorage.setItem('solar.conversaId', 'conversa-anonima-1');
+      const fixture = montar();
+
+      expect(elemento(fixture, '.alerta.info')?.textContent?.trim()).toBe(
+        'A conversa que você começou com a Lia fica salva na sua conta.',
+      );
+
+      preencher(fixture);
+      fixture.componentInstance.entrar();
+
+      const req = httpMock.expectOne('/api/sessoes');
       expect(req.request.method).toBe('POST');
       expect(req.request.withCredentials).toBeTrue();
-      expect(req.request.headers.has('X-Chave-Privacidade')).toBeFalse();
-      expect(req.request.headers.has('X-Corretor-Id')).toBeFalse();
-      req.flush({ corretor });
-      fixture.detectChanges();
-
-      expect(TestBed.inject(SessaoStore).corretor()).toEqual(corretor);
-      expect(navegou).toHaveBeenCalledWith(['/painel']);
+      expect(req.request.body.conversaId).toBe('conversa-anonima-1');
+      req.flush(sessaoCliente());
     });
 
-    it('login de supervisor repassa a resposta completa e preserva perfil e filtros na SessaoStore', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-      irParaSenha(fixture, 'supervisor@solar.com.br');
-
-      const router = TestBed.inject(Router);
-      const navegou = spyOn(router, 'navigate');
-
-      fixture.componentInstance.senha.set('senha-supervisor-123');
+    it('carregando: campos travados, giro no botão e saídas apagadas', async () => {
+      const fixture = montar();
+      preencher(fixture);
       fixture.componentInstance.entrar();
-
-      const req = httpMock.expectOne('/api/painel/sessoes');
-      const respostaSupervisor: SessaoResposta = {
-        corretor: {
-          id: '8a9b0c1d-0000-0000-0000-000000000099',
-          nome: 'Carlos Supervisor',
-          especialidade: 'geral',
-        },
-        perfil: 'supervisor',
-        corretorId: null,
-        vinculoAtivo: false,
-        filtrosPermitidos: ['todos', 'sem_corretor'],
-        filtroInicial: 'todos',
-      };
-      req.flush(respostaSupervisor);
       fixture.detectChanges();
+      await fixture.whenStable();
 
-      const sessaoStore = TestBed.inject(SessaoStore);
-      expect(sessaoStore.corretor()).toEqual(respostaSupervisor.corretor);
-      expect(sessaoStore.perfil()).toBe('supervisor');
-      expect(sessaoStore.corretorId()).toBeNull();
-      expect(sessaoStore.vinculoAtivo()).toBeFalse();
-      expect(sessaoStore.filtrosPermitidos()).toEqual(['todos', 'sem_corretor']);
-      expect(sessaoStore.filtroInicial()).toBe('todos');
-      expect(navegou).toHaveBeenCalledWith(['/painel']);
+      expect(elemento<HTMLInputElement>(fixture, '#campo-email')?.disabled).toBeTrue();
+      expect(elemento<HTMLInputElement>(fixture, '#campo-senha')?.disabled).toBeTrue();
+      expect(elemento(fixture, '.botao-primario .verificando')?.getAttribute('aria-label')).toBe(
+        'Entrando',
+      );
+      expect(elemento(fixture, '.sem-conta')?.classList).toContain('apagado');
+      expect(elemento(fixture, '.faixa-corretor')?.classList).toContain('apagado');
+      expect(elemento(fixture, '.faixa-corretor')?.getAttribute('tabindex')).toBe('-1');
+
+      httpMock.expectOne('/api/sessoes').flush(sessaoCliente());
     });
 
-    it('contagem de tentativas só aparece a partir da segunda falha', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-      irParaSenha(fixture);
+    it('cliente volta ao chat depois de entrar', () => {
+      const navegou = spyOn(TestBed.inject(Router), 'navigate');
+      const fixture = montar();
+      preencher(fixture);
+      fixture.componentInstance.entrar();
+      httpMock.expectOne('/api/sessoes').flush(sessaoCliente());
 
-      fixture.componentInstance.senha.set('errada');
+      expect(TestBed.inject(SessaoStore).perfil()).toBe('cliente');
+      expect(navegou).toHaveBeenCalledWith(['/']);
+    });
+
+    for (const [papel, sessao] of [
+      ['corretor', sessaoCorretor('em_analise')],
+      ['supervisor', sessaoSupervisor()],
+    ] as const) {
+      it(`${papel} vai ao painel depois de entrar`, () => {
+        const navegou = spyOn(TestBed.inject(Router), 'navigate');
+        const fixture = montar();
+        preencher(fixture);
+        fixture.componentInstance.entrar();
+        httpMock.expectOne('/api/sessoes').flush(sessao);
+
+        const store = TestBed.inject(SessaoStore);
+        expect(store.perfil()).toBe(papel);
+        expect(store.usuario()).toEqual(sessao.usuario);
+        expect(navegou).toHaveBeenCalledWith(['/painel']);
+      });
+    }
+
+    it('erro: a mesma mensagem para qualquer credencial errada, apaga a senha e mantém o e-mail', () => {
+      const fixture = montar();
+      preencher(fixture, 'errada');
       fixture.componentInstance.entrar();
       httpMock
-        .expectOne('/api/painel/sessoes')
-        .flush({ tentativasRestantes: 4 }, { status: 401, statusText: 'Unauthorized' });
+        .expectOne('/api/sessoes')
+        .flush(
+          { codigo: 'credenciais_invalidas', mensagem: 'x' },
+          { status: 401, statusText: 'Unauthorized' },
+        );
       fixture.detectChanges();
+
+      expect(texto(fixture)).toContain('E-mail ou senha incorretos. Confira e tente de novo.');
       expect(texto(fixture)).not.toContain('Restam');
-
-      fixture.componentInstance.senha.set('errada de novo');
-      fixture.componentInstance.entrar();
-      httpMock
-        .expectOne('/api/painel/sessoes')
-        .flush({ tentativasRestantes: 2 }, { status: 401, statusText: 'Unauthorized' });
-      fixture.detectChanges();
-      expect(texto(fixture)).toContain(
-        'Senha incorreta. Restam 2 tentativas antes do bloqueio temporário.',
-      );
+      expect(fixture.componentInstance.senha()).toBe('');
+      expect(fixture.componentInstance.email()).toBe('marina.couto@email.com');
+      expect(elemento(fixture, '#campo-email')?.classList).toContain('com-erro');
+      expect(elemento(fixture, '#campo-senha')?.classList).toContain('com-erro');
+      expect(elemento<HTMLButtonElement>(fixture, '.botao-primario')?.disabled).toBeTrue();
     });
 
-    it('423 bloqueia o formulário por 30 segundos e libera sozinho ao fim da contagem', fakeAsync(() => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-      irParaSenha(fixture);
-
-      fixture.componentInstance.senha.set('quinta tentativa');
+    it('bloqueado: usa segundosRestantes, conta para trás em mm:ss e libera sozinho', fakeAsync(() => {
+      const fixture = montar();
+      preencher(fixture, 'quinta tentativa');
       fixture.componentInstance.entrar();
       httpMock
-        .expectOne('/api/painel/sessoes')
-        .flush({ bloqueadoPorSegundos: 30 }, { status: 423, statusText: 'Locked' });
+        .expectOne('/api/sessoes')
+        .flush(
+          { codigo: 'bloqueado', segundosRestantes: 292 },
+          { status: 423, statusText: 'Locked' },
+        );
       fixture.detectChanges();
+      tick();
 
       expect(texto(fixture)).toContain(
-        'Muitas tentativas incorretas. Formulário bloqueado por 30 segundos.',
+        'Muitas tentativas seguidas. Tente de novo em 04:52 ou redefina a senha.',
       );
+      const senha = elemento<HTMLInputElement>(fixture, '#campo-senha')!;
+      expect(senha.disabled).toBeTrue();
+      expect(senha.placeholder).toBe('Bloqueado temporariamente');
+      expect(elemento<HTMLButtonElement>(fixture, '.botao-primario')?.disabled).toBeTrue();
+      expect(elemento(fixture, '.botao-secundario')?.textContent?.trim()).toBe('Redefinir senha');
 
-      tick(6000);
+      tick(2000);
       fixture.detectChanges();
-      expect(fixture.componentInstance.bloqueado()).toBeTrue();
-      expect(texto(fixture)).toContain('Bloqueado temporariamente');
-      expect(texto(fixture)).toContain('Aguarde 0:24');
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>('#campo-senha')
-          ?.disabled,
-      ).toBeTrue();
+      expect(texto(fixture)).toContain('04:50');
 
-      tick(24000);
+      tick(290000);
       fixture.detectChanges();
       expect(fixture.componentInstance.bloqueado()).toBeFalse();
-      expect(texto(fixture)).not.toContain('Bloqueado temporariamente');
+      expect(texto(fixture)).not.toContain('Muitas tentativas seguidas');
     }));
 
-    it('Telas 4 e 5 pedem o link e confirmam sem revelar se o e-mail existe', fakeAsync(() => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-      irParaSenha(fixture);
+    describe('foco no campo de senha', () => {
+      function montarNoDocumento(): ComponentFixture<Entrar> {
+        const fixture = montar();
+        document.body.appendChild(fixture.nativeElement);
+        fixture.autoDetectChanges();
+        return fixture;
+      }
 
+      afterEach(() => document.body.querySelectorAll('app-entrar').forEach((el) => el.remove()));
+
+      it('depois de 401 credenciais_invalidas, o foco vai para a senha já limpa', fakeAsync(() => {
+        const fixture = montarNoDocumento();
+        preencher(fixture, 'errada');
+        elemento<HTMLButtonElement>(fixture, '.botao-primario')!.focus();
+        fixture.componentInstance.entrar();
+        fixture.detectChanges();
+        tick();
+        httpMock
+          .expectOne('/api/sessoes')
+          .flush(
+            { codigo: 'credenciais_invalidas', mensagem: 'x' },
+            { status: 401, statusText: 'Unauthorized' },
+          );
+        fixture.detectChanges();
+        tick();
+
+        const senha = elemento<HTMLInputElement>(fixture, '#campo-senha')!;
+        expect(document.activeElement).toBe(senha);
+        expect(senha.disabled).toBeFalse();
+        expect(senha.value).toBe('');
+      }));
+
+      it('outros erros não puxam o foco para a senha', fakeAsync(() => {
+        const fixture = montarNoDocumento();
+        preencher(fixture);
+        fixture.componentInstance.entrar();
+        httpMock.expectOne('/api/sessoes').flush(null, { status: 500, statusText: 'Erro' });
+        fixture.detectChanges();
+        tick();
+
+        expect(document.activeElement).not.toBe(elemento(fixture, '#campo-senha'));
+      }));
+
+      it('quando o bloqueio termina e o campo volta a ficar habilitado, o foco vai para a senha', fakeAsync(() => {
+        const fixture = montarNoDocumento();
+        preencher(fixture);
+        fixture.componentInstance.entrar();
+        httpMock
+          .expectOne('/api/sessoes')
+          .flush(
+            { codigo: 'bloqueado', segundosRestantes: 2 },
+            { status: 423, statusText: 'Locked' },
+          );
+        fixture.detectChanges();
+        tick();
+
+        const senha = elemento<HTMLInputElement>(fixture, '#campo-senha')!;
+        expect(senha.disabled).toBeTrue();
+        expect(document.activeElement).not.toBe(senha);
+
+        tick(1000);
+        fixture.detectChanges();
+        tick();
+        expect(document.activeElement).not.toBe(senha);
+
+        tick(1000);
+        fixture.detectChanges();
+        tick();
+        expect(fixture.componentInstance.bloqueado()).toBeFalse();
+        expect(senha.disabled).toBeFalse();
+        expect(document.activeElement).toBe(senha);
+      }));
+    });
+
+    it('a faixa do corretor some durante o bloqueio e volta quando ele termina', fakeAsync(() => {
+      const fixture = montar();
+      expect(elemento(fixture, '.faixa-corretor')).toBeTruthy();
+
+      preencher(fixture);
+      fixture.componentInstance.entrar();
+      httpMock
+        .expectOne('/api/sessoes')
+        .flush(
+          { codigo: 'bloqueado', segundosRestantes: 3 },
+          { status: 423, statusText: 'Locked' },
+        );
+      fixture.detectChanges();
+
+      expect(fixture.componentInstance.bloqueado()).toBeTrue();
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
+      expect(texto(fixture)).not.toContain('É corretor de imóveis?');
+      expect(elemento(fixture, '.botao-secundario')?.textContent?.trim()).toBe('Redefinir senha');
+
+      tick(2000);
+      fixture.detectChanges();
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
+
+      tick(1000);
+      fixture.detectChanges();
+      tick();
+      expect(fixture.componentInstance.bloqueado()).toBeFalse();
+      expect(elemento(fixture, '.faixa-corretor')?.getAttribute('href')).toBe('/seja-corretor');
+      expect(elemento(fixture, '.sem-conta')).toBeTruthy();
+    }));
+
+    it('Redefinir senha no bloqueio abre o pedido de link', fakeAsync(() => {
+      const fixture = montar();
+      preencher(fixture);
+      fixture.componentInstance.entrar();
+      httpMock
+        .expectOne('/api/sessoes')
+        .flush(
+          { codigo: 'bloqueado', segundosRestantes: 60 },
+          { status: 423, statusText: 'Locked' },
+        );
+      fixture.detectChanges();
+
+      expect(elemento(fixture, '.sem-conta')).toBeNull();
+      expect(elemento(fixture, '.faixa-corretor')).toBeNull();
+
+      elemento<HTMLButtonElement>(fixture, '.botao-secundario')!.click();
+      fixture.detectChanges();
+
+      expect(texto(fixture)).toContain('Redefinir senha');
+      expect(fixture.componentInstance.bloqueado()).toBeFalse();
+    }));
+
+    it('pede o link de redefinição no caminho novo, sem revelar se o e-mail existe', fakeAsync(() => {
+      const fixture = montar();
+      fixture.componentInstance.email.set('marina.couto@email.com');
       fixture.componentInstance.irParaRecuperacao();
       fixture.detectChanges();
       tick();
-      expect(texto(fixture)).toContain('Redefinir senha');
+
       expect(texto(fixture)).toContain('← Voltar para o login');
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-          '#campo-email-recuperacao',
-        )?.value,
-      ).toBe('renata.costa@solar.com.br');
+      expect(elemento<HTMLInputElement>(fixture, '#campo-email-recuperacao')?.value).toBe(
+        'marina.couto@email.com',
+      );
 
       fixture.componentInstance.enviarLink();
-      const req = httpMock.expectOne('/api/painel/senha/recuperacoes');
+      const req = httpMock.expectOne('/api/senha/recuperacoes');
       expect(req.request.method).toBe('POST');
-      req.flush(null, { status: 202, statusText: 'Accepted' });
+      expect(req.request.body).toEqual({ email: 'marina.couto@email.com' });
+      req.flush('nao encontrado', { status: 404, statusText: 'Not Found' });
       fixture.detectChanges();
 
       expect(texto(fixture)).toContain('Verifique seu e-mail');
       expect(texto(fixture)).toContain('O link expira em 30 minutos.');
-      expect(texto(fixture)).toContain('Reenviar e-mail');
     }));
 
-    it('e-mail inexistente na recuperação mostra exatamente a mesma Tela 5', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-
-      fixture.componentInstance.email.set('nao.existe@solar.com.br');
+    it('429 no pedido de link não finge que o link foi enviado', () => {
+      const fixture = montar();
+      fixture.componentInstance.email.set('marina.couto@email.com');
       fixture.componentInstance.irParaRecuperacao();
       fixture.componentInstance.enviarLink();
       httpMock
-        .expectOne('/api/painel/senha/recuperacoes')
-        .flush('nao encontrado', { status: 404, statusText: 'Not Found' });
-      fixture.detectChanges();
-
-      expect(texto(fixture)).toContain('Verifique seu e-mail');
-      expect(texto(fixture)).toContain('O link expira em 30 minutos.');
-    });
-
-    it('429 no limiter não finge que o link foi enviado', () => {
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-
-      fixture.componentInstance.email.set('renata.costa@solar.com.br');
-      fixture.componentInstance.irParaRecuperacao();
-      fixture.componentInstance.enviarLink();
-      httpMock
-        .expectOne('/api/painel/senha/recuperacoes')
+        .expectOne('/api/senha/recuperacoes')
         .flush(null, { status: 429, statusText: 'Too Many Requests' });
       fixture.detectChanges();
 
       expect(texto(fixture)).not.toContain('Verifique seu e-mail');
-      expect(texto(fixture)).toContain('Redefinir senha');
       expect(texto(fixture)).toContain('Muitos pedidos seguidos.');
     });
+
+    it('Voltar para o login retorna à tela única', () => {
+      const fixture = montar();
+      fixture.componentInstance.irParaRecuperacao();
+      fixture.detectChanges();
+      fixture.componentInstance.voltarParaLogin();
+      fixture.detectChanges();
+
+      expect(texto(fixture)).toContain('Entrar na Solar');
+    });
+
+    for (const tema of TEMAS) {
+      it(`no tema ${tema}, o botão Entrar habilitado usa a cor de ação do tema`, () => {
+        aplicarTema(tema);
+        const fixture = montar();
+        preencher(fixture);
+
+        const botao = elemento<HTMLButtonElement>(fixture, '.botao-primario')!;
+        expect(botao.disabled).toBeFalse();
+        expect(getComputedStyle(botao).backgroundColor).toBe(MARCA_POR_TEMA[tema]);
+      });
+
+      it(`no tema ${tema}, a faixa usa o fundo travado e a chamada usa a cor de ação`, () => {
+        aplicarTema(tema);
+        const fixture = montar();
+        const faixa = elemento(fixture, '.faixa-corretor')!;
+
+        expect(getComputedStyle(faixa).backgroundColor).toBe(FUNDO_TRAVADO_POR_TEMA[tema]);
+        expect(getComputedStyle(faixa.querySelector('.faixa-chamada')!).color).toBe(
+          MARCA_POR_TEMA[tema],
+        );
+        expect(getComputedStyle(elemento(fixture, '.sem-conta a')!).color).toBe(
+          MARCA_POR_TEMA[tema],
+        );
+      });
+    }
+  });
+
+  it('?redefinir abre direto o pedido de link', async () => {
+    await configurar({ redefinir: '1' });
+    const fixture = montar();
+
+    expect(texto(fixture)).toContain('Informe seu e-mail. Enviaremos um link');
   });
 
   describe('com token de redefinição na URL', () => {
-    it('Tela 6 abre com o e-mail do token e salva a nova senha entrando direto no painel', async () => {
-      await configurar('token-valido-123');
-
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
+    it('valida o token e salva a nova senha no caminho novo, levando cada papel ao seu destino', async () => {
+      await configurar({ token: 'token-valido-123' });
+      const fixture = montar();
 
       httpMock
-        .expectOne('/api/painel/senha/recuperacoes/token-valido-123')
-        .flush({ email: 'renata.costa@solar.com.br' });
+        .expectOne('/api/senha/recuperacoes/token-valido-123')
+        .flush({ email: 'marina.couto@email.com' });
       fixture.detectChanges();
 
       expect(texto(fixture)).toContain('Crie uma nova senha');
-      expect(texto(fixture)).toContain('Ao salvar, você entra direto no painel do corretor.');
+      expect(texto(fixture)).toContain('Ao salvar, você já entra na sua conta.');
 
-      const router = TestBed.inject(Router);
-      const navegou = spyOn(router, 'navigate');
-
+      const navegou = spyOn(TestBed.inject(Router), 'navigate');
       fixture.componentInstance.novaSenha.set('senha-nova-forte');
       fixture.componentInstance.confirmacaoSenha.set('senha-nova-forte');
-      fixture.detectChanges();
       fixture.componentInstance.salvarSenha();
 
-      const req = httpMock.expectOne('/api/painel/senha');
+      const req = httpMock.expectOne('/api/senha');
       expect(req.request.body).toEqual({
         token: 'token-valido-123',
         novaSenha: 'senha-nova-forte',
       });
-      req.flush({ corretor });
-      fixture.detectChanges();
+      req.flush(sessaoCliente());
 
-      expect(TestBed.inject(SessaoStore).corretor()).toEqual(corretor);
-      expect(navegou).toHaveBeenCalledWith(['/painel']);
+      expect(TestBed.inject(SessaoStore).perfil()).toBe('cliente');
+      expect(navegou).toHaveBeenCalledWith(['/']);
     });
 
-    it('Tela 6c desabilita Salvar e acusa divergência só no campo de confirmação', async () => {
-      await configurar('token-valido-123');
-
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
+    it('desabilita Salvar e acusa divergência só na confirmação', async () => {
+      await configurar({ token: 'token-valido-123' });
+      const fixture = montar();
       httpMock
-        .expectOne('/api/painel/senha/recuperacoes/token-valido-123')
-        .flush({ email: 'renata.costa@solar.com.br' });
+        .expectOne('/api/senha/recuperacoes/token-valido-123')
+        .flush({ email: 'marina.couto@email.com' });
       fixture.detectChanges();
 
       fixture.componentInstance.novaSenha.set('senha-nova-forte');
       fixture.componentInstance.confirmacaoSenha.set('senha-diferente');
       fixture.detectChanges();
 
-      const html = fixture.nativeElement as HTMLElement;
       expect(texto(fixture)).toContain('As senhas não coincidem.');
-      expect(html.querySelector('#campo-confirmacao')?.classList).toContain('com-erro');
-      expect(html.querySelector('#campo-nova-senha')?.classList).not.toContain('com-erro');
-      expect(html.querySelector<HTMLButtonElement>('.botao-primario')?.disabled).toBeTrue();
-
-      httpMock.expectNone('/api/painel/senha');
+      expect(elemento(fixture, '#campo-confirmacao')?.classList).toContain('com-erro');
+      expect(elemento<HTMLButtonElement>(fixture, '.botao-primario')?.disabled).toBeTrue();
+      httpMock.expectNone('/api/senha');
     });
 
-    it('Tela 6b substitui o formulário quando o link expirou ou já foi usado', async () => {
-      await configurar('token-queimado');
-
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-
+    it('link expirado ou usado troca o formulário pela tela de link inválido', async () => {
+      await configurar({ token: 'token-queimado' });
+      const fixture = montar();
       httpMock
-        .expectOne('/api/painel/senha/recuperacoes/token-queimado')
+        .expectOne('/api/senha/recuperacoes/token-queimado')
         .flush('expirado', { status: 410, statusText: 'Gone' });
       fixture.detectChanges();
 
-      const html = fixture.nativeElement as HTMLElement;
       expect(texto(fixture)).toContain('Este link não é mais válido');
-      expect(texto(fixture)).toContain('Pedir novo link');
-      expect(html.querySelector('#campo-nova-senha')).toBeNull();
-      expect(html.querySelector('#campo-confirmacao')).toBeNull();
-    });
-
-    it('Pedir novo link volta para a Tela 4 sem reaproveitar o e-mail do link antigo', async () => {
-      await configurar('token-queimado');
-
-      const fixture = TestBed.createComponent(Entrar);
-      fixture.detectChanges();
-      httpMock
-        .expectOne('/api/painel/senha/recuperacoes/token-queimado')
-        .flush('expirado', { status: 410, statusText: 'Gone' });
-      fixture.detectChanges();
+      expect(elemento(fixture, '#campo-nova-senha')).toBeNull();
 
       fixture.componentInstance.pedirNovoLink();
       fixture.detectChanges();
-
-      expect(texto(fixture)).toContain('Redefinir senha');
-      expect(
-        (fixture.nativeElement as HTMLElement).querySelector<HTMLInputElement>(
-          '#campo-email-recuperacao',
-        )?.value,
-      ).toBe('');
+      expect(elemento<HTMLInputElement>(fixture, '#campo-email-recuperacao')?.value).toBe('');
     });
   });
 });

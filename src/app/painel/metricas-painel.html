@@ -1,0 +1,200 @@
+<section class="metricas" [class.expandida]="expandido()" [attr.aria-busy]="carregando()" aria-labelledby="titulo-metricas" tabindex="0">
+  <header class="cabecalho">
+    <h2 id="titulo-metricas">{{ supervisor() ? 'Métricas da imobiliária' : 'Suas métricas' }}</h2>
+    <span class="periodo">Últimos {{ f.plural(dados()?.periodo?.dias ?? 30, 'dia', 'dias') }}</span>
+    <p class="escopo">{{ supervisor() ? 'Todos os leads · recorte atual da Visão geral' : 'Meus leads · conversas com você hoje' }}
+      @if (dados(); as d) { · atualizado às <span class="mono">{{ f.data(d.periodo.atualizadoEm, 'horario') }}</span> }
+    </p>
+  </header>
+  <button type="button" class="alternar" [attr.aria-expanded]="expandido()" aria-controls="extras-metricas"
+    (click)="alternar()">
+    <span class="rotulo-desktop">{{ expandido() ? 'Ver menos' : 'Ver mais métricas' }}</span>
+    <span class="rotulo-celular">{{ expandido() ? 'Ver menos métricas' : 'Ver todas as métricas' }}</span>
+    <svg class="seta" [class.recolher]="expandido()" width="14" height="14" viewBox="0 0 14 14" aria-hidden="true" focusable="false">
+      <path d="M3 5L7 9L11 5" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+  </button>
+  <div class="miolo">
+    @if (carregando()) {
+      <div class="carregamento" role="status" aria-label="Carregando métricas">
+        @for (n of [1, 2, 3]; track n) { <div class="cartao"><span class="esqueleto"></span><span class="apoio">Carregando métricas…</span></div> }
+      </div>
+    } @else if (erro()) {
+      <div class="estado" role="alert">Não foi possível carregar as métricas.
+        <button type="button" class="tentar" (click)="carregar()">Tentar novamente</button>
+      </div>
+    } @else if (dados(); as d) {
+      @if (vazio()) { <p class="estado vazio">Ainda não há conversas. Os números aparecem assim que a Lia atender o primeiro lead.</p> }
+      <div class="resumo-celular">
+        <div class="cartao"><strong class="numero">{{ f.numero(baseAvanco()) }}</strong><span>{{ supervisor() ? 'conversas iniciadas' : 'conversas atribuídas a você' }}</span></div>
+        <div class="cartao"><strong class="numero">{{ f.percentual(d.dadosEssenciaisPreenchidos, baseAvanco()) }}</strong><span>com dados essenciais</span></div>
+        <div class="cartao"><strong class="numero">{{ f.numero(d.horariosConfirmados) }}</strong><span>conversas com horário confirmado</span></div>
+      </div>
+      @if (supervisor() && d.equipe; as e) {
+        <button class="pendentes-celular" type="button" (click)="abrirPendentes.emit()">{{ f.plural(e.pendentesAprovacao, 'corretor aguarda', 'corretores aguardam') }} aprovação</button>
+      }
+      @if (!expandido()) {
+        <div class="mini-grafico-celular">
+          @if (historicoParcial()) {
+            <p class="aviso-parcial">
+              <span class="marcador-neutro" aria-hidden="true"></span>
+              <span>{{ f.historico(d.periodo.historicoDesde) }}</span>
+            </p>
+          }
+          <app-metricas-avanco [etapas]="d.avanco" [compacto]="true" />
+        </div>
+      }
+      <div class="principais" [class.com-equipe]="supervisor()">
+        <article class="cartao card-grafico">
+          <h3>Avanço das conversas no chat</h3><app-criterio-metrica titulo="Avanço das conversas no chat" [texto]="criterio('avanco')" />
+          @if (historicoParcial()) {
+            <p class="aviso-parcial">
+              <span class="marcador-neutro" aria-hidden="true"></span>
+              <span>{{ f.historico(d.periodo.historicoDesde) }}</span>
+            </p>
+          }
+          @if (baseAvanco() === 0 && !vazio()) {
+            <p class="aviso-parcial">
+              <span class="marcador-neutro" aria-hidden="true"></span>
+              <span>Ainda não há conversas no período. As barras aparecem quando alguém escrever para a Lia.</span>
+            </p>
+          }
+          <app-metricas-avanco [etapas]="d.avanco" />
+        </article>
+        <div class="bloco-cards">
+          <article class="cartao">
+            <h3>Dados essenciais preenchidos</h3><app-criterio-metrica titulo="Dados essenciais preenchidos" [texto]="criterio('essenciais')" />
+            <strong class="numero" data-metrica="essenciais">{{ f.percentual(d.dadosEssenciaisPreenchidos, baseAvanco()) }}</strong>
+            <p class="apoio">{{ f.deConversas(d.dadosEssenciaisPreenchidos, baseAvanco()) }}</p>
+            <span class="trilho"><span [style.width]="f.largura(d.dadosEssenciaisPreenchidos, baseAvanco())"></span></span>
+          </article>
+          <article class="cartao">
+            <h3>Horários confirmados</h3><app-criterio-metrica titulo="Horários confirmados" [texto]="criterio('confirmadas')" />
+            <strong class="numero" data-metrica="confirmadas">{{ f.numero(d.horariosConfirmados) }}</strong>
+            <p class="apoio">
+              @if (baseAvanco() > 0) {
+                {{ f.deConversas(d.horariosConfirmados, baseAvanco()) }} iniciadas no período
+              } @else {
+                {{ f.deConversas(d.horariosConfirmados, baseAvanco()) }}
+              }
+            </p>
+            <p>{{ f.plural(d.reservasProximos7Dias, 'reserva', 'reservas') }} nos próximos 7 dias</p>
+          </article>
+          <article class="cartao card-intencao" [class.coluna-dupla]="!supervisor()">
+            <h3>Leads por intenção</h3><app-criterio-metrica titulo="Leads por intenção" [texto]="criterio('intencao')" />
+            <div class="barra-intencao" role="img" aria-label="Distribuição de intenção; contagens na legenda">
+              @for (i of intencoes(); track i.rotulo) { <span [style.width]="f.largura(i.valor, totalIntencoes())" [style.background]="i.cor"></span> }
+            </div>
+            <ul class="legenda">@for (i of intencoes(); track i.rotulo) {
+              <li><span class="marcador" [style.background]="i.cor"></span><span>{{ i.rotulo }}</span><strong class="mono">{{ f.numero(i.valor) }}</strong></li>
+            }</ul>
+          </article>
+          @if (supervisor() && d.equipe; as e) {
+            <article class="cartao equipe">
+              <h3>Conversas atribuídas por corretor</h3><app-criterio-metrica titulo="Conversas atribuídas por corretor" [texto]="criterio('equipe')" />
+              <p>{{ f.plural(totalAtribuidas(), 'conversa', 'conversas') }} com corretor hoje</p>
+              <ul class="carga" tabindex="0" aria-label="Conversas por corretor; área com rolagem">
+                @for (a of equipe(); track a.corretor.id) {
+                  <li tabindex="0" [attr.aria-label]="a.corretor.nome + ': ' + f.plural(a.conversas, 'conversa atribuída', 'conversas atribuídas')">
+                    <strong class="mono" aria-hidden="true">{{ f.numero(a.conversas) }}</strong>
+                    <span class="coluna"><span [style.height]="f.largura(a.conversas, maxAtribuidas())"></span></span>
+                    <span aria-hidden="true">{{ a.corretor.iniciais }}</span>
+                  </li>
+                }
+              </ul>
+              <p class="aguardando">{{ f.plural(e.aguardandoCorretor, 'conversa aguarda', 'conversas aguardam') }} corretor disponível</p>
+              <button class="pendentes" type="button" (click)="abrirPendentes.emit()">{{ f.plural(e.pendentesAprovacao, 'corretor aguarda', 'corretores aguardam') }} aprovação</button>
+            </article>
+          }
+        </div>
+      </div>
+      <div id="extras-metricas" class="extras" [hidden]="!expandido()">
+        <h3 class="titulo-extras">Mais métricas</h3>
+        <div class="grade-extras">
+          <article class="cartao">
+            <h3>Score de qualificação</h3><app-criterio-metrica titulo="Score de qualificação" [texto]="criterio('score')" />
+            <div class="score">
+              <div class="donut" role="img" [attr.aria-label]="'Score: ' + f.plural(totalScore(), 'lead avaliado', 'leads avaliados') + '; faixas na legenda'" [style.background]="donut()">
+                <span><strong class="mono">{{ f.numero(totalScore()) }}</strong><small>com score</small></span>
+              </div>
+              <ul class="legenda">@for (t of temperaturas(); track t.rotulo) {
+                <li><span class="marcador" [style.background]="t.cor"></span><span>{{ t.rotulo }}</span><strong class="mono">{{ f.numero(t.valor) }}</strong><span class="mono">{{ f.percentual(t.valor, totalScore()) }}</span></li>
+              }</ul>
+            </div>
+            <p>{{ f.plural(totalScore(), 'lead com score', 'leads com score') }} · {{ f.plural(d.extras.score.semAvaliacao, 'lead sem avaliação', 'leads sem avaliação') }}</p>
+          </article>
+          <article class="cartao">
+            <h3>Tempo mediano até o primeiro encaminhamento</h3><app-criterio-metrica titulo="Tempo mediano até o primeiro encaminhamento" [texto]="criterio('tempo')" />
+            <strong class="numero">{{ f.tempo(d.extras.tempoMedianoMin) }}</strong>
+            <svg class="svg-tempo" width="120" height="36" viewBox="0 0 120 36" role="img" [attr.aria-label]="f.serieTempo(d.extras.tempoMedianoDiario, 'acessivel')">
+              <line x1="0" y1="34" x2="120" y2="34" stroke="var(--inativo-borda)" stroke-width="1" />
+              @for (seg of sparklineTempo().segmentos; track seg) {
+                <polyline [attr.points]="seg" fill="none" stroke="var(--marca)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              }
+              @for (iso of sparklineTempo().isolados; track iso.x) {
+                @if (iso.x !== sparklineTempo().ultimo?.x) {
+                  <circle [attr.cx]="iso.x" [attr.cy]="iso.y" r="2" fill="var(--marca)" />
+                }
+              }
+              @if (sparklineTempo().ultimo; as ult) {
+                <circle [attr.cx]="ult.x" [attr.cy]="ult.y" r="3" fill="var(--marca)" />
+              }
+            </svg>
+            <p class="apoio">{{ f.serieTempo(d.extras.tempoMedianoDiario, 'visivel') }}</p>
+          </article>
+          <article class="cartao">
+            <h3>Follow-up automático</h3><app-criterio-metrica titulo="Follow-up automático" [texto]="criterio('followUp')" />
+            <div class="linha-followup">
+              <span>Com follow-up</span>
+              <strong class="mono">{{ f.numero(d.extras.followUp.comFollowUp) }}</strong>
+            </div>
+            <span class="trilho follow-up-total">
+              <span [style.width]="d.extras.followUp.comFollowUp > 0 ? '100%' : '0%'"></span>
+            </span>
+            <div class="linha-followup">
+              <span>{{ f.respostaFollowUp(d.extras.followUp.janelaDias) }}</span>
+              <span class="mono">
+                {{ f.numero(d.extras.followUp.janelaEncerrada > 0 ? d.extras.followUp.responderam : 0) }} de {{ f.numero(d.extras.followUp.janelaEncerrada) }} · {{ f.percentual(d.extras.followUp.responderam, d.extras.followUp.janelaEncerrada) }}
+              </span>
+            </div>
+            <span class="trilho follow-up-resposta">
+              <span [style.width]="f.largura(d.extras.followUp.responderam, d.extras.followUp.janelaEncerrada)"></span>
+            </span>
+            <p class="apoio">{{ f.observacaoFollowUp(d.extras.followUp.emObservacao) }}</p>
+          </article>
+          <article class="cartao">
+            <h3>Imóveis mais sugeridos pela Lia</h3><app-criterio-metrica titulo="Imóveis mais sugeridos pela Lia" [texto]="criterio('imoveis')" />
+            @if (!d.extras.imoveis.length) { <p class="apoio">Nenhuma sugestão de imóvel ainda.</p> }
+            <ol class="ranking imoveis">@for (i of d.extras.imoveis; track i.id) {
+              <li><span class="mono codigo">{{ i.id }}</span><span class="bairro">{{ i.bairro }}</span><span class="trilho"><span [style.width]="f.largura(i.conversas, maxImoveis())"></span></span><strong class="mono">{{ f.numero(i.conversas) }}</strong></li>
+            }</ol>
+            <p class="apoio">Contagem de conversas distintas por imóvel</p>
+          </article>
+          <article class="cartao">
+            <h3>Regiões mais procuradas</h3><app-criterio-metrica titulo="Regiões mais procuradas" [texto]="criterio('regioes')" />
+            @if (!d.extras.regioes.top.length) { <p class="apoio">Nenhuma região informada ainda.</p> }
+            <ol class="ranking">@for (r of d.extras.regioes.top; track r.regiao) {
+              <li><span>{{ r.regiao }}</span><span class="trilho"><span [style.width]="f.largura(r.leads, maxRegioes())"></span></span><strong class="mono">{{ f.numero(r.leads) }}</strong></li>
+            }</ol>
+            <p>{{ f.numero(d.extras.regioes.informaram) }} de {{ f.plural(d.extras.regioes.leads, 'lead informou', 'leads informaram') }} região; {{ f.plural(d.extras.regioes.outras, 'lead em outra região', 'leads em outras regiões') }}</p>
+          </article>
+          <article class="cartao">
+            <h3>Próximos horários confirmados</h3><app-criterio-metrica titulo="Próximos horários confirmados" [texto]="criterio('horarios')" />
+            @if (!d.extras.proximosHorarios.length) { <p class="apoio">Nenhum horário marcado.</p> }
+            <ul class="horarios">@for (h of d.extras.proximosHorarios; track $index) {
+              <li><span class="marcador confirmado"></span><time class="mono" [attr.datetime]="h.inicio">{{ f.data(h.inicio) }}</time><span>{{ h.iniciais }}</span></li>
+            }</ul>
+          </article>
+          <article class="cartao">
+            <h3>Privacidade · acompanhamento administrativo</h3><app-criterio-metrica titulo="Privacidade" [texto]="criterio('privacidade')" />
+            <strong class="numero">{{ f.percentual(d.extras.privacidade.comConsentimento, d.extras.privacidade.leads) }}</strong>
+            <p>{{ f.numero(d.extras.privacidade.comConsentimento) }} de {{ f.plural(d.extras.privacidade.leads, 'lead', 'leads') }} com consentimento registrado</p>
+            <span class="trilho consentimento"><span [style.width]="f.largura(d.extras.privacidade.comConsentimento, d.extras.privacidade.leads)"></span></span>
+            <p>Completam {{ f.plural(d.extras.privacidade.prazoRetencaoMeses, 'mês', 'meses') }} sem contato nos próximos 30 dias: <strong class="mono">{{ f.numero(d.extras.privacidade.vencem30Dias) }}</strong></p>
+            <p class="apoio">{{ d.extras.privacidade.proximoVencimento ? 'Próximo vencimento: ' + f.data(d.extras.privacidade.proximoVencimento, 'mes') : 'Sem prazos de retenção correndo.' }}</p>
+          </article>
+        </div>
+      </div>
+    }
+  </div>
+</section>

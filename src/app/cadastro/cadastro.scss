@@ -1,0 +1,112 @@
+@use '../entrar/formulario';
+
+.dupla {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.chip {
+  min-height: 36px;
+  padding: 0 14px;
+  font-family: inherit;
+  font-size: 13.5px;
+  color: var(--login-texto-secundario);
+  background: var(--login-fundo-card);
+  border: 1px solid var(--login-borda);
+  border-radius: 999px;
+  cursor: pointer;
+
+  &.ligado {
+    font-weight: 600;
+    color: var(--login-acao);
+    border-color: var(--login-acao);
+    background: color-mix(in srgb, var(--login-acao) 12%, var(--login-fundo-card));
+
+    &::before {
+      content: '✓ ';
+    }
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+}
+
+.chips.com-erro .chip {
+  border-color: color-mix(in srgb, var(--login-erro) 55%, var(--login-borda));
+}
+
+.aceite {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 20px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--login-texto-secundario);
+  cursor: pointer;
+
+  input {
+    flex: none;
+    width: 18px;
+    height: 18px;
+    margin: 0;
+    accent-color: var(--login-acao);
+  }
+}
+
+.centro {
+  margin-top: 14px;
+  text-align: center;
+}
+
+@media (max-width: 400px) {
+  .dupla {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
+}
+
+.resumo-email {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--login-erro) 30%, var(--login-borda));
+  border-radius: var(--login-raio-campo);
+  color: var(--login-texto-secundario);
+  background: color-mix(in srgb, var(--login-erro) 12%, var(--login-fundo-card));
+  font-size: 12.5px;
+  line-height: 1.45;
+
+  &__titulo {
+    margin: 0;
+    color: var(--login-texto-primario);
+    font-family: 'Libre Franklin', system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    line-height: 1.35;
+  }
+
+  &__orientacao {
+    margin: 0;
+
+    a {
+      color: var(--login-acao);
+      font-weight: 600;
+      text-decoration: underline;
+      text-decoration-thickness: 1px;
+      text-underline-offset: 2px;
+    }
+  }
+}

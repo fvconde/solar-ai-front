@@ -7,6 +7,7 @@ import {
   ConsentimentoRequest,
   ConsentimentoResponse,
   ConversaResponse,
+  ExclusaoTitularResponse,
   MensagemResponse,
   NovaMensagemRequest,
 } from './contrato';
@@ -38,6 +39,16 @@ export class ConversaApi {
   }
 
   obterConversa(conversaId: string): Promise<ConversaResponse> {
-    return firstValueFrom(this.http.get<ConversaResponse>(`/conversas/${conversaId}`));
+    return firstValueFrom(
+      this.http.get<ConversaResponse>(`/conversas/${conversaId}`, { withCredentials: true }),
+    );
+  }
+
+  apagarConversa(conversaId: string): Promise<ExclusaoTitularResponse> {
+    return firstValueFrom(
+      this.http.delete<ExclusaoTitularResponse>(`/conversas/${conversaId}/titular`, {
+        withCredentials: true,
+      }),
+    );
   }
 }

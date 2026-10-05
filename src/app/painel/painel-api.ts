@@ -1,19 +1,21 @@
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
+import { MetricasPainelResponse } from './metricas-contrato';
 import {
+  CorretorPendente,
   FilaLeadsResponse,
   LeadDetalheResponse,
   ResumoLia,
-  SessaoPainelResposta,
 } from './painel-contrato';
 
 @Injectable({ providedIn: 'root' })
 export class PainelApi {
   private readonly http = inject(HttpClient);
 
-  obterSessao(): Observable<SessaoPainelResposta> {
-    return this.http.get<SessaoPainelResposta>('/api/painel/sessao', {
+  obterMetricas(dias = 30): Observable<MetricasPainelResponse> {
+    return this.http.get<MetricasPainelResponse>('/api/painel/metricas', {
+      params: new HttpParams().set('dias', dias),
       withCredentials: true,
     });
   }
@@ -52,6 +54,28 @@ export class PainelApi {
         params,
         withCredentials: true,
       },
+    );
+  }
+
+  listarPendentes(): Observable<CorretorPendente[]> {
+    return this.http.get<CorretorPendente[]>('/api/painel/corretores/pendentes', {
+      withCredentials: true,
+    });
+  }
+
+  aprovarCorretor(id: string): Observable<void> {
+    return this.http.post<void>(
+      `/api/painel/corretores/${encodeURIComponent(id)}/aprovacao`,
+      {},
+      { withCredentials: true },
+    );
+  }
+
+  recusarCorretor(id: string, motivo: string | null): Observable<void> {
+    return this.http.post<void>(
+      `/api/painel/corretores/${encodeURIComponent(id)}/recusa`,
+      motivo ? { motivo } : {},
+      { withCredentials: true },
     );
   }
 }
