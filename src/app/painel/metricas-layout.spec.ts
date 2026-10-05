@@ -114,6 +114,7 @@ describe('Layout real das métricas por viewport (S-22)', () => {
           const extras = doc.querySelector<HTMLElement>('.extras')!;
           expect(win.innerWidth).toBe(largura);
           expect(win.innerHeight).toBe(altura);
+          expect(doc.documentElement.scrollWidth).toBeLessThanOrEqual(largura);
           expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(altura * .4 + 1);
           expect(faixa.getBoundingClientRect().height).toBeGreaterThan(100);
           expect(fila.getBoundingClientRect().height).toBeGreaterThan(0);
@@ -131,6 +132,8 @@ describe('Layout real das métricas por viewport (S-22)', () => {
           if (largura <= 860) {
             expect(doc.querySelector('.alternar')!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
             expect(win.getComputedStyle(doc.querySelector('.resumo-celular')!).display).toBe('grid');
+            expect(doc.querySelector('.mini-grafico-celular')).toBeNull();
+            expect(doc.querySelectorAll('.card-grafico').length).toBe(1);
           } else {
             const grafico = doc.querySelector<HTMLElement>('.principais .card-grafico')!;
             expect(grafico).not.toBeNull();

@@ -277,4 +277,154 @@ describe('Faixa de métricas (S-22)', () => {
     expect(html.textContent).toContain('Avanço das conversas no chat');
     expect(html.textContent).toContain('Dados essenciais preenchidos');
   });
+  it('exibe aviso histórico quando inicio é anterior a historicoDesde e omite no limite', () => {
+    const dados = metricasParaTeste();
+    dados.periodo.inicio = '2026-07-01T00:00:00Z';
+    dados.periodo.historicoDesde = '2026-08-01T00:00:00Z';
+    const html1 = montar(dados);
+    expect(fixture.componentInstance.historicoParcial()).toBeTrue();
+    expect(html1.querySelector('.aviso-parcial')?.textContent).toContain('Histórico de avanço disponível desde 01/08');
+
+    fixture.destroy();
+    const dadosLimite = metricasParaTeste();
+    dadosLimite.periodo.inicio = '2026-08-01T00:00:00Z';
+    dadosLimite.periodo.historicoDesde = '2026-08-01T00:00:00Z';
+    const html2 = montar(dadosLimite);
+    expect(fixture.componentInstance.historicoParcial()).toBeFalse();
+    expect(html2.querySelector('.aviso-parcial')).toBeNull();
+  });
+  it('base histórica menor que conversasIniciadas e leads governa os percentuais, cards e resumo', () => {
+    const dados = metricasParaTeste();
+    dados.conversasIniciadas = 20;
+    dados.extras.privacidade.leads = 30;
+    dados.avanco = [
+      { etapa: 'iniciadas', conversas: 10 },
+      { etapa: 'intencao', conversas: 9 },
+      { etapa: 'essenciais', conversas: 6 },
+      { etapa: 'encaminhamento', conversas: 5 },
+      { etapa: 'corretor', conversas: 4 },
+      { etapa: 'horario', conversas: 3 },
+    ];
+    dados.dadosEssenciaisPreenchidos = 6;
+    dados.horariosConfirmados = 3;
+    const html = montar(dados);
+    expect(fixture.componentInstance.baseAvanco()).toBe(10);
+    expect(html.querySelector('[data-metrica=essenciais]')?.textContent).toBe('60%');
+    expect(html.querySelector('[data-metrica=confirmadas]')?.textContent).toBe('3');
+    expect(html.textContent).toContain('6 de 10 conversas');
+    expect(html.textContent).toContain('3 de 10 conversas iniciadas no período');
+    expect(html.querySelector('.resumo-celular .cartao:first-child strong')?.textContent).toBe(String(10));
+    expect(html.querySelector('.resumo-celular .cartao:nth-child(2) strong')?.textContent).toBe('60%');
+    expect(html.querySelector('.resumo-celular .cartao:last-child strong')?.textContent).toBe(String(3));
+  });
+  it('horários coincide com a última barra e essenciais possui contador próprio para corretor', () => {
+    definirPerfil('corretor');
+    const dados = metricasParaTeste();
+    dados.equipe = null;
+    dados.avanco = [
+      { etapa: 'atribuidas', conversas: 10 },
+      { etapa: 'horario', conversas: 3 },
+    ];
+    dados.dadosEssenciaisPreenchidos = 5;
+    dados.horariosConfirmados = 3;
+    const html = montar(dados);
+    expect(fixture.componentInstance.ultimaBarra()).toBe(3);
+    expect(dados.horariosConfirmados).toBe(fixture.componentInstance.ultimaBarra());
+    expect(html.querySelector('[data-metrica=essenciais]')?.textContent).toBe('50%');
+    expect(html.querySelector('[data-metrica=confirmadas]')?.textContent).toBe('3');
+    expect(html.querySelectorAll('.item-barra').length).toBe(2);
+  });
+  it('gráfico zero com leads antigos mantém intenção, score, atribuição e privacidade', () => {
+    const dados = metricasParaTeste();
+    dados.conversasIniciadas = 0;
+    dados.dadosEssenciaisPreenchidos = 0;
+    dados.horariosConfirmados = 0;
+    dados.avanco = [
+      { etapa: 'iniciadas', conversas: 0 },
+      { etapa: 'intencao', conversas: 0 },
+      { etapa: 'essenciais', conversas: 0 },
+      { etapa: 'encaminhamento', conversas: 0 },
+      { etapa: 'corretor', conversas: 0 },
+      { etapa: 'horario', conversas: 0 },
+    ];
+    dados.extras.privacidade.leads = 10;
+    const html = montar(dados);
+    expect(fixture.componentInstance.baseAvanco()).toBe(0);
+    expect(fixture.componentInstance.vazio()).toBeFalse();
+    expect(html.textContent).not.toContain('Ainda não há conversas. Os números aparecem');
+    expect(html.textContent).toContain('Ainda não há conversas no período. As barras aparecem quando alguém escrever para a Lia.');
+    expect(html.querySelector('.barra-intencao')).not.toBeNull();
+    expect(html.querySelector('.equipe')).not.toBeNull();
+    expandir();
+    expect(html.querySelector('.score')).not.toBeNull();
+    expect(html.textContent).toContain('Privacidade');
+  });
+  it('tempo trata nulo, mediana par, série com lacunas sem ligar pontos e série vazia', () => {
+    const dados = metricasParaTeste();
+    dados.extras.tempoMedianoMin = null;
+    dados.extras.tempoMedianoDiario = [];
+    const html = montar(dados);
+    expandir();
+    expect(html.textContent).toContain('A linha aparece com o primeiro encaminhamento.');
+    expect(fixture.componentInstance.sparklineTempo().segmentos.length).toBe(0);
+    expect(fixture.componentInstance.sparklineTempo().ultimo).toBeNull();
+
+    fixture.destroy();
+    const dadosLacuna = metricasParaTeste();
+    dadosLacuna.extras.tempoMedianoMin = 14;
+    dadosLacuna.extras.tempoMedianoDiario = [18, null, 14, null, 12, null, 10];
+    montar(dadosLacuna);
+    expandir();
+    const spark = fixture.componentInstance.sparklineTempo();
+    expect(spark.segmentos.length).toBe(0);
+    expect(spark.isolados.length).toBe(4);
+    expect(spark.ultimo).toEqual({ x: 120, y: 30 });
+  });
+  it('follow-up calcula proporção sobre janelas encerradas e trata janelas recentes e configuração', () => {
+    const dados = metricasParaTeste();
+    dados.extras.followUp = {
+      janelaDias: 7,
+      comFollowUp: 5,
+      janelaEncerrada: 4,
+      responderam: 2,
+      emObservacao: 1,
+    };
+    const html = montar(dados);
+    expandir();
+    expect(html.textContent).toContain('Responderam em até 7 dias.');
+    expect(html.textContent).toContain('2 de 4 · 50%');
+    expect(html.textContent).toContain('1 follow-up em observação');
+
+    fixture.destroy();
+    const dadosRecentes = metricasParaTeste();
+    dadosRecentes.extras.followUp = {
+      janelaDias: 3,
+      comFollowUp: 3,
+      janelaEncerrada: 0,
+      responderam: 0,
+      emObservacao: 3,
+    };
+    const htmlRecentes = montar(dadosRecentes);
+    expandir();
+    expect(htmlRecentes.textContent).toContain('Responderam em até 3 dias.');
+    expect(htmlRecentes.textContent).toContain('0 de 0 · —');
+    expect(htmlRecentes.textContent).not.toContain('NaN');
+    expect(htmlRecentes.textContent).toContain('3 follow-ups em observação');
+    expect(fixture.componentInstance.criterio('followUp')).toContain('janela de 3 dias');
+  });
+  it('gerencia foco, tecla Escape no detalhe do gráfico e isolamento de alvos no mobile', () => {
+    const html = montar();
+    const botaoBarra = html.querySelector<HTMLButtonElement>('.item-barra button')!;
+    botaoBarra.dispatchEvent(new MouseEvent('click'));
+    fixture.detectChanges();
+    expect(botaoBarra.getAttribute('aria-describedby')).not.toBeNull();
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+    expect(botaoBarra.getAttribute('aria-describedby')).toBeNull();
+
+    expect(html.querySelector('.mini-grafico-celular')).not.toBeNull();
+    expandir();
+    expect(html.querySelector('.mini-grafico-celular')).toBeNull();
+    expect(html.querySelectorAll('.item-barra button').length).toBe(6);
+  });
 });
