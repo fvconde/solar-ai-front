@@ -33,7 +33,18 @@ export class ConversaStore {
   readonly contatoErro = signal<string | null>(null);
   readonly aceiteEnviando = signal(false);
   readonly aceiteErro = signal<string | null>(null);
+  readonly apagando = signal(false);
+  readonly conversaApagada = signal(false);
+  readonly erroExclusao = signal<'confirmada' | 'incerta' | null>(null);
+  readonly consentimentoPendente = signal(false);
 
+  readonly podeApagarConversa = computed(
+    () =>
+      !!this.conversaAtual() &&
+      this.emConversa() &&
+      this.estado() !== 'inicio-conta' &&
+      !this.consentimentoPendente(),
+  );
   readonly aguardando = computed(
     () => this.estado() === 'preparando' || this.estado() === 'espera-prolongada',
   );
@@ -42,9 +53,15 @@ export class ConversaStore {
   );
   readonly composerRemovido = computed(() => this.estado() === 'encerrada');
   readonly envioDisponivel = computed(
-    () => this.estado() === 'conversando' || this.estado() === 'falha',
+    () =>
+      !this.apagando() &&
+      (this.estado() === 'conversando' ||
+        this.estado() === 'falha' ||
+        this.estado() === 'inicio-conta'),
   );
-  readonly campoEditavel = computed(() => this.emConversa() && this.estado() !== 'encerrada');
+  readonly campoEditavel = computed(
+    () => !this.apagando() && this.emConversa() && this.estado() !== 'encerrada',
+  );
   readonly motivoEnvio = computed(() => {
     switch (this.estado()) {
       case 'aceite-pendente':
@@ -74,10 +91,14 @@ export class ConversaStore {
   private ultimoEnvioVisivel = false;
   private sequencia = 0;
   private totalMensagens = 0;
+  private geracao = 0;
   private cronometro: ReturnType<typeof setTimeout> | undefined;
   private cronometroPolling: ReturnType<typeof setInterval> | undefined;
 
   async iniciar(): Promise<void> {
+    if (this.apagando()) {
+      return;
+    }
     const salva = this.ler(CHAVE_CONVERSA);
     if (!salva) {
       this.estado.set('aceite-pendente');
@@ -86,10 +107,17 @@ export class ConversaStore {
     }
 
     this.conversaId = salva;
+    const g = this.geracao;
     try {
       const conversa = await this.api.obterConversa(salva);
+      if (g !== this.geracao) {
+        return;
+      }
       await this.retomarConversa(conversa);
     } catch (erro) {
+      if (g !== this.geracao) {
+        return;
+      }
       this.itens.set([]);
       if (erro instanceof HttpErrorResponse && erro.status === 404) {
         this.estado.set('aceite-pendente');
@@ -100,10 +128,11 @@ export class ConversaStore {
   }
 
   async aceitar(): Promise<void> {
-    if (this.aceiteEnviando()) {
+    if (this.apagando() || this.aceiteEnviando()) {
       return;
     }
 
+    this.conversaApagada.set(false);
     this.aceiteEnviando.set(true);
     this.aceiteErro.set(null);
 
@@ -112,21 +141,36 @@ export class ConversaStore {
       this.gravar(CHAVE_CONVERSA, this.conversaId);
     }
 
+    const g = this.geracao;
     try {
       await this.api.registrarConsentimento(this.conversaId, {
         versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
       });
+      if (g !== this.geracao) {
+        return;
+      }
       const conversa = await this.api.obterConversa(this.conversaId);
+      if (g !== this.geracao) {
+        return;
+      }
       await this.retomarConversa(conversa);
     } catch {
+      if (g !== this.geracao) {
+        return;
+      }
       this.estado.set('aceite-pendente');
       this.aceiteErro.set('Não foi possível registrar sua autorização. Tente novamente.');
     } finally {
-      this.aceiteEnviando.set(false);
+      if (g === this.geracao) {
+        this.aceiteEnviando.set(false);
+      }
     }
   }
 
   recusar(): void {
+    if (this.apagando()) {
+      return;
+    }
     this.pararPolling();
     this.totalMensagens = 0;
     this.aceiteErro.set(null);
@@ -135,14 +179,21 @@ export class ConversaStore {
   }
 
   reverEscolha(): void {
+    if (this.apagando()) {
+      return;
+    }
     this.aceiteErro.set(null);
     this.estado.set('aceite-pendente');
   }
 
   async definirConsentimentoDaConta(versao: string | null): Promise<void> {
     this.versaoConsentidaNaConta = versao;
-    if (!this.conversaId && this.estado() === 'aceite-pendente') {
-      await this.aceitarPelaConta();
+    if (!this.conversaId) {
+      if (this.estado() === 'aceite-pendente') {
+        await this.aceitarPelaConta();
+      } else if (this.estado() === 'inicio-conta' && versao !== VERSAO_AVISO_PRIVACIDADE) {
+        this.estado.set('aceite-pendente');
+      }
     }
   }
 
@@ -151,10 +202,14 @@ export class ConversaStore {
   }
 
   async abrirConversa(id: string): Promise<void> {
-    if (id === this.conversaId) {
+    if (this.apagando() || id === this.conversaId) {
       return;
     }
+    this.conversaApagada.set(false);
     this.pararPolling();
+    this.pararCronometro();
+    this.geracao++;
+    this.consentimentoPendente.set(false);
     this.gravar(CHAVE_CONVERSA, id);
     this.conversaId = '';
     this.totalMensagens = 0;
@@ -164,7 +219,14 @@ export class ConversaStore {
   }
 
   async novaConversa(): Promise<void> {
+    if (this.apagando()) {
+      return;
+    }
+    this.conversaApagada.set(false);
     this.pararPolling();
+    this.pararCronometro();
+    this.geracao++;
+    this.consentimentoPendente.set(false);
     this.apagar(CHAVE_CONVERSA);
     this.conversaId = '';
     this.totalMensagens = 0;
@@ -176,14 +238,35 @@ export class ConversaStore {
 
   async enviar(texto: string): Promise<void> {
     const limpo = texto.trim();
-    if (!limpo || !this.envioDisponivel()) {
+    if (!limpo || !this.envioDisponivel() || this.apagando()) {
       return;
     }
 
+    this.conversaApagada.set(false);
     this.pararPolling();
 
     if (this.estado() === 'falha') {
       this.removerEventoFinal();
+    }
+
+    if (this.estado() === 'inicio-conta' || this.consentimentoPendente()) {
+      if (!this.conversaId) {
+        this.conversaId = crypto.randomUUID();
+        this.gravar(CHAVE_CONVERSA, this.conversaId);
+      }
+      if (this.itens().length === 0) {
+        this.acrescentar({ tipo: 'divisor', id: this.proximoId(), rotulo: HOJE });
+      }
+      this.acrescentar({
+        tipo: 'pessoa',
+        id: this.proximoId(),
+        texto: limpo,
+        hora: horaAgora(),
+      });
+      this.ultimoEnvio = limpo;
+      this.ultimoEnvioVisivel = true;
+      await this.executarTurnoComConsentimentoPendente();
+      return;
     }
 
     this.acrescentar({
@@ -202,15 +285,19 @@ export class ConversaStore {
    * formulario direto ao Postgres, sem passar pelo turno e sem chegar ao modelo.
    */
   async enviarContato(dados: ContatoRequest): Promise<void> {
-    if (this.contatoEnviando()) {
+    if (this.apagando() || this.contatoEnviando()) {
       return;
     }
 
     this.contatoEnviando.set(true);
     this.contatoErro.set(null);
 
+    const g = this.geracao;
     try {
       await this.api.registrarContato(this.conversaId, dados);
+      if (g !== this.geracao) {
+        return;
+      }
       this.removerContato();
       this.acrescentar({
         tipo: 'evento',
@@ -221,18 +308,149 @@ export class ConversaStore {
         acao: null,
       });
     } catch {
+      if (g !== this.geracao) {
+        return;
+      }
       this.contatoErro.set('Não foi possível registrar seu contato. Tente novamente.');
     } finally {
-      this.contatoEnviando.set(false);
+      if (g === this.geracao) {
+        this.contatoEnviando.set(false);
+      }
     }
   }
 
   async tentarNovamente(): Promise<void> {
-    if (!this.ultimoEnvio) {
+    if (this.apagando() || !this.ultimoEnvio) {
       return;
     }
     this.removerEventoFinal();
+
+    if (this.consentimentoPendente()) {
+      await this.executarTurnoComConsentimentoPendente();
+      return;
+    }
+
     await this.turno();
+  }
+
+  private async executarTurnoComConsentimentoPendente(): Promise<void> {
+    this.consentimentoPendente.set(true);
+    this.estado.set('preparando');
+    this.armarCronometro();
+    const g = this.geracao;
+
+    try {
+      await this.api.registrarConsentimento(this.conversaId, {
+        versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+      });
+      if (g !== this.geracao) {
+        return;
+      }
+      this.consentimentoPendente.set(false);
+    } catch {
+      if (g !== this.geracao) {
+        return;
+      }
+      this.pararCronometro();
+      this.registrarFalha();
+      return;
+    }
+
+    try {
+      const resposta = await this.api.enviarMensagem(this.conversaId, this.ultimoEnvio);
+      if (g !== this.geracao) {
+        return;
+      }
+      this.pararCronometro();
+      this.aplicar(resposta);
+    } catch {
+      if (g !== this.geracao) {
+        return;
+      }
+      this.pararCronometro();
+      this.registrarFalha();
+    }
+  }
+
+  async apagarConversa(): Promise<boolean> {
+    if (this.apagando() || this.consentimentoPendente() || !this.podeApagarConversa()) {
+      return false;
+    }
+    const id = this.conversaId;
+    if (!id) {
+      return false;
+    }
+
+    this.apagando.set(true);
+    this.erroExclusao.set(null);
+    const g = this.geracao;
+
+    try {
+      await this.api.apagarConversa(id);
+      if (g !== this.geracao) {
+        return false;
+      }
+      this.processarSucessoExclusao();
+      return true;
+    } catch (erro) {
+      if (g !== this.geracao) {
+        return false;
+      }
+      if (erro instanceof HttpErrorResponse && erro.status === 404) {
+        this.processarSucessoExclusao();
+        return true;
+      }
+      if (
+        erro instanceof HttpErrorResponse &&
+        (erro.status === 403 || erro.status === 409 || erro.status === 429)
+      ) {
+        this.erroExclusao.set('confirmada');
+        return false;
+      }
+
+      try {
+        await this.api.obterConversa(id);
+        if (g !== this.geracao) {
+          return false;
+        }
+        this.erroExclusao.set('confirmada');
+        return false;
+      } catch {
+        if (g !== this.geracao) {
+          return false;
+        }
+        this.erroExclusao.set('incerta');
+        return false;
+      }
+    } finally {
+      this.apagando.set(false);
+    }
+  }
+
+  private processarSucessoExclusao(): void {
+    this.pararCronometro();
+    this.pararPolling();
+    this.geracao++;
+    this.apagar(CHAVE_CONVERSA);
+    this.conversaId = '';
+    this.itens.set([]);
+    this.ultimoEnvio = '';
+    this.ultimoEnvioVisivel = false;
+    this.sequencia = 0;
+    this.totalMensagens = 0;
+    this.contatoErro.set(null);
+    this.contatoEnviando.set(false);
+    this.aceiteErro.set(null);
+    this.aceiteEnviando.set(false);
+    this.erroExclusao.set(null);
+    this.consentimentoPendente.set(false);
+    this.conversaApagada.set(true);
+
+    if (this.versaoConsentidaNaConta === VERSAO_AVISO_PRIVACIDADE) {
+      this.estado.set('inicio-conta');
+    } else {
+      this.estado.set('aceite-pendente');
+    }
   }
 
   atenderAcao(acao: AcaoEvento): void {
@@ -297,11 +515,18 @@ export class ConversaStore {
   private async turno(): Promise<void> {
     this.estado.set('preparando');
     this.armarCronometro();
+    const g = this.geracao;
     try {
       const resposta = await this.api.enviarMensagem(this.conversaId, this.ultimoEnvio);
+      if (g !== this.geracao) {
+        return;
+      }
       this.pararCronometro();
       this.aplicar(resposta);
     } catch {
+      if (g !== this.geracao) {
+        return;
+      }
       this.pararCronometro();
       this.registrarFalha();
     }
@@ -357,12 +582,21 @@ export class ConversaStore {
   }
 
   async verificarNovasMensagens(): Promise<void> {
-    if (!this.conversaId || this.estado() !== 'conversando' || this.aguardando()) {
+    if (
+      this.apagando() ||
+      !this.conversaId ||
+      this.estado() !== 'conversando' ||
+      this.aguardando()
+    ) {
       return;
     }
 
+    const g = this.geracao;
     try {
       const conversa = await this.api.obterConversa(this.conversaId);
+      if (g !== this.geracao) {
+        return;
+      }
       if (conversa.mensagens.length > this.totalMensagens) {
         const novas = conversa.mensagens.slice(this.totalMensagens);
         this.totalMensagens = conversa.mensagens.length;
@@ -600,8 +834,9 @@ export class ConversaStore {
 
   private armarCronometro(): void {
     this.pararCronometro();
+    const g = this.geracao;
     this.cronometro = setTimeout(() => {
-      if (this.estado() === 'preparando') {
+      if (g === this.geracao && this.estado() === 'preparando') {
         this.estado.set('espera-prolongada');
       }
     }, ESPERA_PROLONGADA_MS);

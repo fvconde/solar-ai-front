@@ -8,6 +8,7 @@ import {
   signal,
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
+import { VERSAO_AVISO_PRIVACIDADE } from '../conversa/contrato';
 
 interface EstadoBarraRolagem {
   topo: number;
@@ -24,7 +25,7 @@ interface EstadoBarraRolagem {
   template: `
     <main class="pagina">
       <article>
-        <p class="rotulo">Aviso de Privacidade · versão 2026-09-11</p>
+        <p class="rotulo">Aviso de Privacidade · versão {{ versao }}</p>
         <h1>Como a Solar usa os dados desta conversa</h1>
 
         <h2>Dados e finalidade</h2>
@@ -45,14 +46,70 @@ interface EstadoBarraRolagem {
           corretor humano da Solar para continuar o atendimento.
         </p>
 
-        <h2>Retenção e eliminação</h2>
+        <h2>Retenção</h2>
         <p>
-          O prazo de guarda e o descarte seguem a política de retenção da Solar. Você pode solicitar
-          a eliminação dos dados associados ao seu lead.
+          O prazo de guarda e o descarte seguem a
+          <a
+            href="https://github.com/fvconde/solar-ai-docs#53-política-de-retenção-de-dados-fonte-única"
+            target="_blank"
+            rel="noopener noreferrer"
+            >política de retenção de 12 meses da Solar</a
+          >.
         </p>
 
+        <h2 id="eliminacao">Como pedir a eliminação dos seus dados</h2>
+        <p>
+          Você pode pedir que a Solar apague os dados associados ao seu atendimento. Existem dois
+          caminhos, e você escolhe qual usar.
+        </p>
+
+        <div class="grade-canais">
+          <section aria-labelledby="canal-chat" class="cartao">
+            <span class="rotulo-canal">No chat · você mesmo</span>
+            <h3 id="canal-chat">Apagar pelo botão do chat</h3>
+            <p>
+              Na conversa com a Lia, use <b>Apagar conversa</b>, logo abaixo do campo de mensagem.
+              Você confirma, e a conversa e suas mensagens são apagadas definitivamente. Não é
+              possível desfazer.
+            </p>
+            <h4>Limites deste caminho</h4>
+            <ul>
+              <li>
+                Apaga só a conversa escolhida. Suas outras conversas e o seu cadastro na Solar não
+                são apagados por ele.
+              </li>
+              <li>
+                Funciona no navegador em que a conversa foi aberta ou, com login, na sua conta. Quem
+                usar esse mesmo navegador também consegue apagar.
+              </li>
+              <li>
+                Algumas conversas antigas, abertas antes de o botão existir, podem não ter essa
+                opção. Nesse caso, peça pelo atendimento.
+              </li>
+              <li>Para excluir a conta inteira, use <a routerLink="/conta">Minha conta</a>.</li>
+            </ul>
+            <a routerLink="/" class="link-acao">Ir para a conversa</a>
+          </section>
+
+          <section aria-labelledby="canal-humano" class="cartao">
+            <span class="rotulo-canal">Com uma pessoa · atendimento</span>
+            <h3 id="canal-humano">Pedir ao atendimento humano</h3>
+            <p>Peça ao corretor que atende você ou ao atendimento da Solar.</p>
+            <h4>Use este caminho para</h4>
+            <ul>
+              <li>apagar outros dados do seu cadastro, além da conversa;</li>
+              <li>conversas antigas que não tenham o botão;</li>
+              <li>qualquer caso em que você prefira falar com uma pessoa.</li>
+            </ul>
+            <p class="orientacao">
+              Para localizarmos seus dados, informe o telefone ou e-mail que você usou e, se
+              lembrar, o dia da conversa.
+            </p>
+          </section>
+        </div>
+
         <p>Evite enviar documentos, dados bancários ou informações sensíveis.</p>
-        <a routerLink="/">Voltar para a conversa</a>
+        <a routerLink="/" class="link-voltar">Voltar para a conversa</a>
       </article>
     </main>
     <div
@@ -147,12 +204,101 @@ interface EstadoBarraRolagem {
       line-height: 1.3;
     }
 
+    h2#eliminacao {
+      margin-top: 32px;
+    }
+
     p {
       margin: 0 0 16px;
       line-height: 1.55;
     }
 
-    a {
+    p a,
+    li a {
+      display: inline;
+      margin-top: 0;
+      color: var(--marca);
+      font-weight: 600;
+    }
+
+    .grade-canais {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
+      gap: 16px;
+      margin: 0 0 20px;
+    }
+
+    .cartao {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      padding: 20px 22px;
+      box-sizing: border-box;
+      background: color-mix(in srgb, var(--superficie-elevada) 72%, var(--fundo-conversa));
+      border: 1px solid var(--borda-componente);
+      border-radius: var(--raio-card);
+    }
+
+    .rotulo-canal {
+      font-family: 'IBM Plex Mono', monospace;
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--texto-secundario);
+    }
+
+    .cartao h3 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    .cartao p {
+      margin: 0;
+      font-size: 15px;
+      line-height: 1.55;
+    }
+
+    .cartao h4 {
+      margin: 4px 0 0;
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .cartao ul {
+      margin: 0;
+      padding-left: 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .cartao li {
+      margin: 0;
+    }
+
+    .cartao .orientacao {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.5;
+      color: var(--texto-secundario);
+    }
+
+    .cartao .link-acao {
+      align-self: flex-start;
+      margin-top: 4px;
+      font-family: 'Instrument Sans', system-ui, sans-serif;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--marca);
+      text-underline-offset: 3px;
+    }
+
+    .link-voltar {
       display: inline-block;
       margin-top: 4px;
       color: var(--marca);
@@ -177,11 +323,33 @@ interface EstadoBarraRolagem {
         margin-top: 20px;
         font-size: 16px;
       }
+
+      h2#eliminacao {
+        margin-top: 28px;
+      }
+
+      .grade-canais {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      .cartao {
+        padding: 18px 16px;
+      }
+
+      .cartao .link-acao {
+        display: inline-flex;
+        align-items: center;
+        min-height: 44px;
+      }
     }
   `,
 })
 export class PoliticaPrivacidade implements AfterViewInit {
   private readonly elemento = inject(ElementRef<HTMLElement>);
+
+  protected readonly versao = VERSAO_AVISO_PRIVACIDADE;
 
   readonly barraRolagem = signal<EstadoBarraRolagem>({
     topo: 0,

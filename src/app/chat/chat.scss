@@ -94,10 +94,17 @@
   color: var(--texto-primario);
 }
 
-.barra-recolhida {
-  height: 34px;
-  background: var(--superficie-barra);
-  border-top: 1px solid var(--borda-estrutura);
+.banner-apagada {
+  display: flex;
+  flex-direction: column;
+  max-width: 560px;
+
+  &:focus,
+  &:focus-visible {
+    outline: 2px solid var(--foco);
+    outline-offset: 6px;
+    border-radius: 2px;
+  }
 }
 
 @media (max-width: 860px) {
