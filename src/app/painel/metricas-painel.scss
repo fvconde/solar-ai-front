@@ -65,6 +65,10 @@ ul, ol { list-style: none; margin: 0; padding: 0; }
 .trilho { display: block; height: 6px; background: var(--inativo-borda); border-radius: 3px; overflow: hidden; }
 .trilho > span { display: block; height: 100%; background: var(--marca); }
 .consentimento > span, .confirmado { background: var(--sucesso); }
+.trilho.follow-up-total > span { background: color-mix(in srgb, var(--marca) 70%, var(--superficie-elevada)); }
+.svg-tempo { display: block; overflow: visible; }
+.linha-followup { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--texto-secundario); }
+.linha-followup strong, .linha-followup .mono { color: var(--texto-primario); }
 .horarios li { display: flex; gap: 8px; align-items: center; font-size: 12.5px; }
 .horarios li > span:last-child { margin-left: auto; color: var(--texto-secundario); }
 .estado { font-size: 13px; display: flex; gap: 12px; align-items: center; }

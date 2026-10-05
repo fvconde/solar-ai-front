@@ -96,15 +96,19 @@ describe('Faixa de métricas (S-22)', () => {
     expect(html.querySelector('.mini-grafico-celular')).not.toBeNull();
     expect(fixture.componentInstance.criterio('iniciadas')).toContain('atualmente atribuídas a você');
   });
-  it('expansão tem cinco extras completos, controle ARIA e persiste por usuário', () => {
+  it('expansão tem sete extras completos, controle ARIA e persiste por usuário', () => {
     const html = montar();
     expect(html.querySelector<HTMLElement>('.extras')?.hidden).toBeTrue();
     expandir();
     expect(html.querySelector<HTMLElement>('.extras')?.hidden).toBeFalse();
     expect(html.querySelector('.alternar')?.getAttribute('aria-expanded')).toBe('true');
     expect(html.querySelector('.alternar')?.getAttribute('aria-controls')).toBe('extras-metricas');
-    expect(html.querySelectorAll('.grade-extras .cartao').length).toBe(5);
+    expect(html.querySelectorAll('.grade-extras .cartao').length).toBe(7);
     expect(localStorage.getItem(chave)).toBe('1');
+    expect(html.querySelector('.extras')?.textContent).toContain('Tempo mediano até o primeiro encaminhamento');
+    expect(html.querySelector('.extras')?.textContent).toContain('Follow-up automático');
+    expect(html.querySelector('.extras')?.textContent).toContain('11 min');
+    expect(html.querySelector('.extras')?.textContent).toContain('50%');
     expect(html.querySelector('.extras')?.textContent).toContain('IMV-001');
     expect(html.querySelector('.extras')?.textContent).toContain('MOEMA');
     expect(html.querySelector('.extras')?.textContent).toContain('12 de 14 leads informaram região');

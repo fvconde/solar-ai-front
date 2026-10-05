@@ -70,6 +70,55 @@ export class MetricasPainel implements OnInit, OnDestroy {
     const a = this.dados()?.avanco;
     return a && a.length > 0 ? a[a.length - 1].conversas : 0;
   });
+  readonly sparklineTempo = computed(() => {
+    const valores = this.dados()?.extras?.tempoMedianoDiario ?? [];
+    if (!valores || valores.length === 0) {
+      return { segmentos: [] as string[], isolados: [] as { x: number; y: number }[], ultimo: null as { x: number; y: number } | null };
+    }
+    const validos = valores.filter((v): v is number => v !== null && Number.isFinite(v));
+    if (validos.length === 0) {
+      return { segmentos: [] as string[], isolados: [] as { x: number; y: number }[], ultimo: null as { x: number; y: number } | null };
+    }
+    const min = Math.min(...validos);
+    const max = Math.max(...validos);
+    const calcY = (v: number) => {
+      if (min === max) return 18;
+      return 30 - ((v - min) / (max - min)) * (30 - 4);
+    };
+
+    const pontos: ({ x: number; y: number } | null)[] = valores.map((v, i) => {
+      const x = i * 20;
+      if (v === null || !Number.isFinite(v)) return null;
+      return { x, y: Math.round(calcY(v) * 100) / 100 };
+    });
+
+    const segmentos: string[] = [];
+    const isolados: { x: number; y: number }[] = [];
+    let grupoAtual: { x: number; y: number }[] = [];
+
+    for (const p of pontos) {
+      if (p !== null) {
+        grupoAtual.push(p);
+      } else {
+        if (grupoAtual.length >= 2) {
+          segmentos.push(grupoAtual.map(pt => `${pt.x},${pt.y}`).join(' '));
+        } else if (grupoAtual.length === 1) {
+          isolados.push(grupoAtual[0]);
+        }
+        grupoAtual = [];
+      }
+    }
+    if (grupoAtual.length >= 2) {
+      segmentos.push(grupoAtual.map(pt => `${pt.x},${pt.y}`).join(' '));
+    } else if (grupoAtual.length === 1) {
+      isolados.push(grupoAtual[0]);
+    }
+
+    const todosValidos = pontos.filter((p): p is { x: number; y: number } => p !== null);
+    const ultimo = todosValidos.length > 0 ? todosValidos[todosValidos.length - 1] : null;
+
+    return { segmentos, isolados, ultimo };
+  });
   readonly vazio = computed(() => (this.dados()?.extras.privacidade.leads ?? 0) === 0 && this.baseAvanco() === 0);
 
   ngOnInit(): void {

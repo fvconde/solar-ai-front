@@ -124,6 +124,45 @@
             <p>{{ f.plural(totalScore(), 'lead com score', 'leads com score') }} · {{ f.plural(d.extras.score.semAvaliacao, 'lead sem avaliação', 'leads sem avaliação') }}</p>
           </article>
           <article class="cartao">
+            <h3>Tempo mediano até o primeiro encaminhamento</h3><app-criterio-metrica titulo="Tempo mediano até o primeiro encaminhamento" [texto]="criterio('tempo')" />
+            <strong class="numero">{{ f.tempo(d.extras.tempoMedianoMin) }}</strong>
+            <svg class="svg-tempo" width="120" height="36" viewBox="0 0 120 36" role="img" [attr.aria-label]="f.serieTempo(d.extras.tempoMedianoDiario, 'acessivel')">
+              <line x1="0" y1="34" x2="120" y2="34" stroke="var(--inativo-borda)" stroke-width="1" />
+              @for (seg of sparklineTempo().segmentos; track seg) {
+                <polyline [attr.points]="seg" fill="none" stroke="var(--marca)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" />
+              }
+              @for (iso of sparklineTempo().isolados; track iso.x) {
+                @if (iso.x !== sparklineTempo().ultimo?.x) {
+                  <circle [attr.cx]="iso.x" [attr.cy]="iso.y" r="2" fill="var(--marca)" />
+                }
+              }
+              @if (sparklineTempo().ultimo; as ult) {
+                <circle [attr.cx]="ult.x" [attr.cy]="ult.y" r="3" fill="var(--marca)" />
+              }
+            </svg>
+            <p class="apoio">{{ f.serieTempo(d.extras.tempoMedianoDiario, 'visivel') }}</p>
+          </article>
+          <article class="cartao">
+            <h3>Follow-up automático</h3><app-criterio-metrica titulo="Follow-up automático" [texto]="criterio('followUp')" />
+            <div class="linha-followup">
+              <span>Com follow-up</span>
+              <strong class="mono">{{ f.numero(d.extras.followUp.comFollowUp) }}</strong>
+            </div>
+            <span class="trilho follow-up-total">
+              <span [style.width]="d.extras.followUp.comFollowUp > 0 ? '100%' : '0%'"></span>
+            </span>
+            <div class="linha-followup">
+              <span>{{ f.respostaFollowUp(d.extras.followUp.janelaDias) }}</span>
+              <span class="mono">
+                {{ f.numero(d.extras.followUp.janelaEncerrada > 0 ? d.extras.followUp.responderam : 0) }} de {{ f.numero(d.extras.followUp.janelaEncerrada) }} · {{ f.percentual(d.extras.followUp.responderam, d.extras.followUp.janelaEncerrada) }}
+              </span>
+            </div>
+            <span class="trilho follow-up-resposta">
+              <span [style.width]="f.largura(d.extras.followUp.responderam, d.extras.followUp.janelaEncerrada)"></span>
+            </span>
+            <p class="apoio">{{ f.observacaoFollowUp(d.extras.followUp.emObservacao) }}</p>
+          </article>
+          <article class="cartao">
             <h3>Imóveis mais sugeridos pela Lia</h3><app-criterio-metrica titulo="Imóveis mais sugeridos pela Lia" [texto]="criterio('imoveis')" />
             @if (!d.extras.imoveis.length) { <p class="apoio">Nenhuma sugestão de imóvel ainda.</p> }
             <ol class="ranking imoveis">@for (i of d.extras.imoveis; track i.id) {
