@@ -13,7 +13,7 @@ import { PainelApi } from './painel-api';
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [CriterioMetrica, MetricasAvanco],
   templateUrl: './metricas-painel.html',
-  styleUrl: './metricas-painel.scss',
+  styleUrls: ['./metricas-painel.scss', './metricas-painel-avanco.scss'],
 })
 export class MetricasPainel implements OnInit, OnDestroy {
   private readonly api = inject(PainelApi);

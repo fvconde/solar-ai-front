@@ -51,7 +51,14 @@ describe('Layout real das métricas por viewport (S-22)', () => {
           const [bloco] = await fixture.getDeferBlocks();
           await bloco.render(DeferBlockState.Complete);
           const dados = metricasParaTeste();
-          if (perfil === 'corretor') dados.equipe = null;
+          if (perfil === 'corretor') {
+            dados.equipe = null;
+            dados.avanco = [
+              { etapa: 'atribuidas', conversas: 14 },
+              { etapa: 'horario', conversas: 4 },
+            ];
+            dados.dadosEssenciaisPreenchidos = 8;
+          }
           http.expectOne('/api/painel/metricas?dias=30').flush(dados);
           fixture.detectChanges();
           const quadro = document.createElement('iframe');
@@ -103,6 +110,16 @@ describe('Layout real das métricas por viewport (S-22)', () => {
             expect(fila.getBoundingClientRect().top).toBeLessThan(altura);
           };
           verificarAlternar(false);
+          if (largura <= 860) {
+            const mini = doc.querySelector<HTMLElement>('.mini-grafico-celular')!;
+            expect(win.getComputedStyle(mini).display).not.toBe('none');
+            const botoesCompactos = Array.from(doc.querySelectorAll<HTMLElement>('.compacto-botao'));
+            expect(botoesCompactos.length).toBe(perfil === 'supervisor' ? 6 : 2);
+            for (const b of botoesCompactos) {
+              expect(b.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
+            }
+            expect(win.getComputedStyle(doc.querySelector('.principais')!).display).toBe('none');
+          }
           fixture.nativeElement.querySelector('.alternar').click();
           fixture.detectChanges();
           doc.body.innerHTML = fixture.nativeElement.outerHTML;
@@ -137,6 +154,8 @@ describe('Layout real das métricas por viewport (S-22)', () => {
           } else {
             const grafico = doc.querySelector<HTMLElement>('.principais .card-grafico')!;
             expect(grafico).not.toBeNull();
+            const barras = Array.from(doc.querySelectorAll<HTMLElement>('.card-grafico .item-barra'));
+            expect(barras.length).toBe(perfil === 'supervisor' ? 6 : 2);
             const cards = Array.from(doc.querySelectorAll<HTMLElement>('.principais .bloco-cards > .cartao'));
             expect(cards.length).toBe(perfil === 'supervisor' ? 4 : 3);
             for (const card of cards) {
