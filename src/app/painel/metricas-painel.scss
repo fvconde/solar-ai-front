@@ -22,7 +22,7 @@ h3 { font-size: 12.5px; line-height: 1.3; font-weight: 500; color: var(--texto-s
 .alternar { display: flex; gap: 8px; align-items: center; align-self: start; margin-bottom: 8px; }
 .seta { display: block; flex: none; }
 .seta.recolher { transform: rotate(180deg); }
-.rotulo-celular, .resumo-celular, .pendentes-celular { display: none; }
+.rotulo-celular, .resumo-celular, .pendentes-celular, .mini-grafico-celular { display: none; }
 .miolo { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 12px; flex: none; overflow: visible; }
 .carregamento { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; flex: none; }
 .principais { display: flex; flex-wrap: wrap; gap: 12px; flex: none; }
@@ -82,6 +82,8 @@ button:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--marca)
   .resumo-celular { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
   .resumo-celular .cartao { padding: 8px 10px; gap: 2px; font-size: 12px; line-height: 1.3; }
   .resumo-celular .numero { font-size: 22px; }
+  .mini-grafico-celular { display: block; margin-top: 6px; }
+  .mini-grafico-celular .aviso-parcial { margin-bottom: 6px; }
   .pendentes-celular { display: block; font-size: 12px; margin-top: 6px; min-height: 24px; }
   .principais { display: none; }
   .expandida .principais, .expandida .principais.com-equipe { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }

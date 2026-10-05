@@ -90,9 +90,10 @@ describe('Faixa de métricas (S-22)', () => {
     dados.dadosEssenciaisPreenchidos = 8;
     const html = montar(dados);
     expect(html.textContent).toContain('Conversas atribuídas a você');
-    expect(html.querySelector('.equipe')).toBeNull();
-    expect(html.querySelector('.resumo-celular')?.textContent).toContain('reservas nos próximos 7 dias');
-    expect(html.querySelector('.resumo-celular .cartao:last-child strong')?.textContent).toBe('3');
+    expect(html.querySelector('.resumo-celular')?.textContent).toContain('com dados essenciais');
+    expect(html.querySelector('.resumo-celular')?.textContent).toContain('conversas com horário confirmado');
+    expect(html.querySelector('.resumo-celular .cartao:last-child strong')?.textContent).toBe('4');
+    expect(html.querySelector('.mini-grafico-celular')).not.toBeNull();
     expect(fixture.componentInstance.criterio('iniciadas')).toContain('atualmente atribuídas a você');
   });
   it('expansão tem cinco extras completos, controle ARIA e persiste por usuário', () => {

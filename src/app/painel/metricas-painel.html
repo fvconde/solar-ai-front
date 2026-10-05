@@ -26,12 +26,23 @@
     } @else if (dados(); as d) {
       @if (vazio()) { <p class="estado vazio">Ainda não há conversas. Os números aparecem assim que a Lia atender o primeiro lead.</p> }
       <div class="resumo-celular">
-        <div class="cartao"><strong class="numero">{{ f.numero(d.conversasIniciadas) }}</strong><span>{{ supervisor() ? 'conversas iniciadas' : 'iniciadas, com você hoje' }}</span></div>
+        <div class="cartao"><strong class="numero">{{ f.numero(baseAvanco()) }}</strong><span>{{ supervisor() ? 'conversas iniciadas' : 'conversas atribuídas a você' }}</span></div>
+        <div class="cartao"><strong class="numero">{{ f.percentual(d.dadosEssenciaisPreenchidos, baseAvanco()) }}</strong><span>com dados essenciais</span></div>
         <div class="cartao"><strong class="numero">{{ f.numero(d.horariosConfirmados) }}</strong><span>conversas com horário confirmado</span></div>
-        <div class="cartao"><strong class="numero">{{ f.numero(supervisor() ? d.equipe?.aguardandoCorretor ?? 0 : d.reservasProximos7Dias) }}</strong><span>{{ supervisor() ? 'aguardando corretor' : 'reservas nos próximos 7 dias' }}</span></div>
       </div>
       @if (supervisor() && d.equipe; as e) {
         <button class="pendentes-celular" type="button" (click)="abrirPendentes.emit()">{{ f.plural(e.pendentesAprovacao, 'corretor aguarda', 'corretores aguardam') }} aprovação</button>
+      }
+      @if (!expandido()) {
+        <div class="mini-grafico-celular">
+          @if (historicoParcial()) {
+            <p class="aviso-parcial">
+              <span class="marcador-neutro" aria-hidden="true"></span>
+              <span>{{ f.historico(d.periodo.historicoDesde) }}</span>
+            </p>
+          }
+          <app-metricas-avanco [etapas]="d.avanco" [compacto]="true" />
+        </div>
       }
       <div class="principais" [class.com-equipe]="supervisor()">
         <article class="cartao card-grafico">
