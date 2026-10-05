@@ -138,8 +138,8 @@ export const formatadorMetricas = {
       prefixo = `${titulo}: ${contagem}, ${pctStr}, ${faltamStr}`;
     }
 
-    if (nota) prefixo += `. ${nota}`;
-    if (explicacao) prefixo += `. ${explicacao}`;
+    if (nota) prefixo += prefixo.endsWith('.') ? ` ${nota}` : `. ${nota}`;
+    if (explicacao) prefixo += prefixo.endsWith('.') ? ` ${explicacao}` : `. ${explicacao}`;
     return prefixo;
   },
   ariaAvanco(itens: AvancoMetricasPainel[]): string {

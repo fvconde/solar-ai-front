@@ -210,12 +210,15 @@
   background: var(--texto-primario);
   color: var(--fundo-conversa);
   box-shadow: 0 4px 14px color-mix(in srgb, var(--texto-primario) 18%, transparent);
-  display: flex;
   flex-direction: column;
   gap: 2px;
   text-align: left;
   pointer-events: auto;
   overflow: visible;
+
+  &:popover-open {
+    display: flex;
+  }
 
   .dica-titulo {
     font: 600 12.5px/1.3 'Libre Franklin', sans-serif;

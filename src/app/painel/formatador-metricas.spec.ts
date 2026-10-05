@@ -96,6 +96,14 @@ describe('Formatador de métricas (S-22)', () => {
     expect(ariaSupervisor).toContain('5 conversas ainda não atingiram esta etapa');
     expect(ariaSupervisor).toContain('Inclui 2 conversas sem os dados essenciais.');
     expect(ariaSupervisor).toContain('Pedido de atendimento humano registrado');
+    expect(ariaSupervisor).not.toContain('..');
+    expect(ariaSupervisor).toContain('sem os dados essenciais. Pedido de atendimento humano registrado');
+
+    const itemSupervisorSingular = { etapa: 'encaminhamento' as const, conversas: 9, semEssenciais: 1 };
+    const ariaSupervisorSingular = f.ariaEtapa(itemSupervisorSingular, 14, false);
+    expect(ariaSupervisorSingular).toContain('Inclui 1 conversa sem os dados essenciais.');
+    expect(ariaSupervisorSingular).not.toContain('..');
+    expect(ariaSupervisorSingular).toContain('sem os dados essenciais. Pedido de atendimento humano registrado');
 
     const itemPrimeiro = { etapa: 'iniciadas' as const, conversas: 14 };
     const ariaPrimeiro = f.ariaEtapa(itemPrimeiro, 14, true);

@@ -256,4 +256,35 @@ describe('MetricasAvanco', () => {
     const caixa = fixture.nativeElement.querySelector('.caixa-detalhe');
     expect(caixa.textContent).toContain('Conversas iniciadas');
   });
+
+  it('controla visibilidade da caixa de detalhe com display none fechada e flex aberta nos modos completo e compacto', () => {
+    const caixa = fixture.nativeElement.querySelector('.caixa-detalhe') as HTMLElement;
+    expect(window.getComputedStyle(caixa).display).toBe('none');
+    expect(caixa.getBoundingClientRect().height).toBe(0);
+
+    const botoes: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.botao-barra');
+    botoes[0].dispatchEvent(new FocusEvent('focus'));
+    fixture.detectChanges();
+    expect(window.getComputedStyle(caixa).display).toBe('flex');
+    expect(caixa.matches(':popover-open')).toBeTrue();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    expect(window.getComputedStyle(caixa).display).toBe('none');
+
+    fixture.componentRef.setInput('compacto', true);
+    fixture.detectChanges();
+    expect(window.getComputedStyle(caixa).display).toBe('none');
+    expect(caixa.getBoundingClientRect().height).toBe(0);
+
+    const botoesCompactos: NodeListOf<HTMLButtonElement> = fixture.nativeElement.querySelectorAll('.compacto-botao');
+    botoesCompactos[0].dispatchEvent(new FocusEvent('focus'));
+    fixture.detectChanges();
+    expect(window.getComputedStyle(caixa).display).toBe('flex');
+    expect(caixa.matches(':popover-open')).toBeTrue();
+
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }));
+    fixture.detectChanges();
+    expect(window.getComputedStyle(caixa).display).toBe('none');
+  });
 });
