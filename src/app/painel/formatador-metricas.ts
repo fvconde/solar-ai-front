@@ -71,7 +71,7 @@ export const formatadorMetricas = {
   explicacaoEtapa(etapa: EtapaAvancoPainel | string): string {
     switch (etapa) {
       case 'iniciadas':
-        return 'Primeira mensagem do usuário, sem contar o "Olá" automático';
+        return 'Primeira mensagem do usuário, sem contar o “Olá” automático';
       case 'intencao':
         return 'Compra, aluguel ou investimento';
       case 'essenciais':
@@ -155,7 +155,7 @@ export const formatadorMetricas = {
     const grupo = etapaRef === 'atribuidas'
       ? (base === 1 ? 'da conversa atribuída a você' : 'das conversas atribuídas a você')
       : (base === 1 ? 'da conversa' : 'das conversas');
-    const verbo = valor === 1 || base === 1 ? 'teve' : 'tiveram';
+    const verbo = base === 1 ? 'teve' : 'tiveram';
     return `${p} ${grupo} ${verbo} horário confirmado`;
   },
   respostaFollowUp(janelaDias: number): string {

@@ -103,7 +103,7 @@ describe('Formatador de métricas (S-22)', () => {
     expect(ariaPrimeiro).toContain('14 conversas');
     expect(ariaPrimeiro).toContain('100%');
     expect(ariaPrimeiro).toContain('Grupo de referência do período');
-    expect(ariaPrimeiro).toContain('Primeira mensagem do usuário, sem contar o "Olá" automático');
+    expect(ariaPrimeiro).toContain('Primeira mensagem do usuário, sem contar o “Olá” automático');
 
     const itemCorretor = { etapa: 'horario' as const, conversas: 2 };
     const ariaCorretor = f.ariaEtapa(itemCorretor, 3, false, 'atribuidas');
@@ -133,8 +133,12 @@ describe('Formatador de métricas (S-22)', () => {
   });
   it('formata resumo de horários confirmados com plural, singular e base zero', () => {
     expect(f.resumoHorarios(4, 14)).toBe('29% das conversas tiveram horário confirmado');
-    expect(f.resumoHorarios(1, 14)).toBe('7% das conversas teve horário confirmado');
+    expect(f.resumoHorarios(1, 14)).toBe('7% das conversas tiveram horário confirmado');
+    expect(f.resumoHorarios(0, 14)).toBe('0% das conversas tiveram horário confirmado');
     expect(f.resumoHorarios(1, 1)).toBe('100% da conversa teve horário confirmado');
+    expect(f.resumoHorarios(2, 3, 'atribuidas')).toBe(
+      '67% das conversas atribuídas a você tiveram horário confirmado'
+    );
     expect(f.resumoHorarios(0, 0)).toBe('Sem conversas no período');
   });
   it('formata frases de follow-up para janelas e contagens de observação', () => {
