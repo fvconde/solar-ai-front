@@ -1,9 +1,34 @@
+export type EtapaAvancoPainel =
+  | 'iniciadas'
+  | 'intencao'
+  | 'essenciais'
+  | 'encaminhamento'
+  | 'corretor'
+  | 'horario'
+  | 'atribuidas';
+
+export interface AvancoMetricasPainel {
+  etapa: EtapaAvancoPainel;
+  conversas: number;
+  semEssenciais?: number;
+}
+
 export interface MetricasPainelResponse {
-  periodo: { dias: number; inicio: string; atualizadoEm: string };
+  periodo: {
+    dias: number;
+    inicio: string;
+    atualizadoEm: string;
+    historicoDesde: string;
+  };
   conversasIniciadas: number;
   horariosConfirmados: number;
   reservasProximos7Dias: number;
-  leadsPorIntencao: { compra: number; aluguel: number; investimento: number; semIntencao: number };
+  leadsPorIntencao: {
+    compra: number;
+    aluguel: number;
+    investimento: number;
+    semIntencao: number;
+  };
   equipe: {
     atribuidasPorCorretor: {
       corretor: { id: string; nome: string; iniciais: string };
@@ -24,5 +49,16 @@ export interface MetricasPainelResponse {
       vencem30Dias: number;
       proximoVencimento: string | null;
     };
+    tempoMedianoMin: number | null;
+    tempoMedianoDiario: (number | null)[];
+    followUp: {
+      janelaDias: number;
+      comFollowUp: number;
+      janelaEncerrada: number;
+      responderam: number;
+      emObservacao: number;
+    };
   };
+  avanco: AvancoMetricasPainel[];
+  dadosEssenciaisPreenchidos: number;
 }

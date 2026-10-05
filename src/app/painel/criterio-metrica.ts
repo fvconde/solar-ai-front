@@ -1,6 +1,7 @@
 import { ChangeDetectionStrategy, Component, ElementRef, HostListener, input, OnDestroy, OnInit, signal, viewChild } from '@angular/core';
 
 let proximoId = 0;
+const EVENTO_CRITERIO_ABERTO = 'solar:criterio-aberto';
 
 @Component({
   selector: 'app-criterio-metrica',
@@ -42,11 +43,23 @@ export class CriterioMetrica implements OnInit, OnDestroy {
     if (document.activeElement === this.botao().nativeElement) this.posicionar();
     else this.fechar();
   };
+  private readonly aoOutroAbrir = (e: Event) => {
+    const ce = e as CustomEvent<{ id: string }>;
+    if (ce.detail?.id !== this.id && this.aberto()) {
+      this.fechar();
+    }
+  };
 
-  ngOnInit(): void { document.addEventListener('scroll', this.aoRolar, true); }
+  ngOnInit(): void {
+    document.addEventListener('scroll', this.aoRolar, true);
+    document.addEventListener(EVENTO_CRITERIO_ABERTO, this.aoOutroAbrir);
+  }
 
   abrir(): void {
     this.cancelarFechamento();
+    if (!this.aberto()) {
+      document.dispatchEvent(new CustomEvent(EVENTO_CRITERIO_ABERTO, { detail: { id: this.id } }));
+    }
     const dica = this.dica().nativeElement;
     dica.showPopover();
     this.posicionar();
@@ -85,6 +98,7 @@ export class CriterioMetrica implements OnInit, OnDestroy {
 
   ngOnDestroy(): void {
     document.removeEventListener('scroll', this.aoRolar, true);
+    document.removeEventListener(EVENTO_CRITERIO_ABERTO, this.aoOutroAbrir);
     this.cancelarFechamento();
     if (this.aberto()) this.dica().nativeElement.hidePopover();
   }

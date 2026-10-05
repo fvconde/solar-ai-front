@@ -3,6 +3,7 @@ import { Subscription } from 'rxjs';
 import { SessaoStore } from '../sessao/sessao-store';
 import { CriterioMetrica } from './criterio-metrica';
 import { formatadorMetricas } from './formatador-metricas';
+import { MetricasAvanco } from './metricas-avanco';
 import { MetricasPainelResponse } from './metricas-contrato';
 import { PainelApi } from './painel-api';
 
@@ -10,9 +11,9 @@ import { PainelApi } from './painel-api';
   selector: 'app-metricas-painel',
   standalone: true,
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CriterioMetrica],
+  imports: [CriterioMetrica, MetricasAvanco],
   templateUrl: './metricas-painel.html',
-  styleUrl: './metricas-painel.scss',
+  styleUrls: ['./metricas-painel.scss', './metricas-painel-avanco.scss'],
 })
 export class MetricasPainel implements OnInit, OnDestroy {
   private readonly api = inject(PainelApi);
@@ -59,7 +60,66 @@ export class MetricasPainel implements OnInit, OnDestroy {
   readonly maxAtribuidas = computed(() => Math.max(0, ...this.equipe().map(a => a.conversas)));
   readonly maxImoveis = computed(() => Math.max(0, ...this.dados()?.extras.imoveis.map(i => i.conversas) ?? []));
   readonly maxRegioes = computed(() => Math.max(0, ...this.dados()?.extras.regioes.top.map(r => r.leads) ?? []));
-  readonly vazio = computed(() => this.dados()?.extras.privacidade.leads === 0 && this.dados()?.conversasIniciadas === 0);
+  readonly baseAvanco = computed(() => this.dados()?.avanco?.[0]?.conversas ?? 0);
+  readonly historicoParcial = computed(() => {
+    const p = this.dados()?.periodo;
+    if (!p?.inicio || !p?.historicoDesde) return false;
+    return Date.parse(p.inicio) < Date.parse(p.historicoDesde);
+  });
+  readonly ultimaBarra = computed(() => {
+    const a = this.dados()?.avanco;
+    return a && a.length > 0 ? a[a.length - 1].conversas : 0;
+  });
+  readonly sparklineTempo = computed(() => {
+    const valores = this.dados()?.extras?.tempoMedianoDiario ?? [];
+    if (!valores || valores.length === 0) {
+      return { segmentos: [] as string[], isolados: [] as { x: number; y: number }[], ultimo: null as { x: number; y: number } | null };
+    }
+    const validos = valores.filter((v): v is number => v !== null && Number.isFinite(v));
+    if (validos.length === 0) {
+      return { segmentos: [] as string[], isolados: [] as { x: number; y: number }[], ultimo: null as { x: number; y: number } | null };
+    }
+    const min = Math.min(...validos);
+    const max = Math.max(...validos);
+    const calcY = (v: number) => {
+      if (min === max) return 18;
+      return 30 - ((v - min) / (max - min)) * (30 - 4);
+    };
+
+    const pontos: ({ x: number; y: number } | null)[] = valores.map((v, i) => {
+      const x = i * 20;
+      if (v === null || !Number.isFinite(v)) return null;
+      return { x, y: Math.round(calcY(v) * 100) / 100 };
+    });
+
+    const segmentos: string[] = [];
+    const isolados: { x: number; y: number }[] = [];
+    let grupoAtual: { x: number; y: number }[] = [];
+
+    for (const p of pontos) {
+      if (p !== null) {
+        grupoAtual.push(p);
+      } else {
+        if (grupoAtual.length >= 2) {
+          segmentos.push(grupoAtual.map(pt => `${pt.x},${pt.y}`).join(' '));
+        } else if (grupoAtual.length === 1) {
+          isolados.push(grupoAtual[0]);
+        }
+        grupoAtual = [];
+      }
+    }
+    if (grupoAtual.length >= 2) {
+      segmentos.push(grupoAtual.map(pt => `${pt.x},${pt.y}`).join(' '));
+    } else if (grupoAtual.length === 1) {
+      isolados.push(grupoAtual[0]);
+    }
+
+    const todosValidos = pontos.filter((p): p is { x: number; y: number } => p !== null);
+    const ultimo = todosValidos.length > 0 ? todosValidos[todosValidos.length - 1] : null;
+
+    return { segmentos, isolados, ultimo };
+  });
+  readonly vazio = computed(() => (this.dados()?.extras.privacidade.leads ?? 0) === 0 && this.baseAvanco() === 0);
 
   ngOnInit(): void {
     try { this.expandido.set(localStorage.getItem(this.chave) === '1'); } catch {}
@@ -86,18 +146,23 @@ export class MetricasPainel implements OnInit, OnDestroy {
       ? 'Recorte atual da Visão geral: leads visíveis pela última distribuição de cada lead. '
       : 'Recorte atual de Meus leads: última distribuição de cada lead; só conversas atualmente atribuídas a você e reservas da sua agenda. ';
     const periodo = this.f.plural(this.dados()?.periodo.dias ?? 30, 'dia', 'dias');
+    const janelaFu = this.f.plural(this.dados()?.extras.followUp?.janelaDias ?? 7, 'dia', 'dias');
     const textos: Record<string, string> = {
+      avanco: `Histórico sem mudança na redistribuição de corretor. Cada barra é independente e calculada sobre a base única com corte do histórico nos últimos ${periodo}.`,
+      essenciais: `Dados essenciais confirmados pela qualificação determinística da Lia, sem limiar de score. Calculado sobre a base de conversas do período a partir do histórico.`,
       iniciadas: `Cada conversa conta uma vez se sua primeira mensagem do lead ocorreu nos últimos ${periodo}, até a atualização. O “Olá” automático não conta. Redistribuição muda o responsável atual, não a data de início.`,
-      confirmadas: `Conversas distintas iniciadas nos últimos ${periodo} com ao menos uma confirmação de horário, sem duplicar mensagens. Confirmar não comprova comparecimento. As reservas dos próximos 7 dias são slots reservados de agora até +7 dias, incluindo os limites; não se limitam às conversas iniciadas no período.`,
+      confirmadas: `Conversas distintas iniciadas nos últimos ${periodo} com registro a partir do histórico e ao menos uma confirmação de horário, sem duplicar mensagens. Confirmar não comprova comparecimento. As reservas dos próximos 7 dias são slots reservados de agora até +7 dias, incluindo os limites; não se limitam às conversas iniciadas no período.`,
       intencao: 'Cada lead distinto conta uma vez pela intenção atual: compra, aluguel, investimento ou sem intenção definida (nula ou indefinida). Inclui todo o recorte, independentemente dos últimos 30 dias.',
       equipe: 'Estado atual por conversa e encaminhamento, sem janela de dias, sem histórico e sem totalizar leads. A redistribuição muda o corretor responsável. Aguardando: encaminhamento ainda sem corretor. Pendentes de aprovação: perfil corretor, corretor ativo e status em análise, como na aba Novos corretores.',
       score: 'Cada lead distinto do recorte conta uma vez, sem janela de dias. Frio: 0–39; morno: 40–69; quente: 70–100. Nulo fica sem avaliação e fora do denominador dos percentuais. As faixas não mudam a qualificação nem o encaminhamento.',
+      tempo: 'Tempo calculado desde a primeira mensagem real do lead, sem saudação, até o primeiro encaminhamento. O marco é imutável na redistribuição de corretores.',
+      followUp: `Primeiro envio de follow-up automático por conversa única. Resposta do lead após envio até o final da janela de ${janelaFu}. Apenas janelas encerradas entram na porcentagem. Conversas recentes com resposta dentro da janela permanecem em observação.`,
       regioes: 'Cada lead distinto do recorte conta uma vez, sem janela de dias. Regiões são agrupadas sem diferença de caixa ou acentos. As cinco primeiras são ordenadas por contagem e nome; a sobra aparece em outras regiões. A cobertura usa todos os leads do recorte.',
       imoveis: 'Somente os imóveis sugeridos registrados nas mensagens: id e bairro do snapshot. Cada conversa distinta conta uma vez por imóvel, sem duplicar repetições de mensagens e sem janela de dias. Mostra recomendações da Lia, não interesse do lead.',
       horarios: 'Slots reservados a partir da atualização, incluindo o início; corretor vê somente sua agenda. A lista mostra apenas início e iniciais do corretor, sem lead, e pode incluir reservas além dos próximos 7 dias.',
       privacidade: `Consentimento registrado por lead distinto de todo o recorte, sem janela de dias. Retenção configurada: ${this.f.plural(this.dados()?.extras.privacidade.prazoRetencaoMeses ?? 0, 'mês', 'meses')}. Último contato é a última mensagem do lead em todas as suas conversas; mensagens automáticas não renovam o prazo. Sem mensagem do lead, usa a menor data entre a primeira conversa e a criação do lead; sem conversa, a criação do lead. O expurgo inclui o limite do prazo. Vencem nos próximos 30 dias inclui os limites a partir de agora; próximo vencimento considera prazos ainda não vencidos.`,
     };
-    return recorte + textos[tipo];
+    return recorte + (textos[tipo] ?? '');
   }
 
   ngOnDestroy(): void { this.requisicao?.unsubscribe(); }
