@@ -172,6 +172,30 @@ describe('Faixa de métricas (S-22)', () => {
     fixture.detectChanges();
     expect(botao.getAttribute('aria-expanded')).toBe('false');
   });
+  it('focar segundo critério fecha o primeiro garantindo apenas uma caixa aberta', () => {
+    const html = montar();
+    expandir();
+    const botoes = html.querySelectorAll<HTMLButtonElement>('app-criterio-metrica button');
+    expect(botoes.length).toBeGreaterThan(1);
+    const primeiro = botoes[0];
+    const segundo = botoes[1];
+
+    primeiro.focus();
+    fixture.detectChanges();
+    const id1 = primeiro.getAttribute('aria-describedby')!;
+    const dica1 = document.getElementById(id1)!;
+    expect(primeiro.getAttribute('aria-expanded')).toBe('true');
+    expect(dica1.matches(':popover-open')).toBeTrue();
+
+    segundo.focus();
+    fixture.detectChanges();
+    const id2 = segundo.getAttribute('aria-describedby')!;
+    const dica2 = document.getElementById(id2)!;
+    expect(primeiro.getAttribute('aria-expanded')).toBe('false');
+    expect(dica1.matches(':popover-open')).toBeFalse();
+    expect(segundo.getAttribute('aria-expanded')).toBe('true');
+    expect(dica2.matches(':popover-open')).toBeTrue();
+  });
   it('tooltip admite hover do conteúdo e não fecha ao sair com o botão ainda focado', fakeAsync(() => {
     const html = montar();
     expandir();
