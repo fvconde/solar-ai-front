@@ -132,18 +132,20 @@ describe('Layout real das métricas por viewport (S-22)', () => {
             expect(doc.querySelector('.alternar')!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
             expect(win.getComputedStyle(doc.querySelector('.resumo-celular')!).display).toBe('grid');
           } else {
-            const cards = Array.from(doc.querySelectorAll<HTMLElement>('.principais > .cartao'));
+            const grafico = doc.querySelector<HTMLElement>('.principais .card-grafico')!;
+            expect(grafico).not.toBeNull();
+            const cards = Array.from(doc.querySelectorAll<HTMLElement>('.principais .bloco-cards > .cartao'));
             expect(cards.length).toBe(perfil === 'supervisor' ? 4 : 3);
             for (const card of cards) {
               expect(card.getBoundingClientRect().width).toBeGreaterThanOrEqual(240);
             }
             if (perfil === 'supervisor' && largura === 861) {
-              const equipe = doc.querySelector<HTMLElement>('.principais > .equipe')!;
+              const equipe = doc.querySelector<HTMLElement>('.principais .equipe')!;
               expect(equipe.getBoundingClientRect().top).toBeGreaterThan(cards[0].getBoundingClientRect().top);
             }
           }
           if (perfil === 'supervisor') {
-            const pendentes = doc.querySelector<HTMLButtonElement>('.principais > .equipe .pendentes')!;
+            const pendentes = doc.querySelector<HTMLButtonElement>('.principais .equipe .pendentes')!;
             pendentes.focus();
             await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
             expect(doc.activeElement).toBe(pendentes);

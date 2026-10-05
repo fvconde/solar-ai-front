@@ -66,11 +66,11 @@ describe('Faixa de métricas (S-22)', () => {
     http.expectOne('/api/painel/metricas?dias=30').flush(metricasParaTeste());
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[role=alert]')).toBeNull();
-    expect(fixture.nativeElement.querySelector('[data-metrica=iniciadas]').textContent).toBe('14');
+    expect(fixture.nativeElement.querySelector('[data-metrica=confirmadas]').textContent).toBe('4');
   });
   it('supervisor vê cards, equipe atual, aguardando e aprovação sem expor nomes visíveis', () => {
     const html = montar();
-    expect(html.querySelector('[data-metrica=iniciadas]')?.textContent).toBe('14');
+    expect(html.querySelector('.card-grafico .valor-topo')?.textContent).toBe('14');
     expect(html.querySelector('[data-metrica=confirmadas]')?.textContent).toBe('4');
     expect(html.querySelector('.equipe')?.textContent).toContain('5 conversas com corretor hoje');
     expect(html.querySelector('.aguardando')?.textContent).toContain('2 conversas aguardam');
@@ -83,6 +83,11 @@ describe('Faixa de métricas (S-22)', () => {
     definirPerfil('corretor');
     const dados = metricasParaTeste();
     dados.equipe = null;
+    dados.avanco = [
+      { etapa: 'atribuidas', conversas: 14 },
+      { etapa: 'horario', conversas: 4 },
+    ];
+    dados.dadosEssenciaisPreenchidos = 8;
     const html = montar(dados);
     expect(html.textContent).toContain('Conversas atribuídas a você');
     expect(html.querySelector('.equipe')).toBeNull();
@@ -147,11 +152,11 @@ describe('Faixa de métricas (S-22)', () => {
     fixture.detectChanges();
     const id = botao.getAttribute('aria-describedby')!;
     const dica = document.getElementById(id)!;
-    expect(botao.getAttribute('aria-label')).toBe('Como é calculado: Conversas iniciadas');
+    expect(botao.getAttribute('aria-label')).toBe('Como é calculado: Avanço das conversas no chat');
     expect(botao.getAttribute('aria-expanded')).toBe('true');
     expect(dica.matches(':popover-open')).toBeTrue();
     expect(dica.getAttribute('role')).toBe('tooltip');
-    expect(dica.textContent).toContain('primeira mensagem do lead');
+    expect(dica.textContent).toContain('Histórico sem mudança');
     expect(dica.getBoundingClientRect().left).toBeGreaterThanOrEqual(12);
     document.dispatchEvent(new Event('scroll'));
     expect(dica.matches(':popover-open')).toBeTrue();
@@ -262,12 +267,9 @@ describe('Faixa de métricas (S-22)', () => {
     fixture.nativeElement.querySelector('.pendentes').click();
     expect(acao).toHaveBeenCalledTimes(1);
   });
-  it('não inclui métricas da Entrega 2', () => {
+  it('integra gráfico de avanço e dados essenciais', () => {
     const html = montar();
-    expandir();
-    expect(html.textContent).not.toContain('Avanço das conversas');
-    expect(html.textContent).not.toContain('Dados essenciais');
-    expect(html.textContent).not.toContain('Tempo mediano');
-    expect(html.textContent).not.toContain('Follow-up automático');
+    expect(html.textContent).toContain('Avanço das conversas no chat');
+    expect(html.textContent).toContain('Dados essenciais preenchidos');
   });
 });

@@ -34,43 +34,68 @@
         <button class="pendentes-celular" type="button" (click)="abrirPendentes.emit()">{{ f.plural(e.pendentesAprovacao, 'corretor aguarda', 'corretores aguardam') }} aprovação</button>
       }
       <div class="principais" [class.com-equipe]="supervisor()">
-        <article class="cartao">
-          <h3>{{ tituloIniciadas() }}</h3><app-criterio-metrica [titulo]="tituloIniciadas()" [texto]="criterio('iniciadas')" />
-          <strong class="numero" data-metrica="iniciadas">{{ f.numero(d.conversasIniciadas) }}</strong>
-          <p class="apoio">{{ supervisor() ? 'no período' : 'iniciadas no período, com você hoje' }}</p>
+        <article class="cartao card-grafico">
+          <h3>Avanço das conversas no chat</h3><app-criterio-metrica titulo="Avanço das conversas no chat" [texto]="criterio('avanco')" />
+          @if (historicoParcial()) {
+            <p class="aviso-parcial">
+              <span class="marcador-neutro" aria-hidden="true"></span>
+              <span>{{ f.historico(d.periodo.historicoDesde) }}</span>
+            </p>
+          }
+          @if (baseAvanco() === 0 && !vazio()) {
+            <p class="aviso-parcial">
+              <span class="marcador-neutro" aria-hidden="true"></span>
+              <span>Ainda não há conversas no período. As barras aparecem quando alguém escrever para a Lia.</span>
+            </p>
+          }
+          <app-metricas-avanco [etapas]="d.avanco" />
         </article>
-        <article class="cartao">
-          <h3>Horários confirmados</h3><app-criterio-metrica titulo="Horários confirmados" [texto]="criterio('confirmadas')" />
-          <strong class="numero" data-metrica="confirmadas">{{ f.numero(d.horariosConfirmados) }}</strong>
-          <p class="apoio">de {{ f.plural(d.conversasIniciadas, 'conversa iniciada', 'conversas iniciadas') }} no período</p>
-          <p>{{ f.plural(d.reservasProximos7Dias, 'reserva', 'reservas') }} nos próximos 7 dias</p>
-        </article>
-        <article class="cartao">
-          <h3>Leads por intenção</h3><app-criterio-metrica titulo="Leads por intenção" [texto]="criterio('intencao')" />
-          <div class="barra-intencao" role="img" aria-label="Distribuição de intenção; contagens na legenda">
-            @for (i of intencoes(); track i.rotulo) { <span [style.width]="f.largura(i.valor, totalIntencoes())" [style.background]="i.cor"></span> }
-          </div>
-          <ul class="legenda">@for (i of intencoes(); track i.rotulo) {
-            <li><span class="marcador" [style.background]="i.cor"></span><span>{{ i.rotulo }}</span><strong class="mono">{{ f.numero(i.valor) }}</strong></li>
-          }</ul>
-        </article>
-        @if (supervisor() && d.equipe; as e) {
-          <article class="cartao equipe">
-            <h3>Conversas atribuídas por corretor</h3><app-criterio-metrica titulo="Conversas atribuídas por corretor" [texto]="criterio('equipe')" />
-            <p>{{ f.plural(totalAtribuidas(), 'conversa', 'conversas') }} com corretor hoje</p>
-            <ul class="carga" tabindex="0" aria-label="Conversas por corretor; área com rolagem">
-              @for (a of equipe(); track a.corretor.id) {
-                <li tabindex="0" [attr.aria-label]="a.corretor.nome + ': ' + f.plural(a.conversas, 'conversa atribuída', 'conversas atribuídas')">
-                  <strong class="mono" aria-hidden="true">{{ f.numero(a.conversas) }}</strong>
-                  <span class="coluna"><span [style.height]="f.largura(a.conversas, maxAtribuidas())"></span></span>
-                  <span aria-hidden="true">{{ a.corretor.iniciais }}</span>
-                </li>
-              }
-            </ul>
-            <p class="aguardando">{{ f.plural(e.aguardandoCorretor, 'conversa aguarda', 'conversas aguardam') }} corretor disponível</p>
-            <button class="pendentes" type="button" (click)="abrirPendentes.emit()">{{ f.plural(e.pendentesAprovacao, 'corretor aguarda', 'corretores aguardam') }} aprovação</button>
+        <div class="bloco-cards">
+          <article class="cartao">
+            <h3>Dados essenciais preenchidos</h3><app-criterio-metrica titulo="Dados essenciais preenchidos" [texto]="criterio('essenciais')" />
+            <strong class="numero" data-metrica="essenciais">{{ f.percentual(d.dadosEssenciaisPreenchidos, baseAvanco()) }}</strong>
+            <p class="apoio">{{ f.deConversas(d.dadosEssenciaisPreenchidos, baseAvanco()) }}</p>
+            <span class="trilho"><span [style.width]="f.largura(d.dadosEssenciaisPreenchidos, baseAvanco())"></span></span>
           </article>
-        }
+          <article class="cartao">
+            <h3>Horários confirmados</h3><app-criterio-metrica titulo="Horários confirmados" [texto]="criterio('confirmadas')" />
+            <strong class="numero" data-metrica="confirmadas">{{ f.numero(d.horariosConfirmados) }}</strong>
+            <p class="apoio">
+              @if (baseAvanco() > 0) {
+                {{ f.deConversas(d.horariosConfirmados, baseAvanco()) }} iniciadas no período
+              } @else {
+                {{ f.deConversas(d.horariosConfirmados, baseAvanco()) }}
+              }
+            </p>
+            <p>{{ f.plural(d.reservasProximos7Dias, 'reserva', 'reservas') }} nos próximos 7 dias</p>
+          </article>
+          <article class="cartao card-intencao" [class.coluna-dupla]="!supervisor()">
+            <h3>Leads por intenção</h3><app-criterio-metrica titulo="Leads por intenção" [texto]="criterio('intencao')" />
+            <div class="barra-intencao" role="img" aria-label="Distribuição de intenção; contagens na legenda">
+              @for (i of intencoes(); track i.rotulo) { <span [style.width]="f.largura(i.valor, totalIntencoes())" [style.background]="i.cor"></span> }
+            </div>
+            <ul class="legenda">@for (i of intencoes(); track i.rotulo) {
+              <li><span class="marcador" [style.background]="i.cor"></span><span>{{ i.rotulo }}</span><strong class="mono">{{ f.numero(i.valor) }}</strong></li>
+            }</ul>
+          </article>
+          @if (supervisor() && d.equipe; as e) {
+            <article class="cartao equipe">
+              <h3>Conversas atribuídas por corretor</h3><app-criterio-metrica titulo="Conversas atribuídas por corretor" [texto]="criterio('equipe')" />
+              <p>{{ f.plural(totalAtribuidas(), 'conversa', 'conversas') }} com corretor hoje</p>
+              <ul class="carga" tabindex="0" aria-label="Conversas por corretor; área com rolagem">
+                @for (a of equipe(); track a.corretor.id) {
+                  <li tabindex="0" [attr.aria-label]="a.corretor.nome + ': ' + f.plural(a.conversas, 'conversa atribuída', 'conversas atribuídas')">
+                    <strong class="mono" aria-hidden="true">{{ f.numero(a.conversas) }}</strong>
+                    <span class="coluna"><span [style.height]="f.largura(a.conversas, maxAtribuidas())"></span></span>
+                    <span aria-hidden="true">{{ a.corretor.iniciais }}</span>
+                  </li>
+                }
+              </ul>
+              <p class="aguardando">{{ f.plural(e.aguardandoCorretor, 'conversa aguarda', 'conversas aguardam') }} corretor disponível</p>
+              <button class="pendentes" type="button" (click)="abrirPendentes.emit()">{{ f.plural(e.pendentesAprovacao, 'corretor aguarda', 'corretores aguardam') }} aprovação</button>
+            </article>
+          }
+        </div>
       </div>
       <div id="extras-metricas" class="extras" [hidden]="!expandido()">
         <h3 class="titulo-extras">Mais métricas</h3>
