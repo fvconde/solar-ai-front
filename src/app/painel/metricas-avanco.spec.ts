@@ -143,13 +143,23 @@ describe('MetricasAvanco', () => {
     component.abrir(0);
     fixture.detectChanges();
     const caixa = fixture.nativeElement.querySelector('.caixa-detalhe');
+    const rectPrimeira = caixa.getBoundingClientRect();
     const leftPrimeira = parseFloat(caixa.style.left);
+    const topPrimeira = parseFloat(caixa.style.top);
     expect(leftPrimeira).toBeGreaterThanOrEqual(12);
+    expect(leftPrimeira + rectPrimeira.width).toBeLessThanOrEqual(window.innerWidth - 12);
+    expect(topPrimeira).toBeGreaterThanOrEqual(12);
+    expect(topPrimeira + rectPrimeira.height).toBeLessThanOrEqual(window.innerHeight - 12);
 
     component.abrir(5);
     fixture.detectChanges();
+    const rectUltima = caixa.getBoundingClientRect();
     const leftUltima = parseFloat(caixa.style.left);
-    expect(leftUltima).toBeLessThanOrEqual(window.innerWidth - 12);
+    const topUltima = parseFloat(caixa.style.top);
+    expect(leftUltima).toBeGreaterThanOrEqual(12);
+    expect(leftUltima + rectUltima.width).toBeLessThanOrEqual(window.innerWidth - 12);
+    expect(topUltima).toBeGreaterThanOrEqual(12);
+    expect(topUltima + rectUltima.height).toBeLessThanOrEqual(window.innerHeight - 12);
   });
 
   it('série de duas barras do corretor (atribuídas 3 / horário 2) usa 67% e não mostra etapas de supervisor', () => {

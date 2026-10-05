@@ -111,13 +111,7 @@
     <span class="dica-titulo">{{ formatador.tituloEtapa(item.etapa) }}</span>
     <span class="dica-explicacao">{{ formatador.explicacaoEtapa(item.etapa) }}</span>
     <span class="dica-contagem">{{ formatador.plural(item.conversas, 'conversa', 'conversas') }}</span>
-    <span class="dica-linha">
-      @if (indiceAtivo() === 0) {
-        Grupo de referência do período
-      } @else {
-        {{ formatador.percentual(item.conversas, base()) }} {{ etapas()[0]?.etapa === 'atribuidas' ? 'das conversas atribuídas' : 'das conversas iniciadas' }}
-      }
-    </span>
+    <span class="dica-linha">{{ formatador.percentualEtapa(item.conversas, base(), indiceAtivo() === 0 ? true : etapas()[0].etapa) }}</span>
     @if (indiceAtivo() !== 0) {
       <span class="dica-linha">{{ formatador.faltamEtapa(item.conversas, base()) }}</span>
     }
