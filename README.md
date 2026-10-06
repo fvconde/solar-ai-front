@@ -1,5 +1,9 @@
 # solar-ai-front
 
+[![CI](https://github.com/fvconde/solar-ai-front/actions/workflows/ci.yml/badge.svg)](https://github.com/fvconde/solar-ai-front/actions/workflows/ci.yml)
+
+> *Nota sobre o badge de CI*: O badge reflete o status das execuções do workflow no GitHub Actions na branch padrão. Antes da integração da branch `feature/S-28` em `develop`/`main` e do primeiro disparo no repositório remoto, o badge poderá exibir status pendente ou não encontrado.
+
 > **Interface do Usuário (Chat do Lead e Painel do Corretor)**  
 > Para a visão geral da plataforma Solar, governança completa de privacidade e diagrama de arquitetura do sistema, consulte o **[README Hub do Solar](https://github.com/fvconde/solar-ai-docs)**.
 
