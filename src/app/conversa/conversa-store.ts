@@ -474,9 +474,9 @@ export class ConversaStore {
         return;
       }
 
-      if (this.eh409HorarioIndisponivel(erro)) {
-        const resposta409 = erro.error as { oferta?: SlotOferecido[] };
-        this.ofertaAgendamento.set(resposta409.oferta ?? []);
+      const oferta409 = this.obterOfertaDo409(erro);
+      if (oferta409 !== null) {
+        this.ofertaAgendamento.set(oferta409);
         this.horarioPerdido.set(slotTentado);
         this.salvarMemoPerda(id, slotTentado);
         this.agendamentoRecolhido.set(false);
@@ -490,6 +490,13 @@ export class ConversaStore {
     } finally {
       if (g === this.geracao && id === this.conversaId) {
         this.agendamentoEnviando.set(false);
+        if (
+          this.estado() === 'conversando' &&
+          !this.agendamentoSincronizacaoPendente() &&
+          !this.apagando()
+        ) {
+          this.iniciarPolling();
+        }
       }
     }
   }
@@ -508,6 +515,13 @@ export class ConversaStore {
     } finally {
       if (g === this.geracao && id === this.conversaId) {
         this.agendamentoEnviando.set(false);
+        if (
+          this.estado() === 'conversando' &&
+          !this.agendamentoSincronizacaoPendente() &&
+          !this.apagando()
+        ) {
+          this.iniciarPolling();
+        }
       }
     }
   }
@@ -1299,19 +1313,15 @@ export class ConversaStore {
 
       this.sequencia = 0;
       this.totalMensagens = conversa.mensagens.length;
-      if (conversa.mensagens.length > 0) {
-        this.itens.set(
-          this.reconstruir(
-            conversa.mensagens,
-            conversa.contatoPendente,
-            conversa.perfilLead?.intencao ?? null,
-          ),
-        );
-      }
+      this.itens.set(
+        this.reconstruir(
+          conversa.mensagens,
+          conversa.contatoPendente,
+          conversa.perfilLead?.intencao ?? null,
+        ),
+      );
       this.estado.set(this.estadoDe(conversa.mensagens));
-      if (this.estado() === 'conversando') {
-        this.iniciarPolling();
-      } else {
+      if (this.estado() !== 'conversando') {
         this.pararPolling();
       }
     } catch {
@@ -1334,24 +1344,27 @@ export class ConversaStore {
     }
   }
 
-  private eh409HorarioIndisponivel(erro: unknown): erro is HttpErrorResponse {
+  private obterOfertaDo409(erro: unknown): SlotOferecido[] | null {
     if (!(erro instanceof HttpErrorResponse) || erro.status !== 409) {
-      return false;
+      return null;
     }
     let corpo = erro.error;
     if (typeof corpo === 'string') {
       try {
         corpo = JSON.parse(corpo);
       } catch {
-        return false;
+        return null;
       }
     }
-    return (
+    if (
       typeof corpo === 'object' &&
       corpo !== null &&
       (corpo as { codigo?: unknown }).codigo === 'horario_indisponivel' &&
       Array.isArray((corpo as { oferta?: unknown }).oferta)
-    );
+    ) {
+      return (corpo as { oferta: SlotOferecido[] }).oferta;
+    }
+    return null;
   }
 
   private chaveMemoPerda(id: string): string {
@@ -1387,7 +1400,9 @@ export class ConversaStore {
         Number.isInteger(parseado.id) &&
         parseado.id > 0 &&
         typeof parseado.inicio === 'string' &&
-        typeof parseado.fim === 'string'
+        typeof parseado.fim === 'string' &&
+        !Number.isNaN(new Date(parseado.inicio).getTime()) &&
+        !Number.isNaN(new Date(parseado.fim).getTime())
       ) {
         return {
           id: parseado.id,
