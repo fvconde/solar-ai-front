@@ -58,6 +58,15 @@ describe('EventoSistema', () => {
     expect(acaoEmitida as AcaoEvento | null).toEqual(acaoMock);
   });
 
+  function corDoToken(variavel: string): string {
+    const probe = document.createElement('div');
+    probe.style.color = `var(${variavel})`;
+    document.body.appendChild(probe);
+    const cor = window.getComputedStyle(probe).color;
+    document.body.removeChild(probe);
+    return cor;
+  }
+
   it('compacto verdadeiro com sucesso exibe linha central com icone check e texto exato sem regua nem acao', () => {
     const acaoMock: AcaoEvento = {
       rotulo: 'Ignorar',
@@ -79,7 +88,7 @@ describe('EventoSistema', () => {
     expect(iconeCheck).not.toBeNull();
     expect(iconeCheck?.getAttribute('aria-hidden')).toBe('true');
 
-    expect(compactoEl.textContent?.trim()).toBe('Reunião com Helena Braga'.includes('HB') ? '' : 'Reunião confirmada · Quarta, 7 de outubro, 14h às 15h');
+    expect(compactoEl.textContent?.trim()).toBe('Reunião confirmada · Quarta, 7 de outubro, 14h às 15h');
     expect(compactoEl.querySelector('.rotulo')).toBeNull();
     expect(compactoEl.querySelector('.regua')).toBeNull();
     expect(compactoEl.querySelector('.marca-estado')).toBeNull();
@@ -92,14 +101,11 @@ describe('EventoSistema', () => {
 
     document.documentElement.setAttribute('data-tema', 'claro');
     fixture.detectChanges();
-    const corClara = window.getComputedStyle(compactoEl).color;
-    expect(corClara.length).toBeGreaterThan(0);
+    expect(window.getComputedStyle(compactoEl).color).toBe(corDoToken('--sucesso'));
 
     document.documentElement.setAttribute('data-tema', 'escuro');
     fixture.detectChanges();
-    const corEscura = window.getComputedStyle(compactoEl).color;
-    expect(corEscura.length).toBeGreaterThan(0);
-    expect(corClara).not.toBe(corEscura);
+    expect(window.getComputedStyle(compactoEl).color).toBe(corDoToken('--sucesso'));
 
     expect(estiloCompacto.maxWidth).toBe('560px');
     expect(estiloCompacto.wordBreak).toBe('break-word');

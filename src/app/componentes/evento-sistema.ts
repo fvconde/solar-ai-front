@@ -41,6 +41,7 @@ import { AcaoEvento, VarianteEvento } from '../conversa/trilha';
       align-items: center;
       justify-content: center;
       align-self: center;
+      margin-inline: auto;
       gap: 6px;
       max-width: 560px;
       width: 100%;
