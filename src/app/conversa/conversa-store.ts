@@ -27,6 +27,7 @@ function ehHandoff(acao: ProximaAcao | null): boolean {
 }
 
 const CHAVE_CONVERSA = 'solar.conversaId';
+const PREFIXO_MEMO_PERDA = 'solar.agendamentoPerdido.';
 const ABERTURA = 'Olá';
 const ESPERA_PROLONGADA_MS = 8000;
 const INTERVALO_POLLING_MS = 3000;
@@ -51,6 +52,10 @@ export class ConversaStore {
   readonly contatoRegistrado = signal(false);
   readonly agendamentoConfirmado = signal<AgendamentoDaConversa | null>(null);
   readonly agendamentoRecolhido = signal(false);
+  readonly agendamentoEnviando = signal(false);
+  readonly agendamentoErro = signal<string | null>(null);
+  readonly horarioPerdido = signal<SlotOferecido | null>(null);
+  readonly agendamentoSincronizacaoPendente = signal(false);
 
   readonly gruposAgendamento = computed(() =>
     agruparSlotsPorDia(this.ofertaAgendamento()),
@@ -84,6 +89,16 @@ export class ConversaStore {
     () => this.agendaDisponivel() && this.ofertaAgendamento().length === 0,
   );
 
+  readonly agendamentoPodeSelecionar = computed(
+    () =>
+      this.agendaDisponivel() &&
+      !this.apagando() &&
+      !this.aguardando() &&
+      !this.contatoEnviando() &&
+      !this.agendamentoEnviando() &&
+      !this.agendamentoSincronizacaoPendente(),
+  );
+
   readonly podeApagarConversa = computed(
     () =>
       !!this.conversaAtual() &&
@@ -101,6 +116,8 @@ export class ConversaStore {
   readonly envioDisponivel = computed(
     () =>
       !this.apagando() &&
+      !this.agendamentoEnviando() &&
+      !this.agendamentoSincronizacaoPendente() &&
       (this.estado() === 'conversando' ||
         this.estado() === 'falha' ||
         this.estado() === 'inicio-conta'),
@@ -109,6 +126,12 @@ export class ConversaStore {
     () => !this.apagando() && this.emConversa() && this.estado() !== 'encerrada',
   );
   readonly motivoEnvio = computed(() => {
+    if (this.agendamentoEnviando()) {
+      return 'Aguarde a confirmação do horário.';
+    }
+    if (this.agendamentoSincronizacaoPendente()) {
+      return 'Atualize a confirmação do horário antes de enviar.';
+    }
     switch (this.estado()) {
       case 'aceite-pendente':
         return 'Marque a autorização acima para começar.';
@@ -140,6 +163,8 @@ export class ConversaStore {
   private geracao = 0;
   private cronometro: ReturnType<typeof setTimeout> | undefined;
   private cronometroPolling: ReturnType<typeof setInterval> | undefined;
+  private revisaoAgenda = 0;
+  private tokenPolling: object | null = null;
 
   async iniciar(): Promise<void> {
     if (this.apagando()) {
@@ -236,14 +261,24 @@ export class ConversaStore {
   }
 
   recolherAgendamento(): void {
-    if (!this.agendaDisponivel() || this.ofertaAgendamento().length === 0) {
+    if (
+      this.agendamentoEnviando() ||
+      this.agendamentoSincronizacaoPendente() ||
+      !this.agendaDisponivel() ||
+      this.ofertaAgendamento().length === 0
+    ) {
       return;
     }
     this.agendamentoRecolhido.set(true);
   }
 
   reabrirAgendamento(): void {
-    if (!this.agendaDisponivel() || this.ofertaAgendamento().length === 0) {
+    if (
+      this.agendamentoEnviando() ||
+      this.agendamentoSincronizacaoPendente() ||
+      !this.agendaDisponivel() ||
+      this.ofertaAgendamento().length === 0
+    ) {
       return;
     }
     this.agendamentoRecolhido.set(false);
@@ -268,11 +303,17 @@ export class ConversaStore {
     if (this.apagando() || id === this.conversaId) {
       return;
     }
+    const idAnterior = this.conversaId;
+    if (idAnterior) {
+      this.limparMemoPerda(idAnterior);
+    }
     this.conversaApagada.set(false);
     this.pararPolling();
     this.pararCronometro();
     this.geracao++;
     this.consentimentoPendente.set(false);
+    this.contatoEnviando.set(false);
+    this.contatoErro.set(null);
     this.resetarAgenda();
     this.gravar(CHAVE_CONVERSA, id);
     this.conversaId = '';
@@ -286,11 +327,17 @@ export class ConversaStore {
     if (this.apagando()) {
       return;
     }
+    const idAnterior = this.conversaId;
+    if (idAnterior) {
+      this.limparMemoPerda(idAnterior);
+    }
     this.conversaApagada.set(false);
     this.pararPolling();
     this.pararCronometro();
     this.geracao++;
     this.consentimentoPendente.set(false);
+    this.contatoEnviando.set(false);
+    this.contatoErro.set(null);
     this.resetarAgenda();
     this.apagar(CHAVE_CONVERSA);
     this.conversaId = '';
@@ -354,6 +401,7 @@ export class ConversaStore {
       return;
     }
 
+    this.invalidarLeiturasDaAgenda();
     this.contatoEnviando.set(true);
     this.contatoErro.set(null);
 
@@ -386,6 +434,84 @@ export class ConversaStore {
     }
   }
 
+  async registrarAgendamento(slotId: number): Promise<void> {
+    if (
+      this.apagando() ||
+      !this.conversaId ||
+      !this.agendamentoPodeSelecionar() ||
+      typeof slotId !== 'number' ||
+      !Number.isInteger(slotId) ||
+      slotId <= 0
+    ) {
+      return;
+    }
+
+    const slotTentado = this.ofertaAgendamento().find((s) => s.id === slotId);
+    if (!slotTentado) {
+      return;
+    }
+
+    this.invalidarLeiturasDaAgenda();
+    this.agendamentoEnviando.set(true);
+    this.agendamentoErro.set(null);
+
+    const g = this.geracao;
+    const id = this.conversaId;
+
+    try {
+      const confirmacao = await this.api.registrarAgendamento(id, slotId);
+      if (g !== this.geracao || id !== this.conversaId) {
+        return;
+      }
+      this.agendamentoConfirmado.set(confirmacao);
+      this.ofertaAgendamento.set([]);
+      this.horarioPerdido.set(null);
+      this.limparMemoPerda(id);
+
+      await this.reconciliarHistorico(id, g, confirmacao);
+    } catch (erro) {
+      if (g !== this.geracao || id !== this.conversaId) {
+        return;
+      }
+
+      if (this.eh409HorarioIndisponivel(erro)) {
+        const resposta409 = erro.error as { oferta?: SlotOferecido[] };
+        this.ofertaAgendamento.set(resposta409.oferta ?? []);
+        this.horarioPerdido.set(slotTentado);
+        this.salvarMemoPerda(id, slotTentado);
+        this.agendamentoRecolhido.set(false);
+        this.agendamentoErro.set(null);
+        this.agendamentoConfirmado.set(null);
+        this.agendamentoSincronizacaoPendente.set(false);
+        return;
+      }
+
+      await this.reconciliarHistorico(id, g, null);
+    } finally {
+      if (g === this.geracao && id === this.conversaId) {
+        this.agendamentoEnviando.set(false);
+      }
+    }
+  }
+
+  async sincronizarAgendamento(): Promise<void> {
+    if (this.apagando() || !this.conversaId || this.agendamentoEnviando()) {
+      return;
+    }
+    this.invalidarLeiturasDaAgenda();
+    this.agendamentoEnviando.set(true);
+    const g = this.geracao;
+    const id = this.conversaId;
+    const confirmacaoPrevia = this.agendamentoConfirmado();
+    try {
+      await this.reconciliarHistorico(id, g, confirmacaoPrevia);
+    } finally {
+      if (g === this.geracao && id === this.conversaId) {
+        this.agendamentoEnviando.set(false);
+      }
+    }
+  }
+
   async tentarNovamente(): Promise<void> {
     if (this.apagando() || !this.ultimoEnvio) {
       return;
@@ -401,6 +527,7 @@ export class ConversaStore {
   }
 
   private async executarTurnoComConsentimentoPendente(): Promise<void> {
+    this.invalidarLeiturasDaAgenda();
     this.consentimentoPendente.set(true);
     this.estado.set('preparando');
     this.armarCronometro();
@@ -495,6 +622,10 @@ export class ConversaStore {
   }
 
   private processarSucessoExclusao(): void {
+    const idAnterior = this.conversaId;
+    if (idAnterior) {
+      this.limparMemoPerda(idAnterior);
+    }
     this.pararCronometro();
     this.pararPolling();
     this.geracao++;
@@ -585,6 +716,7 @@ export class ConversaStore {
   }
 
   private async turno(): Promise<void> {
+    this.invalidarLeiturasDaAgenda();
     this.estado.set('preparando');
     this.armarCronometro();
     const g = this.geracao;
@@ -618,6 +750,10 @@ export class ConversaStore {
     if (resposta.agendamento?.estado === 'confirmado' && resposta.agendamento.horario) {
       this.agendamentoConfirmado.set(resposta.agendamento);
       this.ofertaAgendamento.set([]);
+      this.horarioPerdido.set(null);
+      if (this.conversaId) {
+        this.limparMemoPerda(this.conversaId);
+      }
     }
 
     const eventoAgendamento = this.eventoDoAgendamento(resposta.agendamento);
@@ -661,7 +797,15 @@ export class ConversaStore {
 
   iniciarPolling(): void {
     this.pararPolling();
-    if (!this.conversaId || this.estado() !== 'conversando') {
+    if (
+      !this.conversaId ||
+      this.estado() !== 'conversando' ||
+      this.apagando() ||
+      this.aguardando() ||
+      this.contatoEnviando() ||
+      this.agendamentoEnviando() ||
+      this.agendamentoSincronizacaoPendente()
+    ) {
       return;
     }
 
@@ -682,19 +826,34 @@ export class ConversaStore {
       this.apagando() ||
       !this.conversaId ||
       this.estado() !== 'conversando' ||
-      this.aguardando()
+      this.aguardando() ||
+      this.contatoEnviando() ||
+      this.agendamentoEnviando() ||
+      this.agendamentoSincronizacaoPendente() ||
+      this.tokenPolling !== null
     ) {
       return;
     }
 
+    const token = {};
+    this.tokenPolling = token;
     const g = this.geracao;
+    const r = this.revisaoAgenda;
+    const id = this.conversaId;
+
     try {
-      const conversa = await this.api.obterConversa(this.conversaId);
+      const conversa = await this.api.obterConversa(id);
       if (
         g !== this.geracao ||
+        r !== this.revisaoAgenda ||
+        id !== this.conversaId ||
+        this.tokenPolling !== token ||
         this.apagando() ||
         this.estado() !== 'conversando' ||
-        this.aguardando()
+        this.aguardando() ||
+        this.contatoEnviando() ||
+        this.agendamentoEnviando() ||
+        this.agendamentoSincronizacaoPendente()
       ) {
         return;
       }
@@ -762,7 +921,12 @@ export class ConversaStore {
           }
         }
       }
-    } catch {}
+    } catch {
+    } finally {
+      if (this.tokenPolling === token) {
+        this.tokenPolling = null;
+      }
+    }
   }
 
   private desfecho(
@@ -1048,16 +1212,201 @@ export class ConversaStore {
 
     if (confirmacao || !corretor || !contatoRegistrado) {
       this.ofertaAgendamento.set([]);
+      this.horarioPerdido.set(null);
+      if (this.conversaId) {
+        this.limparMemoPerda(this.conversaId);
+      }
     } else {
-      this.ofertaAgendamento.set(conversa.oferta ?? []);
+      const novaOferta = conversa.oferta ?? [];
+      this.ofertaAgendamento.set(novaOferta);
+      const perdido =
+        this.horarioPerdido() ?? (this.conversaId ? this.lerMemoPerda(this.conversaId) : null);
+      if (perdido) {
+        if (novaOferta.some((s) => s.id === perdido.id)) {
+          this.horarioPerdido.set(null);
+          if (this.conversaId) {
+            this.limparMemoPerda(this.conversaId);
+          }
+        } else {
+          this.horarioPerdido.set(perdido);
+        }
+      }
     }
   }
 
   private resetarAgenda(): void {
+    this.invalidarLeiturasDaAgenda();
     this.ofertaAgendamento.set([]);
     this.corretorAgendamento.set(null);
     this.contatoRegistrado.set(false);
     this.agendamentoConfirmado.set(null);
     this.agendamentoRecolhido.set(false);
+    this.agendamentoEnviando.set(false);
+    this.agendamentoErro.set(null);
+    this.horarioPerdido.set(null);
+    this.agendamentoSincronizacaoPendente.set(false);
+    if (this.conversaId) {
+      this.limparMemoPerda(this.conversaId);
+    }
+  }
+
+  private invalidarLeiturasDaAgenda(): void {
+    this.revisaoAgenda++;
+    this.tokenPolling = null;
+  }
+
+  private async reconciliarHistorico(
+    id: string,
+    g: number,
+    confirmacaoPrevia: AgendamentoDaConversa | null = null,
+  ): Promise<void> {
+    try {
+      const conversa = await this.api.obterConversa(id);
+      if (g !== this.geracao || id !== this.conversaId) {
+        return;
+      }
+
+      if (!conversa.consentimentoEm || conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE) {
+        this.resetarAgenda();
+        this.estado.set('aceite-pendente');
+        return;
+      }
+
+      this.atualizarAgenda(conversa);
+
+      if (confirmacaoPrevia) {
+        const confirmacaoNoGet = this.agendamentoConfirmado();
+        if (!confirmacaoNoGet || conversa.mensagens.length === 0) {
+          this.agendamentoConfirmado.set(confirmacaoPrevia);
+          this.ofertaAgendamento.set([]);
+          this.agendamentoSincronizacaoPendente.set(true);
+          this.agendamentoErro.set(
+            'A reunião foi confirmada. Não foi possível carregar o histórico. Atualize a confirmação.',
+          );
+          return;
+        }
+      }
+
+      if (this.agendamentoConfirmado()) {
+        this.agendamentoSincronizacaoPendente.set(false);
+        this.agendamentoErro.set(null);
+      } else if (!confirmacaoPrevia) {
+        this.agendamentoSincronizacaoPendente.set(false);
+        this.agendamentoErro.set(
+          'Não foi possível confirmar esse horário. Confira os horários atualizados.',
+        );
+      }
+
+      this.sequencia = 0;
+      this.totalMensagens = conversa.mensagens.length;
+      if (conversa.mensagens.length > 0) {
+        this.itens.set(
+          this.reconstruir(
+            conversa.mensagens,
+            conversa.contatoPendente,
+            conversa.perfilLead?.intencao ?? null,
+          ),
+        );
+      }
+      this.estado.set(this.estadoDe(conversa.mensagens));
+      if (this.estado() === 'conversando') {
+        this.iniciarPolling();
+      } else {
+        this.pararPolling();
+      }
+    } catch {
+      if (g !== this.geracao || id !== this.conversaId) {
+        return;
+      }
+      if (confirmacaoPrevia) {
+        this.agendamentoConfirmado.set(confirmacaoPrevia);
+        this.ofertaAgendamento.set([]);
+        this.agendamentoSincronizacaoPendente.set(true);
+        this.agendamentoErro.set(
+          'A reunião foi confirmada. Não foi possível carregar o histórico. Atualize a confirmação.',
+        );
+      } else {
+        this.agendamentoSincronizacaoPendente.set(true);
+        this.agendamentoErro.set(
+          'Não foi possível verificar o horário. Atualize os horários antes de tentar de novo.',
+        );
+      }
+    }
+  }
+
+  private eh409HorarioIndisponivel(erro: unknown): erro is HttpErrorResponse {
+    if (!(erro instanceof HttpErrorResponse) || erro.status !== 409) {
+      return false;
+    }
+    let corpo = erro.error;
+    if (typeof corpo === 'string') {
+      try {
+        corpo = JSON.parse(corpo);
+      } catch {
+        return false;
+      }
+    }
+    return (
+      typeof corpo === 'object' &&
+      corpo !== null &&
+      (corpo as { codigo?: unknown }).codigo === 'horario_indisponivel' &&
+      Array.isArray((corpo as { oferta?: unknown }).oferta)
+    );
+  }
+
+  private chaveMemoPerda(id: string): string {
+    return `${PREFIXO_MEMO_PERDA}${id}`;
+  }
+
+  private salvarMemoPerda(conversaId: string, slot: SlotOferecido): void {
+    if (!conversaId) {
+      return;
+    }
+    try {
+      sessionStorage.setItem(
+        this.chaveMemoPerda(conversaId),
+        JSON.stringify({ id: slot.id, inicio: slot.inicio, fim: slot.fim }),
+      );
+    } catch {}
+  }
+
+  private lerMemoPerda(conversaId: string): SlotOferecido | null {
+    if (!conversaId) {
+      return null;
+    }
+    try {
+      const bruto = sessionStorage.getItem(this.chaveMemoPerda(conversaId));
+      if (!bruto) {
+        return null;
+      }
+      const parseado = JSON.parse(bruto);
+      if (
+        parseado &&
+        typeof parseado === 'object' &&
+        typeof parseado.id === 'number' &&
+        Number.isInteger(parseado.id) &&
+        parseado.id > 0 &&
+        typeof parseado.inicio === 'string' &&
+        typeof parseado.fim === 'string'
+      ) {
+        return {
+          id: parseado.id,
+          inicio: parseado.inicio,
+          fim: parseado.fim,
+        };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  private limparMemoPerda(conversaId: string): void {
+    if (!conversaId) {
+      return;
+    }
+    try {
+      sessionStorage.removeItem(this.chaveMemoPerda(conversaId));
+    } catch {}
   }
 }
