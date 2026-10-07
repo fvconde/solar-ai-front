@@ -66,6 +66,7 @@ function conversa(
     contatoPendente,
     consentimentoEm: new Date().toISOString(),
     versaoAvisoPrivacidade: '2026-09-11',
+    oferta: [],
   };
 }
 
@@ -256,7 +257,7 @@ describe('ConversaStore ao retomar', () => {
         true,
       ),
     );
-    api.registrarContato.and.resolveTo({ leadId: 'l1' });
+    api.registrarContato.and.resolveTo({ leadId: 'l1', oferta: [] });
 
     await store.iniciar();
     await store.enviarContato({ nome: 'Ana', telefone: '11999998888', email: null });
