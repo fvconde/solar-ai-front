@@ -53,6 +53,7 @@ export interface EncaminhamentoDetalhe {
 export interface AgendamentoDetalhe {
   dataHora: string;
   status: string;
+  fim: string;
 }
 
 export interface TurnoTranscricao {

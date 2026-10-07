@@ -483,3 +483,65 @@ app-fila-aprovacao {
     font-size: 13px;
   }
 }
+
+.secao-agendamento {
+  .linha-agendamento {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+  }
+
+  .bloco-data-agendamento {
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    border-radius: 10px;
+    background: var(--marca);
+    color: var(--marca-contraste);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Instrument Sans', sans-serif;
+    font-weight: 600;
+    box-sizing: border-box;
+  }
+
+  .mes-agendamento {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .dia-agendamento {
+    font-size: 26px;
+    font-weight: 600;
+    line-height: 1;
+  }
+
+  .info-agendamento {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    flex: 1;
+    overflow-wrap: break-word;
+    word-break: break-word;
+  }
+
+  .principal-agendamento {
+    font-family: 'Instrument Sans', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--texto-primario);
+    line-height: 1.25;
+  }
+
+  .secundaria-agendamento {
+    font-size: 13px;
+    color: var(--texto-secundario);
+    line-height: 1.4;
+  }
+}
+

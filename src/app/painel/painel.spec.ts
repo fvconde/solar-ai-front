@@ -89,6 +89,7 @@ describe('Painel (S-21)', () => {
     agendamento: {
       dataHora: '2026-09-18T15:30:00Z',
       status: 'confirmado',
+      fim: '2026-09-18T16:30:00Z',
     },
     imoveisSugeridos: [
       {
@@ -671,5 +672,375 @@ describe('Painel (S-21)', () => {
 
     expect(html.querySelector('.bloco-acesso-restrito')).toBeNull();
     expect(html.querySelectorAll('.item-lead').length).toBe(2);
+  });
+
+  it('18. agendamento confirmado exibe bloco OUT 7, intervalo no horario de Brasilia e nome do corretor', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet.flush({
+      ...detalheMockComConversa,
+      encaminhamento: {
+        ...detalheMockComConversa.encaminhamento!,
+        corretor: { id: 'c-201', nome: 'Helena Braga', iniciais: 'HB' },
+      },
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:00:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const secao = html.querySelector('.secao-agendamento') as HTMLElement;
+    expect(secao).toBeTruthy();
+
+    const bloco = secao.querySelector('.bloco-data-agendamento') as HTMLElement;
+    expect(bloco).toBeTruthy();
+
+    const mes = secao.querySelector('.mes-agendamento');
+    const dia = secao.querySelector('.dia-agendamento');
+    expect(mes?.textContent?.trim()).toBe('OUT');
+    expect(dia?.textContent?.trim()).toBe('7');
+
+    const principal = secao.querySelector('.principal-agendamento');
+    expect(principal?.textContent?.trim()).toBe('Quarta · 14h às 15h');
+
+    const secundaria = secao.querySelector('.secundaria-agendamento');
+    expect(secundaria?.textContent?.trim()).toBe('Com Helena Braga · confirmada pelo lead no chat');
+
+    expect(secao.querySelector('.badge-estado')).toBeNull();
+  });
+
+  it('19. agendamento com duracao de 90 minutos exibe termino real e exclui termino presumido de 15h', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet.flush({
+      ...detalheMockComConversa,
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:30:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const secao = html.querySelector('.secao-agendamento') as HTMLElement;
+    const principal = secao.querySelector('.principal-agendamento');
+
+    expect(principal?.textContent?.trim()).toBe('Quarta · 14h às 15h30');
+    expect(principal?.textContent?.trim().endsWith('15h')).toBeFalse();
+    expect(principal?.textContent?.trim()).not.toBe('Quarta · 14h às 15h');
+  });
+
+  it('20. agendamento com mudanca de data UTC/SP exibe dia correto em Brasilia e intervalo com minutos', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet.flush({
+      ...detalheMockComConversa,
+      agendamento: {
+        dataHora: '2026-10-01T01:30:00Z',
+        fim: '2026-10-01T03:00:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const secao = html.querySelector('.secao-agendamento') as HTMLElement;
+    const mes = secao.querySelector('.mes-agendamento');
+    const dia = secao.querySelector('.dia-agendamento');
+    const principal = secao.querySelector('.principal-agendamento');
+
+    expect(mes?.textContent?.trim()).toBe('SET');
+    expect(dia?.textContent?.trim()).toBe('30');
+    expect(principal?.textContent?.trim()).toBe('Quarta · 22h30 às 0h');
+  });
+
+  it('21. agendamento nulo ou com status nao confirmado preserva frase de ausencia sem bloco de data', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet1 = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet1.flush({
+      ...detalheMockComConversa,
+      agendamento: null,
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const secao1 = html.querySelector('.secao-agendamento') as HTMLElement;
+    expect(secao1.textContent).toContain('Nenhum agendamento confirmado.');
+    expect(secao1.querySelector('.bloco-data-agendamento')).toBeNull();
+
+    comp.selecionarLead(filaMock.itens[1]);
+    fixture.detectChanges();
+
+    const reqDet2 = httpMock.expectOne('/api/painel/leads/l3');
+    reqDet2.flush({
+      ...detalheMockComConversa,
+      id: 'l3',
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:00:00Z',
+        status: 'pendente',
+      },
+    });
+    fixture.detectChanges();
+
+    const secao2 = html.querySelector('.secao-agendamento') as HTMLElement;
+    expect(secao2.textContent).toContain('Nenhum agendamento confirmado.');
+    expect(secao2.querySelector('.bloco-data-agendamento')).toBeNull();
+    expect(secao2.querySelector('.linha-agendamento')).toBeNull();
+  });
+
+  it('22. fallback neutro usa Corretor(a) quando encaminhamento, corretor ou nome estao ausentes ou em branco', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet1 = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet1.flush({
+      ...detalheMockComConversa,
+      encaminhamento: null,
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:00:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    let sec = html.querySelector('.secundaria-agendamento');
+    expect(sec?.textContent?.trim()).toBe('Com Corretor(a) · confirmada pelo lead no chat');
+
+    comp.selecionarLead(filaMock.itens[1]);
+    fixture.detectChanges();
+
+    const reqDet2 = httpMock.expectOne('/api/painel/leads/l3');
+    reqDet2.flush({
+      ...detalheMockComConversa,
+      id: 'l3',
+      encaminhamento: {
+        id: 99,
+        status: 'atribuido',
+        corretor: null,
+        atribuidoEm: '2026-10-07T10:00:00Z',
+      },
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:00:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    sec = html.querySelector('.secundaria-agendamento');
+    expect(sec?.textContent?.trim()).toBe('Com Corretor(a) · confirmada pelo lead no chat');
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet3 = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet3.flush({
+      ...detalheMockComConversa,
+      encaminhamento: {
+        id: 100,
+        status: 'atribuido',
+        corretor: { id: 'c-300', nome: '   ', iniciais: '' },
+        atribuidoEm: '2026-10-07T10:00:00Z',
+      },
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:00:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    sec = html.querySelector('.secundaria-agendamento');
+    expect(sec?.textContent?.trim()).toBe('Com Corretor(a) · confirmada pelo lead no chat');
+  });
+
+  it('23. computedStyle nos temas claro e escuro corresponde aos probes dos tokens e respeita dimensoes exatas', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet.flush({
+      ...detalheMockComConversa,
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:00:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const secao = html.querySelector('.secao-agendamento') as HTMLElement;
+    const linha = secao.querySelector('.linha-agendamento') as HTMLElement;
+    const bloco = secao.querySelector('.bloco-data-agendamento') as HTMLElement;
+    const mes = secao.querySelector('.mes-agendamento') as HTMLElement;
+    const dia = secao.querySelector('.dia-agendamento') as HTMLElement;
+    const info = secao.querySelector('.info-agendamento') as HTMLElement;
+    const principal = secao.querySelector('.principal-agendamento') as HTMLElement;
+    const secundaria = secao.querySelector('.secundaria-agendamento') as HTMLElement;
+
+    const probeMarca = document.createElement('div');
+    probeMarca.style.backgroundColor = 'var(--marca)';
+    probeMarca.style.color = 'var(--marca-contraste)';
+    const probeTexto = document.createElement('div');
+    probeTexto.style.color = 'var(--texto-primario)';
+    probeTexto.style.backgroundColor = 'var(--texto-secundario)';
+    document.body.appendChild(probeMarca);
+    document.body.appendChild(probeTexto);
+
+    try {
+      document.documentElement.setAttribute('data-tema', 'claro');
+      const estiloMarcaClaro = window.getComputedStyle(probeMarca);
+      const estiloTextoClaro = window.getComputedStyle(probeTexto);
+      const estiloBlocoClaro = window.getComputedStyle(bloco);
+      const estiloPrincClaro = window.getComputedStyle(principal);
+      const estiloSecClaro = window.getComputedStyle(secundaria);
+
+      expect(estiloBlocoClaro.backgroundColor).toBe(estiloMarcaClaro.backgroundColor);
+      expect(estiloBlocoClaro.color).toBe(estiloMarcaClaro.color);
+      expect(estiloPrincClaro.color).toBe(estiloTextoClaro.color);
+      expect(estiloSecClaro.color).toBe(estiloTextoClaro.backgroundColor);
+
+      const corMarcaClara = estiloMarcaClaro.backgroundColor;
+      const corTextoClara = estiloTextoClaro.color;
+
+      document.documentElement.setAttribute('data-tema', 'escuro');
+      const estiloMarcaEscuro = window.getComputedStyle(probeMarca);
+      const estiloTextoEscuro = window.getComputedStyle(probeTexto);
+      const estiloBlocoEscuro = window.getComputedStyle(bloco);
+      const estiloPrincEscuro = window.getComputedStyle(principal);
+      const estiloSecEscuro = window.getComputedStyle(secundaria);
+
+      expect(estiloBlocoEscuro.backgroundColor).toBe(estiloMarcaEscuro.backgroundColor);
+      expect(estiloBlocoEscuro.color).toBe(estiloMarcaEscuro.color);
+      expect(estiloPrincEscuro.color).toBe(estiloTextoEscuro.color);
+      expect(estiloSecEscuro.color).toBe(estiloTextoEscuro.backgroundColor);
+
+      expect(estiloMarcaEscuro.backgroundColor).not.toBe(corMarcaClara);
+      expect(estiloTextoEscuro.color).not.toBe(corTextoClara);
+
+      expect(estiloBlocoEscuro.width).toBe('64px');
+      expect(estiloBlocoEscuro.height).toBe('64px');
+      expect(estiloBlocoEscuro.borderRadius).toBe('10px');
+      expect(estiloBlocoEscuro.flexShrink).toBe('0');
+      expect(estiloBlocoEscuro.fontWeight).toBe('600');
+      expect(estiloBlocoEscuro.fontFamily).toContain('Instrument Sans');
+
+      const estiloMes = window.getComputedStyle(mes);
+      expect(estiloMes.fontSize).toBe('11px');
+      expect(estiloMes.fontWeight).toBe('600');
+      expect(estiloMes.textTransform).toBe('uppercase');
+      expect(estiloMes.letterSpacing).toMatch(/0\.88px|0\.08em/);
+
+      const estiloDia = window.getComputedStyle(dia);
+      expect(estiloDia.fontSize).toBe('26px');
+      expect(estiloDia.fontWeight).toBe('600');
+      expect(estiloDia.lineHeight).toMatch(/26px|1/);
+
+      const estiloLinha = window.getComputedStyle(linha);
+      expect(estiloLinha.gap).toBe('16px');
+      expect(estiloLinha.alignItems).toBe('center');
+
+      const estiloInfo = window.getComputedStyle(info);
+      expect(estiloInfo.gap).toBe('4px');
+
+      expect(estiloPrincEscuro.fontSize).toBe('18px');
+      expect(estiloPrincEscuro.fontWeight).toBe('600');
+      expect(estiloPrincEscuro.fontFamily).toContain('Instrument Sans');
+
+      expect(estiloSecEscuro.fontSize).toBe('13px');
+    } finally {
+      document.documentElement.removeAttribute('data-tema');
+      probeMarca.remove();
+      probeTexto.remove();
+    }
+  });
+
+  it('24. geometria real em espaco estreito de 240px preserva bloco 64x64 sem encolhimento e quebra texto sem overflow', () => {
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarLead(filaMock.itens[0]);
+    fixture.detectChanges();
+
+    const reqDet = httpMock.expectOne('/api/painel/leads/l1');
+    reqDet.flush({
+      ...detalheMockComConversa,
+      encaminhamento: {
+        id: 42,
+        status: 'atribuido',
+        corretor: { id: 'c-201', nome: 'Helena Maria da Silva Braga de Alcantara', iniciais: 'HB' },
+        atribuidoEm: '2026-10-07T10:00:00Z',
+      },
+      agendamento: {
+        dataHora: '2026-10-07T17:00:00Z',
+        fim: '2026-10-07T18:00:00Z',
+        status: 'confirmado',
+      },
+    });
+    fixture.detectChanges();
+
+    const html = fixture.nativeElement as HTMLElement;
+    const secao = html.querySelector('.secao-agendamento') as HTMLElement;
+    const bloco = secao.querySelector('.bloco-data-agendamento') as HTMLElement;
+    const info = secao.querySelector('.info-agendamento') as HTMLElement;
+
+    const container = document.createElement('div');
+    container.style.width = '240px';
+    container.style.boxSizing = 'border-box';
+    container.style.overflow = 'hidden';
+    document.body.appendChild(container);
+
+    const parenteOriginal = secao.parentElement;
+    const proximoIrmao = secao.nextSibling;
+
+    try {
+      container.appendChild(secao);
+
+      const rectBloco = bloco.getBoundingClientRect();
+      expect(Math.round(rectBloco.width)).toBe(64);
+      expect(Math.round(rectBloco.height)).toBe(64);
+
+      expect(secao.scrollWidth).toBeLessThanOrEqual(secao.clientWidth + 1);
+      expect(info.scrollWidth).toBeLessThanOrEqual(info.clientWidth + 1);
+    } finally {
+      if (parenteOriginal) {
+        parenteOriginal.insertBefore(secao, proximoIrmao);
+      }
+      container.remove();
+    }
   });
 });

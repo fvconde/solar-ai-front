@@ -19,6 +19,11 @@ import { AvisoAprovacao } from './aviso-aprovacao';
 import { FilaAprovacao } from './fila-aprovacao';
 import { PainelApi } from './painel-api';
 import { LeadDetalheResponse, LeadPainelItem } from './painel-contrato';
+import {
+  blocoDataDoAgendamento,
+  diaDaSemanaDoAgendamento,
+  intervaloDoAgendamento,
+} from '../conversa/horario';
 import { PainelEmAnalise } from './painel-em-analise';
 import { MetricasPainel } from './metricas-painel';
 
@@ -379,5 +384,24 @@ export class Painel implements OnInit, OnDestroy {
     }
     const tempo = this.formatarTempoRelativo(enc.atribuidoEm, false);
     return `${enc.corretor.nome} · ${tempo}`;
+  }
+
+  blocoDataAgendamento(dataHora: string): { mes: string; dia: string } {
+    return blocoDataDoAgendamento(dataHora);
+  }
+
+  linhaPrincipalAgendamento(dataHora: string, fim: string): string {
+    const diaSemana = diaDaSemanaDoAgendamento(dataHora);
+    const intervalo = intervaloDoAgendamento(dataHora, fim);
+    if (!diaSemana || !intervalo) {
+      return '';
+    }
+    return `${diaSemana} · ${intervalo}`;
+  }
+
+  linhaSecundariaAgendamento(detalhe: LeadDetalheResponse): string {
+    const nomeBruto = detalhe.encaminhamento?.corretor?.nome?.trim();
+    const nome = nomeBruto && nomeBruto.length > 0 ? nomeBruto : 'Corretor(a)';
+    return `Com ${nome} · confirmada pelo lead no chat`;
   }
 }

@@ -341,13 +341,25 @@
               <span class="rotulo-secao">Agendamento</span>
               @if (detalhe.agendamento && detalhe.agendamento.status === 'confirmado') {
                 <div class="linha-agendamento">
-                  <span class="badge-estado">
-                    <span class="marca-estado marca-sucesso"></span>
-                    <span class="rotulo-estado">Confirmado</span>
-                  </span>
-                  <span class="data-agendamento">{{
-                    formatarDataHora(detalhe.agendamento.dataHora)
-                  }}</span>
+                  <div class="bloco-data-agendamento">
+                    <span class="mes-agendamento">{{
+                      blocoDataAgendamento(detalhe.agendamento.dataHora).mes
+                    }}</span>
+                    <span class="dia-agendamento">{{
+                      blocoDataAgendamento(detalhe.agendamento.dataHora).dia
+                    }}</span>
+                  </div>
+                  <div class="info-agendamento">
+                    <span class="principal-agendamento">{{
+                      linhaPrincipalAgendamento(
+                        detalhe.agendamento.dataHora,
+                        detalhe.agendamento.fim
+                      )
+                    }}</span>
+                    <span class="secundaria-agendamento">{{
+                      linhaSecundariaAgendamento(detalhe)
+                    }}</span>
+                  </div>
                 </div>
               } @else {
                 <p class="frase-ausencia">Nenhum agendamento confirmado.</p>
