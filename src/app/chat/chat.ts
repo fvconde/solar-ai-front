@@ -13,6 +13,7 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AvisoConsentimento } from '../componentes/aviso-consentimento';
+import { CartaoAgendamento } from '../componentes/cartao-agendamento';
 import { Composer } from '../componentes/composer';
 import { ConfirmacaoExclusao } from '../componentes/confirmacao-exclusao';
 import { DivisorData } from '../componentes/divisor-data';
@@ -46,6 +47,7 @@ const CHAVE_CONVITE_DISPENSADO = 'solar.conviteDispensado';
     HistoricoConversas,
     RouterLink,
     ConfirmacaoExclusao,
+    CartaoAgendamento,
   ],
   templateUrl: './chat.html',
   styleUrl: './chat.scss',
@@ -65,6 +67,10 @@ export class Chat implements OnInit {
   readonly listaAberta = signal(false);
   private readonly conviteDispensadoEm = signal(lerLocal(CHAVE_CONVITE_DISPENSADO));
   private geracaoConversas = 0;
+  private ultimoItensRef: unknown = null;
+  private ultimoEstado: string | null = null;
+  private ultimoPalcoEl: HTMLElement | null = null;
+  private ultimaAssinaturaAgenda: string | null = null;
 
   readonly mostrarConvite = computed(() => {
     if (this.sessao.ativa() || !this.store.emConversa()) {
@@ -79,15 +85,43 @@ export class Chat implements OnInit {
 
   constructor() {
     afterRenderEffect(() => {
-      this.store.itens();
-      this.store.estado();
+      const itens = this.store.itens();
+      const estado = this.store.estado();
       const apagada = this.store.conversaApagada();
       const elemento = this.palco()?.nativeElement;
+
+      const oferta = this.store.ofertaAgendamento();
+      const recolhido = this.store.agendamentoRecolhido();
+      const perdido = this.store.horarioPerdido();
+      const erro = this.store.agendamentoErro();
+      const confirmado = !!this.store.agendamentoConfirmado();
+      const busyOuPendente =
+        this.store.agendamentoEnviando() || this.store.agendamentoSincronizacaoPendente();
+
+      const slotsStr = oferta.map((s) => `${s.id}:${s.inicio}:${s.fim}`).join(';');
+      const perdidoStr = perdido ? `${perdido.id}:${perdido.inicio}:${perdido.fim}` : '';
+      const assinatura = `${slotsStr}|${recolhido}|${perdidoStr}|${erro ?? ''}|${confirmado}|${busyOuPendente}`;
+
       if (apagada) {
         this.bannerApagada()?.nativeElement.focus();
         return;
       }
-      if (elemento) {
+
+      if (!elemento) {
+        this.ultimoPalcoEl = null;
+        return;
+      }
+
+      const itensMudaram = itens !== this.ultimoItensRef;
+      const estadoMudou = estado !== this.ultimoEstado;
+      const elementoMudou = elemento !== this.ultimoPalcoEl;
+      const agendaMudou = assinatura !== this.ultimaAssinaturaAgenda;
+
+      if (itensMudaram || estadoMudou || elementoMudou || agendaMudou) {
+        this.ultimoItensRef = itens;
+        this.ultimoEstado = estado;
+        this.ultimoPalcoEl = elemento;
+        this.ultimaAssinaturaAgenda = assinatura;
         elemento.scrollTop = elemento.scrollHeight;
       }
     });
@@ -134,6 +168,22 @@ export class Chat implements OnInit {
 
   protected registrarContato(dados: ContatoRequest): void {
     void this.store.enviarContato(dados);
+  }
+
+  protected registrarAgendamento(slotId: number): void {
+    void this.store.registrarAgendamento(slotId);
+  }
+
+  protected recolherAgendamento(): void {
+    this.store.recolherAgendamento();
+  }
+
+  protected reabrirAgendamento(): void {
+    this.store.reabrirAgendamento();
+  }
+
+  protected sincronizarAgendamento(): void {
+    void this.store.sincronizarAgendamento();
   }
 
   protected abrirConversa(id: string): void {

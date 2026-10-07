@@ -2,11 +2,15 @@ import { provideHttpClient } from '@angular/common/http';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
 import { ComponentFixture, fakeAsync, flush, TestBed, tick } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import { By } from '@angular/platform-browser';
+import { FormularioContato } from '../componentes/formulario-contato';
 import { ContaResponse, ConversaResumo } from '../conta/conta-contrato';
 import {
+  AgendamentoDaConversa,
   ExclusaoTitularResponse,
   MensagemDaConversa,
   ProximaAcao,
+  SlotOferecido,
   VERSAO_AVISO_PRIVACIDADE,
 } from '../conversa/contrato';
 import { ConversaStore } from '../conversa/conversa-store';
@@ -914,6 +918,579 @@ describe('Chat', () => {
 
       TestBed.inject(ConversaStore).pararPolling();
       httpMock.verify();
+      flush();
+    }));
+  });
+
+  describe('integracao de agendamento (T5b)', () => {
+    const slotA1: SlotOferecido = {
+      id: 101,
+      inicio: '2026-10-07T09:00:00-03:00',
+      fim: '2026-10-07T10:00:00-03:00',
+    };
+    const slotA2: SlotOferecido = {
+      id: 102,
+      inicio: '2026-10-07T14:00:00-03:00',
+      fim: '2026-10-07T15:00:00-03:00',
+    };
+    const slotA3: SlotOferecido = {
+      id: 103,
+      inicio: '2026-10-07T19:00:00-03:00',
+      fim: '2026-10-07T20:00:00-03:00',
+    };
+
+    function conversaComOferta(
+      id: string,
+      oferta: SlotOferecido[],
+      corretor: string | null = 'Helena Braga',
+      contatoPendente = false,
+      agendamento: AgendamentoDaConversa | null = null,
+      mensagens?: MensagemDaConversa[],
+    ) {
+      return {
+        conversaId: id,
+        perfilLead: null,
+        mensagens: mensagens ?? [
+          {
+            papel: 'lead' as const,
+            texto: 'Quero um apartamento.',
+            em: '2026-10-07T10:00:00Z',
+            proximaAcao: null,
+            corretor: null,
+            agendamento: null,
+          },
+          {
+            papel: 'agente' as const,
+            texto: 'Encaminhando para Helena Braga.',
+            em: '2026-10-07T10:01:00Z',
+            proximaAcao: 'agendar_reuniao' as ProximaAcao,
+            corretor,
+            agendamento,
+          },
+        ],
+        contatoPendente,
+        consentimentoEm: '2026-10-07T10:00:00Z',
+        versaoAvisoPrivacidade: VERSAO_AVISO_PRIVACIDADE,
+        oferta,
+      };
+    }
+
+    it('renderiza Card quando GET traz conversa elegivel e oculta quando faltam condicoes', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-elegivel');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-elegivel').flush(
+        conversaComOferta('c-elegivel', [slotA1, slotA2], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('app-cartao-agendamento')).not.toBeNull();
+      expect(html(fixture).querySelector('.avatar')?.textContent?.trim()).toBe('HB');
+      expect(html(fixture).querySelectorAll('.slot-botao').length).toBe(2);
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('oferta vazia e perda vazia mostram aviso unico sem duplicar e sem card nem botoes', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-vazia');
+      let fixture = TestBed.createComponent(Chat);
+      let store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-vazia').flush(
+        conversaComOferta('c-vazia', [], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('.aviso-vazio-neutro')).not.toBeNull();
+      expect(html(fixture).querySelector('.avatar')).toBeNull();
+      expect(html(fixture).querySelector('.cartao')).toBeNull();
+      expect(html(fixture).querySelectorAll('.slot-botao').length).toBe(0);
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+
+      sessionStorage.setItem(
+        'solar.agendamentoPerdido.c-perdida-vazia',
+        JSON.stringify({ id: 101, inicio: slotA1.inicio, fim: slotA1.fim }),
+      );
+      localStorage.setItem('solar.conversaId', 'c-perdida-vazia');
+      fixture = TestBed.createComponent(Chat);
+      store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-perdida-vazia').flush(
+        conversaComOferta('c-perdida-vazia', [], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const avisoAtencao = html(fixture).querySelector('.aviso-vazio-atencao');
+      expect(avisoAtencao).not.toBeNull();
+      expect(avisoAtencao?.getAttribute('role')).toBe('alert');
+      expect(avisoAtencao?.textContent).toContain('Não há horários disponíveis no momento.');
+      expect(avisoAtencao?.textContent).not.toContain('Estes ainda estão livres');
+      expect(html(fixture).querySelectorAll('.aviso-vazio-neutro').length).toBe(0);
+
+      sessionStorage.removeItem('solar.agendamentoPerdido.c-perdida-vazia');
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('formulario de contato apos submissao 200 com oferta exibe o Card sem disparar POST de mensagens', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-contato');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-contato').flush(
+        conversaComOferta('c-contato', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('app-formulario-contato')).not.toBeNull();
+      expect(html(fixture).querySelector('app-cartao-agendamento')).toBeNull();
+
+      const formDebug = fixture.debugElement.query(By.directive(FormularioContato));
+      formDebug.componentInstance.enviar.emit({
+        nome: 'Marina Couto',
+        telefone: '11987654321',
+        email: 'marina@email.com',
+      });
+      tick();
+      fixture.detectChanges();
+
+      const reqContato = httpMock.expectOne('/conversas/c-contato/contato');
+      expect(reqContato.request.method).toBe('POST');
+      reqContato.flush({
+        conversaId: 'c-contato',
+        resposta: 'Contato salvo.',
+        intencao: 'agendar_reuniao',
+        proximaAcao: 'agendar_reuniao',
+        perfilLead: null,
+        imoveisSugeridos: [],
+        corretor: 'Helena Braga',
+        contatoPendente: false,
+        agendamento: null,
+        oferta: [slotA1, slotA2],
+      });
+      tick();
+      fixture.detectChanges();
+
+      httpMock.expectNone('/conversas/c-contato/mensagens');
+      expect(html(fixture).querySelector('app-cartao-agendamento')).not.toBeNull();
+      expect(html(fixture).querySelectorAll('.slot-botao').length).toBe(2);
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('clique em slot envia POST agendamentos, desabilita controles e exibe confirmacao compacta apos reconciliacao', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-slot-post');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-slot-post').flush(
+        conversaComOferta('c-slot-post', [slotA1, slotA2], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const primeiroSlot = html(fixture).querySelector('.slot-botao') as HTMLButtonElement;
+      primeiroSlot.click();
+      fixture.detectChanges();
+
+      const reqPost = httpMock.expectOne('/conversas/c-slot-post/agendamentos');
+      expect(reqPost.request.method).toBe('POST');
+      expect(reqPost.request.body).toEqual({ slotId: 101 });
+
+      const slots = html(fixture).querySelectorAll('.slot-botao');
+      for (const s of Array.from(slots) as HTMLButtonElement[]) {
+        expect(s.disabled).toBeTrue();
+      }
+      const botaoAgoraNao = html(fixture).querySelector('.link-recolher') as HTMLButtonElement;
+      expect(botaoAgoraNao.disabled).toBeTrue();
+      expect(html(fixture).querySelector('.evento-compacto')).toBeNull();
+
+      reqPost.flush({
+        estado: 'confirmado',
+        horario: slotA1,
+        alternativas: [],
+      });
+      tick();
+      fixture.detectChanges();
+
+      const reqGet = httpMock.expectOne('/conversas/c-slot-post');
+      expect(reqGet.request.method).toBe('GET');
+      reqGet.flush(
+        conversaComOferta(
+          'c-slot-post',
+          [],
+          'Helena Braga',
+          false,
+          { estado: 'confirmado', horario: slotA1, alternativas: [] },
+          [
+            {
+              papel: 'lead',
+              texto: 'Quero agendar',
+              em: '2026-10-07T10:00:00Z',
+              proximaAcao: null,
+              corretor: null,
+              agendamento: null,
+            },
+            {
+              papel: 'agente',
+              texto: 'Encaminhando.',
+              em: '2026-10-07T10:01:00Z',
+              proximaAcao: 'agendar_reuniao',
+              corretor: 'Helena Braga',
+              agendamento: null,
+            },
+            {
+              papel: 'lead',
+              texto: 'Quarta, 7 de outubro às 9h',
+              em: '2026-10-07T10:02:00Z',
+              proximaAcao: null,
+              corretor: null,
+              agendamento: null,
+            },
+            {
+              papel: 'agente',
+              texto: 'Reunião confirmada. Helena entrará em contato.',
+              em: '2026-10-07T10:02:05Z',
+              proximaAcao: 'continuar_conversa',
+              corretor: 'Helena Braga',
+              agendamento: { estado: 'confirmado', horario: slotA1, alternativas: [] },
+            },
+          ],
+        ),
+      );
+      tick();
+      fixture.detectChanges();
+
+      httpMock.expectNone('/conversas/c-slot-post/mensagens');
+      const eventoCompacto = html(fixture).querySelector('.evento-compacto');
+      expect(eventoCompacto).not.toBeNull();
+      expect(eventoCompacto?.textContent).toContain('Reunião confirmada');
+
+      const itensDOM = html(fixture).querySelectorAll('app-mensagem-pessoa, app-evento-sistema, app-mensagem-lia');
+      expect(itensDOM.length).toBeGreaterThanOrEqual(3);
+
+      document.documentElement.setAttribute('data-tema', 'claro');
+      fixture.detectChanges();
+      const corClara = window.getComputedStyle(eventoCompacto as Element).color;
+      expect(corClara.length).toBeGreaterThan(0);
+
+      document.documentElement.setAttribute('data-tema', 'escuro');
+      fixture.detectChanges();
+      const corEscura = window.getComputedStyle(eventoCompacto as Element).color;
+      expect(corEscura.length).toBeGreaterThan(0);
+      expect(corClara).not.toBe(corEscura);
+
+      document.documentElement.removeAttribute('data-tema');
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('resposta 409 horario_indisponivel com alternativas e vazia atualiza card e aviso com role alert', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-409');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-409').flush(
+        conversaComOferta('c-409', [slotA1, slotA2], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const primeiroSlot = html(fixture).querySelector('.slot-botao') as HTMLButtonElement;
+      primeiroSlot.click();
+      fixture.detectChanges();
+
+      const reqPost = httpMock.expectOne('/conversas/c-409/agendamentos');
+      reqPost.flush(
+        { codigo: 'horario_indisponivel', oferta: [slotA2] },
+        { status: 409, statusText: 'Conflict' },
+      );
+      tick();
+      fixture.detectChanges();
+
+      const aviso = html(fixture).querySelector('.aviso-perda');
+      expect(aviso).not.toBeNull();
+      expect(aviso?.getAttribute('role')).toBe('alert');
+      expect(aviso?.textContent).toContain('O horário das 9h de quarta acabou de ser reservado. Estes ainda estão livres:');
+      expect(html(fixture).querySelectorAll('.slot-botao').length).toBe(1);
+
+      const segundoSlot = html(fixture).querySelector('.slot-botao') as HTMLButtonElement;
+      segundoSlot.click();
+      fixture.detectChanges();
+
+      const reqPost2 = httpMock.expectOne('/conversas/c-409/agendamentos');
+      reqPost2.flush(
+        { codigo: 'horario_indisponivel', oferta: [] },
+        { status: 409, statusText: 'Conflict' },
+      );
+      tick();
+      fixture.detectChanges();
+
+      const avisoVazio = html(fixture).querySelector('.aviso-vazio-atencao');
+      expect(avisoVazio).not.toBeNull();
+      expect(avisoVazio?.getAttribute('role')).toBe('alert');
+      expect(avisoVazio?.textContent).toContain('O horário das 14h de quarta acabou de ser reservado. Não há horários disponíveis no momento.');
+
+      sessionStorage.removeItem('solar.agendamentoPerdido.c-409');
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('botao Agora nao recolhe para faixa compacta e Ver horario reabre sem requisicoes HTTP', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-recolher');
+      let fixture = TestBed.createComponent(Chat);
+      let store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-recolher').flush(
+        conversaComOferta('c-recolher', [slotA1, slotA2], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const botaoAgoraNao = html(fixture).querySelector('.link-recolher') as HTMLButtonElement;
+      botaoAgoraNao.click();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('.faixa-recolhida')).not.toBeNull();
+      expect(html(fixture).querySelector('.cartao')).toBeNull();
+
+      const botaoReabrir = html(fixture).querySelector('.link-reabrir') as HTMLButtonElement;
+      botaoReabrir.click();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('.cartao')).not.toBeNull();
+      expect(html(fixture).querySelector('.faixa-recolhida')).toBeNull();
+      httpMock.expectNone('/conversas/c-recolher');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+
+      fixture = TestBed.createComponent(Chat);
+      store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-recolher').flush(
+        conversaComOferta('c-recolher', [slotA1, slotA2], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('.cartao')).not.toBeNull();
+      expect(html(fixture).querySelector('.faixa-recolhida')).toBeNull();
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('recuperacao GET em falha de reconciliacao preserva fato e permite atualizacao manual sem repetir POST', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-recov');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-recov').flush(
+        conversaComOferta('c-recov', [slotA1], 'Helena Braga', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const slotBtn = html(fixture).querySelector('.slot-botao') as HTMLButtonElement;
+      slotBtn.click();
+      fixture.detectChanges();
+
+      const reqPost = httpMock.expectOne('/conversas/c-recov/agendamentos');
+      reqPost.flush({ estado: 'confirmado', horario: slotA1, alternativas: [] });
+      tick();
+      fixture.detectChanges();
+
+      const reqGetFalha = httpMock.expectOne('/conversas/c-recov');
+      reqGetFalha.flush('Erro servidor', { status: 500, statusText: 'Server Error' });
+      tick();
+      fixture.detectChanges();
+
+      const avisoErro = html(fixture).querySelector('.aviso-erro-agendamento');
+      expect(avisoErro).not.toBeNull();
+      expect(avisoErro?.getAttribute('role')).toBe('alert');
+
+      const botaoSinc = html(fixture).querySelector('.botao-sincronizar-agendamento') as HTMLButtonElement;
+      expect(botaoSinc.textContent?.trim()).toBe('Atualizar confirmação');
+
+      botaoSinc.click();
+      fixture.detectChanges();
+
+      const reqGetRetry = httpMock.expectOne('/conversas/c-recov');
+      expect(reqGetRetry.request.method).toBe('GET');
+      httpMock.expectNone('/conversas/c-recov/agendamentos');
+
+      reqGetRetry.flush(
+        conversaComOferta(
+          'c-recov',
+          [],
+          'Helena Braga',
+          false,
+          { estado: 'confirmado', horario: slotA1, alternativas: [] },
+          [
+            {
+              papel: 'agente',
+              texto: 'Confirmado com Helena Braga.',
+              em: '2026-10-07T10:02:05Z',
+              proximaAcao: 'continuar_conversa',
+              corretor: 'Helena Braga',
+              agendamento: { estado: 'confirmado', horario: slotA1, alternativas: [] },
+            },
+          ],
+        ),
+      );
+      tick();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('.aviso-erro-agendamento')).toBeNull();
+      expect(html(fixture).querySelector('.evento-compacto')).not.toBeNull();
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('geometria estreita quebra slots sem overflow e adapta cores nos dois temas', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-narrow');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      const hostEl = html(fixture);
+      hostEl.style.width = '320px';
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-narrow').flush(
+        conversaComOferta('c-narrow', [slotA1, slotA2, slotA3], 'Helena Maria da Silva Braga de Vasconcelos', false),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const cartao = hostEl.querySelector('.cartao') as HTMLElement;
+      expect(cartao).not.toBeNull();
+      expect(cartao.scrollWidth).toBeLessThanOrEqual(cartao.clientWidth + 2);
+
+      const botoes = hostEl.querySelectorAll('.slot-botao');
+      expect(botoes.length).toBe(3);
+      const b1 = botoes[0] as HTMLElement;
+      const b3 = botoes[2] as HTMLElement;
+
+      const rect1 = b1.getBoundingClientRect();
+      expect(rect1.width).toBeGreaterThanOrEqual(70);
+      expect(rect1.width).toBeLessThanOrEqual(80);
+      expect(rect1.height).toBeGreaterThanOrEqual(50);
+      expect(rect1.height).toBeLessThanOrEqual(60);
+
+      expect(b3.offsetTop).toBeGreaterThan(b1.offsetTop);
+
+      document.documentElement.setAttribute('data-tema', 'claro');
+      fixture.detectChanges();
+      const fundoClaro = window.getComputedStyle(cartao).backgroundColor;
+      expect(fundoClaro.length).toBeGreaterThan(0);
+
+      document.documentElement.setAttribute('data-tema', 'escuro');
+      fixture.detectChanges();
+      const fundoEscuro = window.getComputedStyle(cartao).backgroundColor;
+      expect(fundoEscuro.length).toBeGreaterThan(0);
+      expect(fundoClaro).not.toBe(fundoEscuro);
+
+      document.documentElement.removeAttribute('data-tema');
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('scroll acompanha novas mensagens mas nao salta para o fundo ao receber polling com mesma oferta', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-scroll');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      const hostEl = html(fixture);
+      hostEl.style.height = '350px';
+      hostEl.style.display = 'flex';
+      document.body.appendChild(hostEl);
+      fixture.detectChanges();
+
+      const muitasMensagens: MensagemDaConversa[] = [];
+      for (let i = 0; i < 20; i++) {
+        muitasMensagens.push({
+          papel: i % 2 === 0 ? 'lead' : 'agente',
+          texto: `Mensagem longa de teste de scroll numero ${i} para gerar overflow no palco`,
+          em: `2026-10-07T10:${i < 10 ? '0' + i : i}:00Z`,
+          proximaAcao: i === 19 ? 'agendar_reuniao' : null,
+          corretor: i === 19 ? 'Helena Braga' : null,
+          agendamento: null,
+        });
+      }
+
+      httpMock.expectOne('/conversas/c-scroll').flush(
+        conversaComOferta('c-scroll', [slotA1, slotA2], 'Helena Braga', false, null, muitasMensagens),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const palco = hostEl.querySelector('.palco') as HTMLElement;
+      expect(palco).not.toBeNull();
+      expect(palco.scrollHeight).toBeGreaterThan(palco.clientHeight);
+      expect(palco.scrollTop).toBeGreaterThan(0);
+
+      palco.scrollTop = 0;
+      expect(palco.scrollTop).toBe(0);
+
+      store.ofertaAgendamento.set([{ ...slotA1 }, { ...slotA2 }]);
+      fixture.detectChanges();
+      tick();
+
+      expect(palco.scrollTop).toBe(0);
+
+      store.itens.update((itens) => [
+        ...itens,
+        { tipo: 'pessoa', id: 'nova-msg', texto: 'Nova pergunta do lead', hora: '10:30' },
+      ]);
+      fixture.detectChanges();
+      tick();
+
+      expect(palco.scrollTop).toBeGreaterThan(0);
+
+      store.pararPolling();
+      httpMock.verify();
+      if (hostEl.parentNode) {
+        document.body.removeChild(hostEl);
+      }
+      fixture.destroy();
       flush();
     }));
   });
