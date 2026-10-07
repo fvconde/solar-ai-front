@@ -61,7 +61,6 @@ export class ConversaStore {
       this.emConversa() &&
       !this.apagando() &&
       !this.consentimentoPendente() &&
-      this.estado() !== 'encerrada' &&
       !!this.corretorAgendamento() &&
       this.contatoRegistrado() &&
       !this.agendamentoConfirmado(),
@@ -1019,6 +1018,11 @@ export class ConversaStore {
   }
 
   private atualizarAgenda(conversa: ConversaResponse): void {
+    if (!conversa.consentimentoEm || conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE) {
+      this.resetarAgenda();
+      return;
+    }
+
     let corretor: string | null = null;
     for (let i = conversa.mensagens.length - 1; i >= 0; i--) {
       const c = conversa.mensagens[i].corretor;
