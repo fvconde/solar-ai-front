@@ -11,7 +11,15 @@ import {
   SlotOferecido,
   VERSAO_AVISO_PRIVACIDADE,
 } from './contrato';
-import { HOJE, diaDe, horaAgora, horaDe, rotuloDeDia } from './horario';
+import {
+  HOJE,
+  agruparSlotsPorDia,
+  dataDoAgendamento,
+  diaDe,
+  horaAgora,
+  horaDe,
+  rotuloDeDia,
+} from './horario';
 import { AcaoEvento, EstadoConversa, ItemTrilha } from './trilha';
 
 function ehHandoff(acao: ProximaAcao | null): boolean {
@@ -37,6 +45,45 @@ export class ConversaStore {
   readonly conversaApagada = signal(false);
   readonly erroExclusao = signal<'confirmada' | 'incerta' | null>(null);
   readonly consentimentoPendente = signal(false);
+
+  readonly ofertaAgendamento = signal<SlotOferecido[]>([]);
+  readonly corretorAgendamento = signal<string | null>(null);
+  readonly contatoRegistrado = signal(false);
+  readonly agendamentoConfirmado = signal<AgendamentoDaConversa | null>(null);
+  readonly agendamentoRecolhido = signal(false);
+
+  readonly gruposAgendamento = computed(() =>
+    agruparSlotsPorDia(this.ofertaAgendamento()),
+  );
+
+  readonly agendaDisponivel = computed(
+    () =>
+      this.emConversa() &&
+      !this.apagando() &&
+      !this.consentimentoPendente() &&
+      this.estado() !== 'encerrada' &&
+      !!this.corretorAgendamento() &&
+      this.contatoRegistrado() &&
+      !this.agendamentoConfirmado(),
+  );
+
+  readonly cartaoAgendaVisivel = computed(
+    () =>
+      this.agendaDisponivel() &&
+      this.ofertaAgendamento().length > 0 &&
+      !this.agendamentoRecolhido(),
+  );
+
+  readonly faixaAgendaVisivel = computed(
+    () =>
+      this.agendaDisponivel() &&
+      this.ofertaAgendamento().length > 0 &&
+      this.agendamentoRecolhido(),
+  );
+
+  readonly avisoAgendaVazia = computed(
+    () => this.agendaDisponivel() && this.ofertaAgendamento().length === 0,
+  );
 
   readonly podeApagarConversa = computed(
     () =>
@@ -101,6 +148,7 @@ export class ConversaStore {
     }
     const salva = this.ler(CHAVE_CONVERSA);
     if (!salva) {
+      this.resetarAgenda();
       this.estado.set('aceite-pendente');
       await this.aceitarPelaConta();
       return;
@@ -119,6 +167,7 @@ export class ConversaStore {
         return;
       }
       this.itens.set([]);
+      this.resetarAgenda();
       if (erro instanceof HttpErrorResponse && erro.status === 404) {
         this.estado.set('aceite-pendente');
         return;
@@ -174,6 +223,7 @@ export class ConversaStore {
     this.pararPolling();
     this.totalMensagens = 0;
     this.aceiteErro.set(null);
+    this.resetarAgenda();
     this.estado.set('aceite-recusado');
     this.itens.set([]);
   }
@@ -184,6 +234,20 @@ export class ConversaStore {
     }
     this.aceiteErro.set(null);
     this.estado.set('aceite-pendente');
+  }
+
+  recolherAgendamento(): void {
+    if (!this.agendaDisponivel() || this.ofertaAgendamento().length === 0) {
+      return;
+    }
+    this.agendamentoRecolhido.set(true);
+  }
+
+  reabrirAgendamento(): void {
+    if (!this.agendaDisponivel() || this.ofertaAgendamento().length === 0) {
+      return;
+    }
+    this.agendamentoRecolhido.set(false);
   }
 
   async definirConsentimentoDaConta(versao: string | null): Promise<void> {
@@ -210,6 +274,7 @@ export class ConversaStore {
     this.pararCronometro();
     this.geracao++;
     this.consentimentoPendente.set(false);
+    this.resetarAgenda();
     this.gravar(CHAVE_CONVERSA, id);
     this.conversaId = '';
     this.totalMensagens = 0;
@@ -227,6 +292,7 @@ export class ConversaStore {
     this.pararCronometro();
     this.geracao++;
     this.consentimentoPendente.set(false);
+    this.resetarAgenda();
     this.apagar(CHAVE_CONVERSA);
     this.conversaId = '';
     this.totalMensagens = 0;
@@ -294,10 +360,12 @@ export class ConversaStore {
 
     const g = this.geracao;
     try {
-      await this.api.registrarContato(this.conversaId, dados);
+      const resposta = await this.api.registrarContato(this.conversaId, dados);
       if (g !== this.geracao) {
         return;
       }
+      this.contatoRegistrado.set(true);
+      this.ofertaAgendamento.set(resposta.oferta ?? []);
       this.removerContato();
       this.acrescentar({
         tipo: 'evento',
@@ -444,6 +512,7 @@ export class ConversaStore {
     this.aceiteEnviando.set(false);
     this.erroExclusao.set(null);
     this.consentimentoPendente.set(false);
+    this.resetarAgenda();
     this.conversaApagada.set(true);
 
     if (this.versaoConsentidaNaConta === VERSAO_AVISO_PRIVACIDADE) {
@@ -488,9 +557,13 @@ export class ConversaStore {
     if (!conversa.consentimentoEm || conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE) {
       this.pararPolling();
       this.itens.set([]);
+      this.resetarAgenda();
       this.estado.set('aceite-pendente');
       return;
     }
+
+    this.agendamentoRecolhido.set(false);
+    this.atualizarAgenda(conversa);
 
     if (conversa.mensagens.length === 0) {
       await this.abrir();
@@ -533,6 +606,29 @@ export class ConversaStore {
   }
 
   private aplicar(resposta: MensagemResponse): void {
+    if (resposta.corretor && resposta.corretor.trim()) {
+      this.corretorAgendamento.set(resposta.corretor.trim());
+    }
+
+    if (resposta.contatoPendente) {
+      this.contatoRegistrado.set(false);
+    } else if (this.corretorAgendamento()) {
+      this.contatoRegistrado.set(true);
+    }
+
+    if (resposta.agendamento?.estado === 'confirmado' && resposta.agendamento.horario) {
+      this.agendamentoConfirmado.set(resposta.agendamento);
+      this.ofertaAgendamento.set([]);
+    }
+
+    const eventoAgendamento = this.eventoDoAgendamento(resposta.agendamento);
+    const ehConfirmacao =
+      resposta.agendamento?.estado === 'confirmado' && !!resposta.agendamento.horario;
+
+    if (ehConfirmacao && eventoAgendamento) {
+      this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...eventoAgendamento });
+    }
+
     this.acrescentar({
       tipo: 'lia',
       id: this.proximoId(),
@@ -543,10 +639,11 @@ export class ConversaStore {
       revelar: true,
     });
 
-    const eventoAgendamento = this.eventoDoAgendamento(resposta.agendamento);
-    const evento = eventoAgendamento ?? this.desfecho(resposta.proximaAcao, resposta.corretor);
-    if (evento) {
-      this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
+    if (!ehConfirmacao) {
+      const evento = eventoAgendamento ?? this.desfecho(resposta.proximaAcao, resposta.corretor);
+      if (evento) {
+        this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
+      }
     }
 
     if (ehHandoff(resposta.proximaAcao) && resposta.contatoPendente) {
@@ -594,40 +691,74 @@ export class ConversaStore {
     const g = this.geracao;
     try {
       const conversa = await this.api.obterConversa(this.conversaId);
-      if (g !== this.geracao) {
+      if (
+        g !== this.geracao ||
+        this.apagando() ||
+        this.estado() !== 'conversando' ||
+        this.aguardando()
+      ) {
         return;
       }
+
+      this.atualizarAgenda(conversa);
+
       if (conversa.mensagens.length > this.totalMensagens) {
         const novas = conversa.mensagens.slice(this.totalMensagens);
-        this.totalMensagens = conversa.mensagens.length;
+        const temLead = novas.some((m) => m.papel === 'lead');
 
-        for (const msg of novas) {
-          if (msg.papel === 'agente') {
-            this.acrescentar({
-              tipo: 'lia',
-              id: this.proximoId(),
-              texto: msg.texto,
-              hora: horaDe(msg.em),
-              imoveis: msg.imoveisSugeridos ?? [],
-              intencao: conversa.perfilLead?.intencao ?? null,
-              revelar: true,
-            });
+        if (temLead) {
+          this.sequencia = 0;
+          this.totalMensagens = conversa.mensagens.length;
+          this.itens.set(
+            this.reconstruir(
+              conversa.mensagens,
+              conversa.contatoPendente,
+              conversa.perfilLead?.intencao ?? null,
+            ),
+          );
+          this.estado.set(this.estadoDe(conversa.mensagens));
+          if (this.estado() === 'encerrada') {
+            this.pararPolling();
+          }
+        } else {
+          this.totalMensagens = conversa.mensagens.length;
+          for (const msg of novas) {
+            if (msg.papel === 'agente') {
+              const eventoAgendamento = this.eventoDoAgendamento(msg.agendamento);
+              const ehConfirmacao =
+                msg.agendamento?.estado === 'confirmado' && !!msg.agendamento.horario;
 
-            const eventoAgendamento = this.eventoDoAgendamento(msg.agendamento);
-            const evento =
-              eventoAgendamento ??
-              (msg.proximaAcao && this.desfecho(msg.proximaAcao, msg.corretor));
-            if (evento) {
-              this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
-            }
+              if (ehConfirmacao && eventoAgendamento) {
+                this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...eventoAgendamento });
+              }
 
-            if (ehHandoff(msg.proximaAcao) && conversa.contatoPendente) {
-              this.acrescentar({ tipo: 'contato', id: this.proximoId() });
-            }
+              this.acrescentar({
+                tipo: 'lia',
+                id: this.proximoId(),
+                texto: msg.texto,
+                hora: horaDe(msg.em),
+                imoveis: msg.imoveisSugeridos ?? [],
+                intencao: conversa.perfilLead?.intencao ?? null,
+                revelar: true,
+              });
 
-            if (msg.proximaAcao === 'encerrar') {
-              this.estado.set('encerrada');
-              this.pararPolling();
+              if (!ehConfirmacao) {
+                const evento =
+                  eventoAgendamento ??
+                  (msg.proximaAcao && this.desfecho(msg.proximaAcao, msg.corretor));
+                if (evento) {
+                  this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
+                }
+              }
+
+              if (ehHandoff(msg.proximaAcao) && conversa.contatoPendente) {
+                this.acrescentar({ tipo: 'contato', id: this.proximoId() });
+              }
+
+              if (msg.proximaAcao === 'encerrar') {
+                this.estado.set('encerrada');
+                this.pararPolling();
+              }
             }
           }
         }
@@ -680,8 +811,8 @@ export class ConversaStore {
     if (agendamento.estado === 'confirmado' && agendamento.horario) {
       return {
         variante: 'sucesso',
-        rotulo: 'Horário confirmado',
-        texto: `Reunião marcada para ${this.rotuloDoHorario(agendamento.horario)}.`,
+        rotulo: 'Reunião confirmada',
+        texto: dataDoAgendamento(agendamento.horario.inicio, agendamento.horario.fim),
         acao: null,
       };
     }
@@ -775,6 +906,14 @@ export class ConversaStore {
         continue;
       }
 
+      const eventoAgendamento = this.eventoDoAgendamento(mensagem.agendamento);
+      const ehConfirmacao =
+        mensagem.agendamento?.estado === 'confirmado' && !!mensagem.agendamento.horario;
+
+      if (ehConfirmacao && eventoAgendamento) {
+        itens.push({ tipo: 'evento', id: this.proximoId(), ...eventoAgendamento });
+      }
+
       itens.push({
         tipo: 'lia',
         id: this.proximoId(),
@@ -785,12 +924,13 @@ export class ConversaStore {
         revelar: false,
       });
 
-      const eventoAgendamento = this.eventoDoAgendamento(mensagem.agendamento);
-      const evento =
-        eventoAgendamento ??
-        (mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao, mensagem.corretor));
-      if (evento) {
-        itens.push({ tipo: 'evento', id: this.proximoId(), ...evento });
+      if (!ehConfirmacao) {
+        const evento =
+          eventoAgendamento ??
+          (mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao, mensagem.corretor));
+        if (evento) {
+          itens.push({ tipo: 'evento', id: this.proximoId(), ...evento });
+        }
       }
     }
 
@@ -876,5 +1016,44 @@ export class ConversaStore {
     } catch {
       return;
     }
+  }
+
+  private atualizarAgenda(conversa: ConversaResponse): void {
+    let corretor: string | null = null;
+    for (let i = conversa.mensagens.length - 1; i >= 0; i--) {
+      const c = conversa.mensagens[i].corretor;
+      if (c && c.trim()) {
+        corretor = c.trim();
+        break;
+      }
+    }
+    this.corretorAgendamento.set(corretor);
+
+    const contatoRegistrado = !!corretor && !conversa.contatoPendente;
+    this.contatoRegistrado.set(contatoRegistrado);
+
+    let confirmacao: AgendamentoDaConversa | null = null;
+    for (let i = conversa.mensagens.length - 1; i >= 0; i--) {
+      const ag = conversa.mensagens[i].agendamento;
+      if (ag && ag.estado === 'confirmado' && ag.horario) {
+        confirmacao = ag;
+        break;
+      }
+    }
+    this.agendamentoConfirmado.set(confirmacao);
+
+    if (confirmacao || !corretor || !contatoRegistrado) {
+      this.ofertaAgendamento.set([]);
+    } else {
+      this.ofertaAgendamento.set(conversa.oferta ?? []);
+    }
+  }
+
+  private resetarAgenda(): void {
+    this.ofertaAgendamento.set([]);
+    this.corretorAgendamento.set(null);
+    this.contatoRegistrado.set(false);
+    this.agendamentoConfirmado.set(null);
+    this.agendamentoRecolhido.set(false);
   }
 }
