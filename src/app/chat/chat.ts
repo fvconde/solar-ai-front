@@ -367,7 +367,7 @@ export class Chat implements OnInit, OnDestroy {
       untracked(() => {
         this.contaApi.obter().subscribe({
           next: (conta) => {
-            if (g !== this.geracaoConta) {
+            if (g !== this.geracaoConta || this.sessao.usuario()?.id !== usuarioId) {
               return;
             }
             if (this.cliente()) {
@@ -387,7 +387,7 @@ export class Chat implements OnInit, OnDestroy {
             });
           },
           error: () => {
-            if (g !== this.geracaoConta) {
+            if (g !== this.geracaoConta || this.sessao.usuario()?.id !== usuarioId) {
               return;
             }
             this.dadosConta.set({

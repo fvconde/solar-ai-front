@@ -4237,6 +4237,167 @@ describe('Chat', () => {
       fixture.destroy();
       flush();
     }));
+
+    it('troca imediata de cliente A para cliente B sem detectChanges antes do flush de A descarta A e aplica apenas dados e consentimento de B', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-troca-imediata');
+      const sessao = TestBed.inject(SessaoStore);
+      sessao.definir(sessaoCliente({ usuario: { id: 'u-cliente-a', nome: 'Cliente A', email: 'a@solar.com.br' } }));
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      const spyConsentimento = spyOn(store, 'definirConsentimentoDaConta').and.callThrough();
+      fixture.detectChanges();
+
+      const reqContaA = httpMock.expectOne('/api/conta');
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-troca-imediata', titulo: 'Troca', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-troca-imediata').flush(
+        conversaComOferta('c-t4-troca-imediata', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      sessao.definir(sessaoCliente({ usuario: { id: 'u-cliente-b', nome: 'Cliente B', email: 'b@solar.com.br' } }));
+
+      reqContaA.flush({
+        id: 'u-cliente-a',
+        nome: 'Cliente A',
+        email: 'a@solar.com.br',
+        telefone: '11911111111',
+        perfil: 'cliente',
+        criadaEm: '2026-09-22T14:08:00Z',
+        corretor: null,
+        consentimento: { em: '2026-09-22T14:08:00Z', versao: 'v-consentimento-A' },
+        conversasSalvas: 0,
+      });
+
+      expect(spyConsentimento).not.toHaveBeenCalledWith('v-consentimento-A');
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      expect(inputNome.value).not.toBe('Cliente A');
+
+      fixture.detectChanges();
+      tick();
+
+      const reqContaB = httpMock.expectOne('/api/conta');
+      expect(reqContaB.request.method).toBe('GET');
+
+      reqContaB.flush({
+        id: 'u-cliente-b',
+        nome: 'Cliente B',
+        email: 'b@solar.com.br',
+        telefone: '11922222222',
+        perfil: 'cliente',
+        criadaEm: '2026-09-22T14:08:00Z',
+        corretor: null,
+        consentimento: { em: '2026-09-22T14:08:00Z', versao: 'v-consentimento-B' },
+        conversasSalvas: 0,
+      });
+      tick();
+      fixture.detectChanges();
+
+      expect(spyConsentimento).toHaveBeenCalledWith('v-consentimento-B');
+
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      expect(inputNome.value).toBe('Cliente B');
+      expect(inputTel.value).toBe('(11) 92222-2222');
+      expect(inputEmail.value).toBe('b@solar.com.br');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('erro na requisicao de conta A apos troca imediata para cliente B sem detectChanges nao altera dados correntes', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-erro-imediato');
+      const sessao = TestBed.inject(SessaoStore);
+      sessao.definir(sessaoCliente({ usuario: { id: 'u-cliente-a', nome: 'Cliente A', email: 'a@solar.com.br' } }));
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const reqContaA = httpMock.expectOne('/api/conta');
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-erro-imediato', titulo: 'Erro', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-erro-imediato').flush(
+        conversaComOferta('c-t4-erro-imediato', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      sessao.definir(sessaoCliente({ usuario: { id: 'u-cliente-b', nome: 'Cliente B', email: 'b@solar.com.br' } }));
+
+      reqContaA.flush('Erro servidor A', { status: 500, statusText: 'Internal Server Error' });
+
+      fixture.detectChanges();
+      tick();
+
+      const reqContaB = httpMock.expectOne('/api/conta');
+      reqContaB.flush(conta(VERSAO_AVISO_PRIVACIDADE));
+      tick();
+      fixture.detectChanges();
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      expect(inputNome.value).toBe('Marina Couto');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('logout imediato sem detectChanges antes do retorno de A descarta resposta de A e nao aplica consentimento', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-logout-imediato');
+      const sessao = TestBed.inject(SessaoStore);
+      sessao.definir(sessaoCliente({ usuario: { id: 'u-cliente-a', nome: 'Cliente A', email: 'a@solar.com.br' } }));
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      const spyConsentimento = spyOn(store, 'definirConsentimentoDaConta').and.callThrough();
+      fixture.detectChanges();
+
+      const reqContaA = httpMock.expectOne('/api/conta');
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-logout-imediato', titulo: 'Logout', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-logout-imediato').flush(
+        conversaComOferta('c-t4-logout-imediato', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      sessao.limpar();
+
+      reqContaA.flush({
+        id: 'u-cliente-a',
+        nome: 'Cliente A',
+        email: 'a@solar.com.br',
+        telefone: '11911111111',
+        perfil: 'cliente',
+        criadaEm: '2026-09-22T14:08:00Z',
+        corretor: null,
+        consentimento: { em: '2026-09-22T14:08:00Z', versao: 'v-consentimento-A' },
+        conversasSalvas: 0,
+      });
+
+      expect(spyConsentimento).not.toHaveBeenCalled();
+
+      fixture.detectChanges();
+      tick();
+
+      httpMock.expectNone('/api/conta');
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      expect(inputNome.value).toBe('');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
   });
 });
 });
