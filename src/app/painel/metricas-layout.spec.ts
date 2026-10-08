@@ -82,13 +82,45 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
           await new Promise<void>(resolve => quadro.contentWindow!.requestAnimationFrame(() => resolve()));
           const win = quadro.contentWindow!;
 
-          const filaInicial = doc.querySelector<HTMLElement>('.corpo-painel')!;
-          expect(filaInicial).not.toBeNull();
-          expect(filaInicial.getBoundingClientRect().height).toBeGreaterThan(0);
+          const shell = doc.querySelector<HTMLElement>('.painel-shell')!;
+          const nav = doc.querySelector<HTMLElement>('nav')!;
+          const painelFila = doc.querySelector<HTMLElement>('#painel-fila-leads')!;
+          const corpo = doc.querySelector<HTMLElement>('.corpo-painel')!;
+          const shellRect = shell.getBoundingClientRect();
+          const navRect = nav.getBoundingClientRect();
+          const painelFilaRect = painelFila.getBoundingClientRect();
+          const corpoRect = corpo.getBoundingClientRect();
+          const navMargemInferior = parseFloat(win.getComputedStyle(nav).marginBottom);
+          const areaDisponivelFila = shellRect.bottom - (navRect.bottom + navMargemInferior);
+
           expect(doc.querySelector('app-metricas-painel')).toBeNull();
           expect(doc.querySelector('.metricas')).toBeNull();
-          expect(doc.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeFalse();
+          expect(painelFila.classList.contains('oculto')).toBeFalse();
           expect(doc.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeTrue();
+
+          expect(Math.abs(painelFilaRect.bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+          expect(Math.abs(painelFilaRect.height - areaDisponivelFila)).toBeLessThanOrEqual(2);
+          expect(Math.abs(corpoRect.bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+          expect(Math.abs(corpoRect.height - (shellRect.bottom - corpoRect.top))).toBeLessThanOrEqual(2);
+
+          if (largura > 860) {
+            const colunaFila = doc.querySelector<HTMLElement>('.coluna-fila')!;
+            const colunaDetalhe = doc.querySelector<HTMLElement>('.coluna-detalhe')!;
+            const listaLeads = doc.querySelector<HTMLElement>('.lista-leads')!;
+            expect(listaLeads).not.toBeNull();
+            expect(colunaFila).not.toBeNull();
+            expect(colunaDetalhe).not.toBeNull();
+            expect(win.getComputedStyle(listaLeads).display).not.toBe('none');
+            expect(win.getComputedStyle(colunaDetalhe).display).not.toBe('none');
+            expect(Math.abs(colunaFila.getBoundingClientRect().height - corpoRect.height)).toBeLessThanOrEqual(2);
+            expect(Math.abs(colunaDetalhe.getBoundingClientRect().height - corpoRect.height)).toBeLessThanOrEqual(2);
+          } else {
+            const colunaFila = doc.querySelector<HTMLElement>('.coluna-fila')!;
+            const colunaDetalhe = doc.querySelector<HTMLElement>('.coluna-detalhe')!;
+            expect(colunaFila).not.toBeNull();
+            expect(win.getComputedStyle(colunaFila).display).not.toBe('none');
+            expect(win.getComputedStyle(colunaDetalhe).display).toBe('none');
+          }
 
           fixture.componentInstance.selecionarMetricas();
           fixture.detectChanges();
@@ -115,12 +147,30 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
           expect(doc.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeFalse();
           expect(doc.querySelector('app-metricas-painel')).not.toBeNull();
 
+          const painelMetricas = doc.querySelector<HTMLElement>('#painel-metricas')!;
+          const appMetricas = doc.querySelector<HTMLElement>('app-metricas-painel')!;
           const faixa = doc.querySelector<HTMLElement>('.metricas')!;
           expect(faixa).not.toBeNull();
           expect(faixa.classList.contains('expandida')).toBeFalse();
           expect(doc.querySelector('.alternar')).toBeNull();
           expect(doc.querySelector('.mini-grafico-celular')).toBeNull();
           expect(doc.querySelector('.resumo-celular')).toBeNull();
+
+          const painelMetricasRect = painelMetricas.getBoundingClientRect();
+          const appMetricasRect = appMetricas.getBoundingClientRect();
+          const faixaRect = faixa.getBoundingClientRect();
+          const areaDisponivelMetricas = shellRect.bottom - (navRect.bottom + navMargemInferior);
+
+          expect(Math.abs(painelMetricasRect.bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+          expect(Math.abs(painelMetricasRect.height - areaDisponivelMetricas)).toBeLessThanOrEqual(2);
+          expect(Math.abs(appMetricasRect.height - painelMetricasRect.height)).toBeLessThanOrEqual(2);
+          expect(Math.abs(faixaRect.height - painelMetricasRect.height)).toBeLessThanOrEqual(2);
+
+          expect(faixaRect.height).toBeGreaterThan(altura * 0.4);
+          expect(win.getComputedStyle(faixa).height).not.toContain('40vh');
+          expect(win.getComputedStyle(faixa).height).not.toContain('40dvh');
+          expect(win.getComputedStyle(faixa).maxHeight).toBe('none');
+          expect(win.getComputedStyle(appMetricas).maxHeight).toBe('none');
 
           const principais = doc.querySelector<HTMLElement>('.principais')!;
           expect(principais).not.toBeNull();
@@ -167,12 +217,39 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
             expect(pendentes.textContent).toContain('aprovação');
           }
 
+          const miolo = doc.querySelector<HTMLElement>('.miolo')!;
+          expect(win.getComputedStyle(miolo).overflowY).toBe('visible');
+          expect(win.getComputedStyle(extras).overflowY).toBe('visible');
+
+          if (altura <= 600 || largura <= 860) {
+            expect(faixa.scrollHeight).toBeGreaterThan(faixa.clientHeight);
+          }
+
+          const rolaveis = [faixa, ...Array.from(faixa.querySelectorAll<HTMLElement>('*'))]
+            .filter(elemento => ['auto', 'scroll'].includes(win.getComputedStyle(elemento).overflowY)
+              && elemento.scrollHeight > elemento.clientHeight);
+          expect(rolaveis).toEqual(faixa.scrollHeight > faixa.clientHeight ? [faixa] : []);
+
           const privacidade = extras.querySelector<HTMLElement>('.grade-extras > .cartao:last-child')!;
           const titulo = privacidade.querySelector<HTMLElement>('h3')!;
           expect(titulo.textContent).toContain('Privacidade');
           titulo.scrollIntoView({ block: 'start' });
           await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
-          expect(faixa.scrollTop).toBeGreaterThanOrEqual(0);
+          expect(titulo.getBoundingClientRect().top).toBeGreaterThanOrEqual(faixa.getBoundingClientRect().top - 2);
+          expect(titulo.getBoundingClientRect().bottom).toBeLessThanOrEqual(faixa.getBoundingClientRect().bottom + 2);
+
+          const ultimoTexto = privacidade.querySelector<HTMLElement>('p:last-child')!;
+          ultimoTexto.scrollIntoView({ block: 'end' });
+          await new Promise<void>(resolve => win.requestAnimationFrame(() => resolve()));
+          expect(ultimoTexto.getBoundingClientRect().top).toBeGreaterThanOrEqual(faixa.getBoundingClientRect().top - 2);
+          expect(ultimoTexto.getBoundingClientRect().bottom).toBeLessThanOrEqual(faixa.getBoundingClientRect().bottom + 2);
+
+          if (altura <= 600 || largura <= 860) {
+            expect(faixa.scrollHeight).toBeGreaterThan(faixa.clientHeight);
+            expect(faixa.scrollTop).toBeGreaterThan(0);
+          }
+          expect(miolo.scrollTop).toBe(0);
+          expect(extras.scrollTop).toBe(0);
 
           if (perfil === 'supervisor') {
             fixture.componentInstance.selecionarFiltro('visao_geral');
@@ -200,10 +277,30 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
 
           expect(doc.querySelector('app-metricas-painel')).toBeNull();
           expect(doc.querySelector('.metricas')).toBeNull();
-          expect(doc.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeFalse();
+          const painelFilaFinal = doc.querySelector<HTMLElement>('#painel-fila-leads')!;
+          const corpoFinal = doc.querySelector<HTMLElement>('.corpo-painel')!;
+          expect(painelFilaFinal.classList.contains('oculto')).toBeFalse();
           expect(doc.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeTrue();
-          const filaFinal = doc.querySelector<HTMLElement>('.corpo-painel')!;
-          expect(filaFinal.getBoundingClientRect().height).toBeGreaterThan(0);
+
+          const corpoFinalRect = corpoFinal.getBoundingClientRect();
+          expect(Math.abs(painelFilaFinal.getBoundingClientRect().bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+          expect(Math.abs(corpoFinalRect.bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+          expect(Math.abs(corpoFinalRect.height - (shellRect.bottom - corpoFinalRect.top))).toBeLessThanOrEqual(2);
+
+          if (largura > 860) {
+            const colunaFilaFinal = doc.querySelector<HTMLElement>('.coluna-fila')!;
+            const colunaDetalheFinal = doc.querySelector<HTMLElement>('.coluna-detalhe')!;
+            expect(colunaFilaFinal).not.toBeNull();
+            expect(colunaDetalheFinal).not.toBeNull();
+            expect(Math.abs(colunaFilaFinal.getBoundingClientRect().height - corpoFinalRect.height)).toBeLessThanOrEqual(2);
+            expect(Math.abs(colunaDetalheFinal.getBoundingClientRect().height - corpoFinalRect.height)).toBeLessThanOrEqual(2);
+          } else {
+            const colunaFilaFinal = doc.querySelector<HTMLElement>('.coluna-fila')!;
+            const colunaDetalheFinal = doc.querySelector<HTMLElement>('.coluna-detalhe')!;
+            expect(colunaFilaFinal).not.toBeNull();
+            expect(win.getComputedStyle(colunaFilaFinal).display).not.toBe('none');
+            expect(win.getComputedStyle(colunaDetalheFinal).display).toBe('none');
+          }
         });
       }
     }

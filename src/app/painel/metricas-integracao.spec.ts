@@ -30,7 +30,10 @@ describe('Integração das métricas com as abas e fila (S-22/S-48)', () => {
     });
   });
 
+  const hostsFixados: HTMLElement[] = [];
+
   afterEach(() => {
+    hostsFixados.splice(0).forEach(h => h.remove());
     http.match('/api/conta');
     http.match('/api/painel/corretores/pendentes');
     http.verify();
@@ -144,15 +147,46 @@ describe('Integração das métricas com as abas e fila (S-22/S-48)', () => {
     });
     fixture.detectChanges();
 
-    const html = fixture.nativeElement as HTMLElement;
-    html.style.height = `${window.innerHeight}px`;
-    const fila = html.querySelector<HTMLElement>('.corpo-painel')!;
-    expect(html.querySelector('app-metricas-painel')).toBeNull();
-    expect(html.querySelector('.metricas')).toBeNull();
-    expect(html.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeFalse();
-    expect(html.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeTrue();
-    expect(fila.getBoundingClientRect().height).toBeGreaterThan(0);
-    expect(getComputedStyle(fila).display).not.toBe('none');
+    const host = fixture.nativeElement as HTMLElement;
+    host.style.cssText = 'position:fixed;left:0;top:0;width:1200px;height:800px;display:flex;flex-direction:column;';
+    document.body.appendChild(host);
+    hostsFixados.push(host);
+
+    const shell = host.querySelector<HTMLElement>('.painel-shell')!;
+    const nav = host.querySelector<HTMLElement>('.abas-supervisor')!;
+    const painelFila = host.querySelector<HTMLElement>('#painel-fila-leads')!;
+    const corpo = host.querySelector<HTMLElement>('.corpo-painel')!;
+    const colunaFila = host.querySelector<HTMLElement>('.coluna-fila')!;
+    const listaLeads = host.querySelector<HTMLElement>('.lista-leads')!;
+    const colunaDetalhe = host.querySelector<HTMLElement>('.coluna-detalhe')!;
+
+    expect(host.querySelector('app-metricas-painel')).toBeNull();
+    expect(host.querySelector('.metricas')).toBeNull();
+    expect(painelFila.classList.contains('oculto')).toBeFalse();
+    expect(host.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeTrue();
+
+    const shellRect = shell.getBoundingClientRect();
+    const navRect = nav.getBoundingClientRect();
+    const painelFilaRect = painelFila.getBoundingClientRect();
+    const corpoRect = corpo.getBoundingClientRect();
+    const navMargemInferior = parseFloat(getComputedStyle(nav).marginBottom);
+    const areaDisponivelFila = shellRect.bottom - (navRect.bottom + navMargemInferior);
+
+    expect(Math.abs(painelFilaRect.bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+    expect(Math.abs(corpoRect.bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+    expect(Math.abs(corpoRect.height - areaDisponivelFila)).toBeLessThanOrEqual(2);
+
+    expect(colunaFila).not.toBeNull();
+    expect(colunaDetalhe).not.toBeNull();
+    expect(listaLeads).not.toBeNull();
+    expect(getComputedStyle(listaLeads).display).not.toBe('none');
+    if (window.innerWidth > 860) {
+      expect(getComputedStyle(colunaDetalhe).display).not.toBe('none');
+      expect(Math.abs(colunaFila.getBoundingClientRect().height - corpoRect.height)).toBeLessThanOrEqual(2);
+      expect(Math.abs(colunaDetalhe.getBoundingClientRect().height - corpoRect.height)).toBeLessThanOrEqual(2);
+    } else {
+      expect(getComputedStyle(colunaDetalhe).display).toBe('none');
+    }
 
     fixture.componentInstance.selecionarMetricas();
     fixture.detectChanges();
@@ -161,19 +195,32 @@ describe('Integração das métricas com as abas e fila (S-22/S-48)', () => {
     http.expectOne('/api/painel/metricas?dias=30').flush(metricasParaTeste());
     fixture.detectChanges();
 
-    const painelMetricas = html.querySelector<HTMLElement>('#painel-metricas')!;
+    const painelMetricas = host.querySelector<HTMLElement>('#painel-metricas')!;
     expect(painelMetricas.classList.contains('oculto')).toBeFalse();
-    expect(html.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeTrue();
+    expect(painelFila.classList.contains('oculto')).toBeTrue();
 
-    const appMetricas = html.querySelector<HTMLElement>('app-metricas-painel')!;
+    const appMetricas = host.querySelector<HTMLElement>('app-metricas-painel')!;
     expect(appMetricas).not.toBeNull();
-    const faixa = html.querySelector<HTMLElement>('.metricas')!;
+    const faixa = host.querySelector<HTMLElement>('.metricas')!;
     expect(faixa).not.toBeNull();
-    expect(html.querySelector('.alternar')).toBeNull();
+    expect(host.querySelector('.alternar')).toBeNull();
     expect(faixa.classList.contains('expandida')).toBeFalse();
 
-    expect(getComputedStyle(appMetricas).maxHeight).toBe('none');
+    const painelMetricasRect = painelMetricas.getBoundingClientRect();
+    const appMetricasRect = appMetricas.getBoundingClientRect();
+    const faixaRect = faixa.getBoundingClientRect();
+    const areaDisponivelMetricas = shellRect.bottom - (navRect.bottom + navMargemInferior);
+
+    expect(Math.abs(painelMetricasRect.bottom - shellRect.bottom)).toBeLessThanOrEqual(2);
+    expect(Math.abs(painelMetricasRect.height - areaDisponivelMetricas)).toBeLessThanOrEqual(2);
+    expect(Math.abs(appMetricasRect.height - painelMetricasRect.height)).toBeLessThanOrEqual(2);
+    expect(Math.abs(faixaRect.height - painelMetricasRect.height)).toBeLessThanOrEqual(2);
+
+    expect(faixaRect.height).toBeGreaterThan(800 * 0.4);
+    expect(getComputedStyle(faixa).height).not.toContain('40vh');
+    expect(getComputedStyle(faixa).height).not.toContain('40dvh');
     expect(getComputedStyle(faixa).maxHeight).toBe('none');
+    expect(getComputedStyle(appMetricas).maxHeight).toBe('none');
   });
 
   it('falha e retry de métricas preservam a fila sem repetir sua consulta', async () => {
