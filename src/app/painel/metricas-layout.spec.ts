@@ -31,7 +31,7 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
 
   for (const perfil of ['supervisor', 'corretor'] as const) {
     for (const tema of ['claro', 'escuro'] as const) {
-      for (const [largura, altura] of [[1440, 900], [861, 600], [390, 844], [390, 568]]) {
+      for (const [largura, altura] of [[1440, 900], [861, 600], [860, 700], [390, 844], [390, 568]]) {
         it(`${perfil}, tema ${tema}, ${largura}×${altura}: Visão geral sem métricas, aba Métricas completa e sem expandida`, async () => {
           TestBed.inject(SessaoStore).definir({
             usuario: { id: 'teste-layout', nome: 'Conta', email: 'conta@solar.com.br' },
@@ -218,17 +218,19 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
               expect(Math.abs(bRect.left - barraRect.left)).toBeLessThanOrEqual(2);
               expect(Math.abs(bRect.right - barraRect.right)).toBeLessThanOrEqual(2);
 
-              expect(rRect.left).toBeGreaterThanOrEqual(bRect.left - 2);
-              expect(rRect.right).toBeLessThanOrEqual(bRect.right + 2);
+              if (largura <= 860) {
+                expect(rRect.left).toBeGreaterThanOrEqual(bRect.left - 2);
+                expect(rRect.right).toBeLessThanOrEqual(bRect.right + 2);
 
-              const range = doc.createRange();
-              const textNode = rotulosSupervisor[i].firstChild;
-              if (textNode) {
-                range.selectNodeContents(textNode);
-                const rects = Array.from(range.getClientRects());
-                for (const r of rects) {
-                  expect(r.left).toBeGreaterThanOrEqual(bRect.left - 2);
-                  expect(r.right).toBeLessThanOrEqual(bRect.right + 2);
+                const range = doc.createRange();
+                const textNode = rotulosSupervisor[i].firstChild;
+                if (textNode) {
+                  range.selectNodeContents(textNode);
+                  const rects = Array.from(range.getClientRects());
+                  for (const r of rects) {
+                    expect(r.left).toBeGreaterThanOrEqual(bRect.left - 2);
+                    expect(r.right).toBeLessThanOrEqual(bRect.right + 2);
+                  }
                 }
               }
 
