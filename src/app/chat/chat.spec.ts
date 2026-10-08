@@ -1074,7 +1074,14 @@ describe('Chat', () => {
       tick();
       fixture.detectChanges();
 
-      expect(html(fixture).querySelector('app-cartao-agendamento')).toBeNull();
+      const cartaoJaConfirmado = html(fixture).querySelector('app-cartao-agendamento');
+      expect(cartaoJaConfirmado).not.toBeNull();
+      const slotsJaConfirmados = cartaoJaConfirmado?.querySelectorAll('.slot-botao');
+      expect(slotsJaConfirmados?.length).toBe(1);
+      const btnConfirmado = slotsJaConfirmados?.[0] as HTMLButtonElement;
+      expect(btnConfirmado.disabled).toBeTrue();
+      expect(btnConfirmado.getAttribute('aria-pressed')).toBe('true');
+      expect(cartaoJaConfirmado?.querySelector('.link-recolher')).toBeNull();
       expect(html(fixture).querySelector('.aviso-vazio-neutro')).toBeNull();
 
       store.pararPolling();
@@ -1239,7 +1246,7 @@ describe('Chat', () => {
             },
             {
               papel: 'agente',
-              texto: 'Combinado! Helena Braga vai te chamar no contato que você deixou.',
+              texto: 'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
               em: '2026-10-07T10:02:05Z',
               proximaAcao: 'agendar_reuniao',
               corretor: 'Helena Braga',
@@ -1252,12 +1259,20 @@ describe('Chat', () => {
       fixture.detectChanges();
 
       httpMock.expectNone('/conversas/c-slot-post/mensagens');
-      expect(html(fixture).querySelector('app-cartao-agendamento')).toBeNull();
+      const cartaoAposConfirmacao = html(fixture).querySelector('app-cartao-agendamento');
+      expect(cartaoAposConfirmacao).not.toBeNull();
+
+      const slotsConfirmados = cartaoAposConfirmacao?.querySelectorAll('.slot-botao');
+      expect(slotsConfirmados?.length).toBe(1);
+      const slotConfirmadoEl = slotsConfirmados?.[0] as HTMLButtonElement;
+      expect(slotConfirmadoEl.disabled).toBeTrue();
+      expect(slotConfirmadoEl.getAttribute('aria-pressed')).toBe('true');
+      expect(slotConfirmadoEl.classList.contains('selecionado')).toBeTrue();
+      expect(cartaoAposConfirmacao?.querySelector('.link-recolher')).toBeNull();
 
       const eventoCompacto = html(fixture).querySelector('.evento-compacto');
-      expect(eventoCompacto).not.toBeNull();
-      expect(eventoCompacto?.textContent?.trim()).toBe('Reunião confirmada · Quarta, 7 de outubro, 9h às 10h');
-      expect(html(fixture).querySelectorAll('.icone-check').length).toBe(1);
+      expect(eventoCompacto).toBeNull();
+      expect(html(fixture).querySelectorAll('.icone-check').length).toBe(0);
 
       const elementosNaColuna = Array.from(html(fixture).querySelector('.coluna')?.children ?? []);
       const elLead = elementosNaColuna.find((el) => el.tagName.toLowerCase() === 'app-mensagem-pessoa');
@@ -1266,26 +1281,25 @@ describe('Chat', () => {
 
       expect(elLead).toBeDefined();
       expect(elEvento).toBeDefined();
+      expect(elEvento?.textContent).toContain('Contato enviado');
+      expect(elEvento?.textContent).toContain('O corretor usará o contato que você forneceu.');
       expect(elLia).toBeDefined();
 
       const idxLead = elementosNaColuna.indexOf(elLead!);
-      const idxEvento = elementosNaColuna.indexOf(elEvento!);
       const idxLia = elementosNaColuna.indexOf(elLia!);
 
-      expect(idxLead).toBeLessThan(idxEvento);
-      expect(idxEvento).toBeLessThan(idxLia);
+      expect(idxLead).toBeLessThan(idxLia);
+      expect(elLia?.textContent).toContain(
+        'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
+      );
 
       document.documentElement.setAttribute('data-tema', 'claro');
       fixture.detectChanges();
-      expect(window.getComputedStyle(eventoCompacto as Element).color).toBe(
-        estiloDoToken('--sucesso', 'color'),
-      );
+      expect(window.getComputedStyle(slotConfirmadoEl).borderTopColor).toBeTruthy();
 
       document.documentElement.setAttribute('data-tema', 'escuro');
       fixture.detectChanges();
-      expect(window.getComputedStyle(eventoCompacto as Element).color).toBe(
-        estiloDoToken('--sucesso', 'color'),
-      );
+      expect(window.getComputedStyle(slotConfirmadoEl).borderTopColor).toBeTruthy();
 
       document.documentElement.removeAttribute('data-tema');
       store.pararPolling();
@@ -1364,16 +1378,26 @@ describe('Chat', () => {
       botaoAgoraNao.click();
       fixture.detectChanges();
 
-      expect(html(fixture).querySelector('.faixa-recolhida')).not.toBeNull();
+      const faixa = html(fixture).querySelector('.faixa-recolhida');
+      expect(faixa).not.toBeNull();
+      expect(faixa?.textContent).toContain('Agendar reunião com Helena Braga');
       expect(html(fixture).querySelector('.cartao')).toBeNull();
+      expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c-recolher')).toBe('1');
 
       const botaoReabrir = html(fixture).querySelector('.link-reabrir') as HTMLButtonElement;
+      expect(botaoReabrir?.textContent?.trim()).toBe('Ver horários');
       botaoReabrir.click();
       fixture.detectChanges();
 
       expect(html(fixture).querySelector('.cartao')).not.toBeNull();
       expect(html(fixture).querySelector('.faixa-recolhida')).toBeNull();
+      expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c-recolher')).toBeNull();
       httpMock.expectNone('/conversas/c-recolher');
+
+      const botaoAgoraNao2 = html(fixture).querySelector('.link-recolher') as HTMLButtonElement;
+      botaoAgoraNao2.click();
+      fixture.detectChanges();
+      expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c-recolher')).toBe('1');
 
       store.pararPolling();
       httpMock.verify();
@@ -1390,13 +1414,14 @@ describe('Chat', () => {
       tick();
       fixture.detectChanges();
 
-      expect(html(fixture).querySelector('.cartao')).not.toBeNull();
-      expect(html(fixture).querySelector('.faixa-recolhida')).toBeNull();
+      expect(html(fixture).querySelector('.faixa-recolhida')).not.toBeNull();
+      expect(html(fixture).querySelector('.cartao')).toBeNull();
 
       store.pararPolling();
       httpMock.verify();
       fixture.destroy();
       flush();
+      sessionStorage.removeItem('solar.agendamentoRecolhido.v1:c-recolher');
     }));
 
     it('recuperacao GET em falha de reconciliacao preserva fato e permite atualizacao manual sem repetir POST', fakeAsync(() => {
@@ -1462,7 +1487,15 @@ describe('Chat', () => {
       fixture.detectChanges();
 
       expect(html(fixture).querySelector('.aviso-erro-agendamento')).toBeNull();
-      expect(html(fixture).querySelector('.evento-compacto')).not.toBeNull();
+      expect(html(fixture).querySelector('.evento-compacto')).toBeNull();
+      const cartaoRecuperado = html(fixture).querySelector('app-cartao-agendamento');
+      expect(cartaoRecuperado).not.toBeNull();
+      const slotsRecuperados = cartaoRecuperado?.querySelectorAll('.slot-botao');
+      expect(slotsRecuperados?.length).toBe(1);
+      const btnSlot = slotsRecuperados?.[0] as HTMLButtonElement;
+      expect(btnSlot.disabled).toBeTrue();
+      expect(btnSlot.getAttribute('aria-pressed')).toBe('true');
+      expect(cartaoRecuperado?.querySelector('.link-recolher')).toBeNull();
 
       store.pararPolling();
       httpMock.verify();
@@ -1608,7 +1641,7 @@ describe('Chat', () => {
       flush();
     }));
 
-    it('geometria wide centraliza evento-compacto com diferenca menor ou igual a 1px em relacao a coluna', fakeAsync(() => {
+    it('geometria wide centraliza cartao de agendamento confirmado com diferenca menor ou igual a 1px em relacao a coluna', fakeAsync(() => {
       localStorage.setItem('solar.conversaId', 'c-wide');
       const fixture = TestBed.createComponent(Chat);
       const store = TestBed.inject(ConversaStore);
@@ -1641,16 +1674,17 @@ describe('Chat', () => {
       fixture.detectChanges();
 
       const coluna = hostEl.querySelector('.coluna') as HTMLElement;
-      const eventoCompacto = hostEl.querySelector('.evento-compacto') as HTMLElement;
+      const cartao = hostEl.querySelector('.cartao') as HTMLElement;
       expect(coluna).not.toBeNull();
-      expect(eventoCompacto).not.toBeNull();
+      expect(cartao).not.toBeNull();
+      expect(hostEl.querySelector('.evento-compacto')).toBeNull();
 
       const rectColuna = coluna.getBoundingClientRect();
-      const rectEvento = eventoCompacto.getBoundingClientRect();
+      const rectCartao = cartao.getBoundingClientRect();
 
       const centroColuna = rectColuna.left + rectColuna.width / 2;
-      const centroEvento = rectEvento.left + rectEvento.width / 2;
-      const diferenca = Math.abs(centroColuna - centroEvento);
+      const centroCartao = rectCartao.left + rectCartao.width / 2;
+      const diferenca = Math.abs(centroColuna - centroCartao);
 
       expect(diferenca).toBeLessThanOrEqual(1);
 

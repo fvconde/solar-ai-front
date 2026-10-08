@@ -38,7 +38,7 @@ import {
           <span>Não há horários disponíveis no momento.</span>
         </div>
       }
-    } @else if (recolhido()) {
+    } @else if (recolhido() && !confirmado()) {
       <div class="faixa-recolhida" [attr.aria-busy]="enviando() ? 'true' : null">
         <span class="faixa-texto">
           <svg
@@ -54,7 +54,7 @@ import {
             <rect x="2" y="3" width="12" height="11" rx="2"></rect>
             <path d="M2 6.5h12M5.5 1.5v3M10.5 1.5v3"></path>
           </svg>
-          <span>Reunião com {{ nomeCorretor() }}</span>
+          <span>Agendar reunião com {{ nomeCorretor() }}</span>
         </span>
         <button
           type="button"
@@ -62,7 +62,7 @@ import {
           [disabled]="reabrirDesabilitado()"
           (click)="aoReabrir()"
         >
-          Ver horário
+          Ver horários
         </button>
       </div>
     } @else {
@@ -106,7 +106,9 @@ import {
                   <button
                     type="button"
                     class="slot-botao"
-                    [disabled]="slotDesabilitado()"
+                    [class.selecionado]="confirmado()"
+                    [disabled]="confirmado() || slotDesabilitado()"
+                    [attr.aria-pressed]="confirmado() ? 'true' : null"
                     [attr.aria-label]="labelDoSlot(slot, grupo.rotulo)"
                     (click)="aoSelecionar(slot.id)"
                   >
@@ -119,16 +121,18 @@ import {
           }
         }
 
-        <div class="rodape">
-          <button
-            type="button"
-            class="link-recolher"
-            [disabled]="recolherDesabilitado()"
-            (click)="aoRecolher()"
-          >
-            Agora não
-          </button>
-        </div>
+        @if (!confirmado()) {
+          <div class="rodape">
+            <button
+              type="button"
+              class="link-recolher"
+              [disabled]="recolherDesabilitado()"
+              (click)="aoRecolher()"
+            >
+              Agora não
+            </button>
+          </div>
+        }
       </div>
     }
   `,
@@ -264,6 +268,27 @@ import {
       opacity: 0.55;
     }
 
+    .slot-botao[aria-pressed='true'],
+    .slot-botao.selecionado {
+      background: var(--marca);
+      border-color: var(--marca);
+      color: var(--marca-contraste);
+      opacity: 1;
+    }
+
+    .slot-botao[aria-pressed='true'] .slot-hora,
+    .slot-botao[aria-pressed='true'] .slot-periodo,
+    .slot-botao.selecionado .slot-hora,
+    .slot-botao.selecionado .slot-periodo {
+      color: var(--marca-contraste);
+    }
+
+    .slot-botao[aria-pressed='true']:disabled,
+    .slot-botao.selecionado:disabled {
+      cursor: default;
+      opacity: 1;
+    }
+
     .slot-hora {
       font-size: 17px;
       font-weight: 600;
@@ -393,6 +418,7 @@ export class CartaoAgendamento {
   readonly enviando = input<boolean>(false);
   readonly sincronizacaoPendente = input<boolean>(false);
   readonly horarioPerdido = input<SlotOferecido | null>(null);
+  readonly confirmado = input<boolean>(false);
 
   readonly selecionar = output<number>();
   readonly recolher = output<void>();
@@ -461,21 +487,21 @@ export class CartaoAgendamento {
   }
 
   aoSelecionar(slotId: number): void {
-    if (this.slotDesabilitado()) {
+    if (this.confirmado() || this.slotDesabilitado()) {
       return;
     }
     this.selecionar.emit(slotId);
   }
 
   aoRecolher(): void {
-    if (this.recolherDesabilitado()) {
+    if (this.confirmado() || this.recolherDesabilitado()) {
       return;
     }
     this.recolher.emit();
   }
 
   aoReabrir(): void {
-    if (this.reabrirDesabilitado()) {
+    if (this.confirmado() || this.reabrirDesabilitado()) {
       return;
     }
     this.reabrir.emit();

@@ -1043,4 +1043,31 @@ describe('Painel (S-21)', () => {
       container.remove();
     }
   });
+
+  it('oculta abertura sintetica inicial Ola e preserva mensagens reais posteriores (item 10)', () => {
+    const fixtureLocal = montarComponente();
+    const comp = fixtureLocal.componentInstance;
+    comp.leadSelecionadoId.set('l1');
+    comp.leadDetalhe.set({
+      ...detalheMockComConversa,
+      transcricao: [
+        { papel: 'lead', texto: 'Olá', em: '2026-09-15T15:00:00Z' },
+        { papel: 'lia', texto: 'Oi! Sou a Lia. Como posso ajudar?', em: '2026-09-15T15:01:00Z' },
+        { papel: 'lead', texto: 'Olá novamente!', em: '2026-09-15T15:02:00Z' },
+      ],
+    });
+    fixtureLocal.detectChanges();
+
+    const itens = comp.transcricaoVisivel();
+    expect(itens.length).toBe(2);
+    expect(itens[0].papel).toBe('lia');
+    expect(itens[0].texto).toBe('Oi! Sou a Lia. Como posso ajudar?');
+    expect(itens[1].papel).toBe('lead');
+    expect(itens[1].texto).toBe('Olá novamente!');
+
+    const mensagensLia = fixtureLocal.nativeElement.querySelectorAll('app-mensagem-lia');
+    const mensagensPessoa = fixtureLocal.nativeElement.querySelectorAll('app-mensagem-pessoa');
+    expect(mensagensLia.length).toBe(1);
+    expect(mensagensPessoa.length).toBe(1);
+  });
 });

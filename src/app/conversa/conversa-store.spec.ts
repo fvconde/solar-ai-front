@@ -104,7 +104,10 @@ describe('ConversaStore ao retomar', () => {
     store = TestBed.inject(ConversaStore);
   });
 
-  afterEach(() => localStorage.clear());
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   function tipos(itens: ItemTrilha[]): string[] {
     return itens.map((item) => item.tipo);
@@ -181,10 +184,20 @@ describe('ConversaStore ao retomar', () => {
 
     await store.iniciar();
 
-    expect(textoDoEvento(store.itens())).toBe('Quinta, 10 de setembro, 15h às 16h');
-    const evento = store.itens().find((item) => item.tipo === 'evento');
-    expect(evento && evento.tipo === 'evento' ? evento.rotulo : '').toBe('Reunião confirmada');
-    expect(tipos(store.itens())).toEqual(['divisor', 'pessoa', 'evento', 'lia']);
+    const eventoConfirmado = store.itens().find((item) => item.tipo === 'evento' && item.rotulo === 'Reunião confirmada');
+    expect(eventoConfirmado).toBeUndefined();
+    expect(store.agendamentoConfirmado()).toEqual({
+      estado: 'confirmado',
+      horario: {
+        id: 42,
+        inicio: '2026-09-10T15:00:00-03:00',
+        fim: '2026-09-10T16:00:00-03:00',
+      },
+      alternativas: [],
+    });
+    expect(tipos(store.itens())).toEqual(['divisor', 'pessoa', 'lia', 'evento']);
+    const eventoContato = store.itens().find((item) => item.tipo === 'evento' && item.rotulo === 'Contato enviado');
+    expect(eventoContato).toBeDefined();
   });
 
   it('corrida perdida mostra as alternativas livres', async () => {
@@ -621,7 +634,10 @@ describe('ConversaStore exclusao titular', () => {
     store = TestBed.inject(ConversaStore);
   });
 
-  afterEach(() => localStorage.clear());
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   it('podeApagarConversa e verdadeiro somente quando existe id e ja passou pelo aceite', async () => {
     localStorage.clear();
@@ -1213,7 +1229,10 @@ describe('ConversaStore agenda e historico T4b1', () => {
     store = TestBed.inject(ConversaStore);
   });
 
-  afterEach(() => localStorage.clear());
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
 
   it('GET elegivel com corretor no historico e oferta nao vazia expoe signals, grupos e cartao visivel', async () => {
     const slot: SlotOferecido = {
@@ -1329,10 +1348,10 @@ describe('ConversaStore agenda e historico T4b1', () => {
     expect(store.contatoErro()).toBeNull();
     const eventoExistente = store.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(eventoExistente).toBeDefined();
-    const eventoContato = store.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Contato registrado');
+    const eventoContato = store.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
     expect(eventoContato).toBeDefined();
     if (eventoContato && eventoContato.tipo === 'evento') {
-      expect(eventoContato.texto).toBe('Pronto. O corretor da Solar usa esse contato para retomar com você.');
+      expect(eventoContato.texto).toBe('O corretor usará o contato que você forneceu.');
     }
     expect(store.itens().some((i) => i.tipo === 'contato')).toBeFalse();
     expect(api.enviarMensagem).not.toHaveBeenCalled();
@@ -1359,7 +1378,7 @@ describe('ConversaStore agenda e historico T4b1', () => {
     expect(store.contatoErro()).not.toBeNull();
   });
 
-  it('GET confirmado posiciona evento antes da Lia fixa e desativa agenda', async () => {
+  it('GET confirmado mantém cartão aberto readonly e não insere evento verde de confirmação', async () => {
     const slotConfirmado = {
       id: 50,
       inicio: '2026-10-15T14:00:00-03:00',
@@ -1392,9 +1411,11 @@ describe('ConversaStore agenda e historico T4b1', () => {
       alternativas: [],
     });
     expect(store.ofertaAgendamento()).toEqual([]);
-    expect(store.agendaDisponivel()).toBeFalse();
-    expect(store.cartaoAgendaVisivel()).toBeFalse();
+    expect(store.agendaDisponivel()).toBeTrue();
+    expect(store.cartaoAgendaVisivel()).toBeTrue();
     expect(store.faixaAgendaVisivel()).toBeFalse();
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.agendamentoPodeSelecionar()).toBeFalse();
     expect(store.avisoAgendaVazia()).toBeFalse();
 
     const itens = store.itens();
@@ -1403,18 +1424,11 @@ describe('ConversaStore agenda e historico T4b1', () => {
     const indiceLia = itens.findIndex((i) => i.tipo === 'lia' && i.texto === 'Perfeito! Sua reunião está confirmada.');
 
     expect(indiceLead).toBeGreaterThanOrEqual(0);
-    expect(indiceEvento).toBe(indiceLead + 1);
-    expect(indiceLia).toBe(indiceEvento + 1);
-
-    const evento = itens[indiceEvento];
-    expect(evento.tipo).toBe('evento');
-    if (evento.tipo === 'evento') {
-      expect(evento.rotulo).toBe('Reunião confirmada');
-      expect(evento.texto).toBe('Quinta, 15 de outubro, 14h às 15h');
-    }
+    expect(indiceEvento).toBe(-1);
+    expect(indiceLia).toBe(indiceLead + 1);
 
     const confirmacoes = itens.filter((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada');
-    expect(confirmacoes.length).toBe(1);
+    expect(confirmacoes.length).toBe(0);
   });
 
   it('oferta vazia em contexto elegivel ativa avisoAgendaVazia sem deduzir confirmacao', async () => {
@@ -1440,7 +1454,7 @@ describe('ConversaStore agenda e historico T4b1', () => {
     expect(store.faixaAgendaVisivel()).toBeFalse();
   });
 
-  it('recolher e reabrir agendamento operam em memoria, sobrevivem a polling e resetam no reload', async () => {
+  it('recolher e reabrir agendamento operam com sessionStorage, sobrevivem a polling e persistem no reload', async () => {
     const slot: SlotOferecido = {
       id: 101,
       inicio: '2026-10-15T14:00:00-03:00',
@@ -1460,14 +1474,13 @@ describe('ConversaStore agenda e historico T4b1', () => {
     expect(store.agendamentoRecolhido()).toBeFalse();
 
     const localLen = localStorage.length;
-    const sessionLen = sessionStorage.length;
 
     store.recolherAgendamento();
     expect(store.agendamentoRecolhido()).toBeTrue();
     expect(store.cartaoAgendaVisivel()).toBeFalse();
     expect(store.faixaAgendaVisivel()).toBeTrue();
     expect(localStorage.length).toBe(localLen);
-    expect(sessionStorage.length).toBe(sessionLen);
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c1')).toBe('1');
 
     await store.verificarNovasMensagens();
     expect(store.agendamentoRecolhido()).toBeTrue();
@@ -1478,9 +1491,11 @@ describe('ConversaStore agenda e historico T4b1', () => {
     expect(store.agendamentoRecolhido()).toBeFalse();
     expect(store.cartaoAgendaVisivel()).toBeTrue();
     expect(store.faixaAgendaVisivel()).toBeFalse();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c1')).toBeNull();
 
     store.recolherAgendamento();
     expect(store.agendamentoRecolhido()).toBeTrue();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c1')).toBe('1');
 
     TestBed.resetTestingModule();
     TestBed.configureTestingModule({
@@ -1492,8 +1507,9 @@ describe('ConversaStore agenda e historico T4b1', () => {
     });
     const novaInstancia = TestBed.inject(ConversaStore);
     await novaInstancia.iniciar();
-    expect(novaInstancia.agendamentoRecolhido()).toBeFalse();
-    expect(novaInstancia.cartaoAgendaVisivel()).toBeTrue();
+    expect(novaInstancia.agendamentoRecolhido()).toBeTrue();
+    expect(novaInstancia.cartaoAgendaVisivel()).toBeFalse();
+    expect(novaInstancia.faixaAgendaVisivel()).toBeTrue();
   });
 
   it('polling com mesma contagem de mensagens recalcula oferta sem duplicar itens', async () => {
@@ -1561,8 +1577,8 @@ describe('ConversaStore agenda e historico T4b1', () => {
     const idxLia = itens.findIndex((i) => i.tipo === 'lia' && i.texto === 'Horário agendado com sucesso!');
 
     expect(idxLead).toBeGreaterThanOrEqual(0);
-    expect(idxEvento).toBe(idxLead + 1);
-    expect(idxLia).toBe(idxEvento + 1);
+    expect(idxEvento).toBe(-1);
+    expect(idxLia).toBe(idxLead + 1);
 
     const totalApos = itens.length;
     await store.verificarNovasMensagens();
@@ -2026,7 +2042,7 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(api.registrarAgendamento).not.toHaveBeenCalled();
   });
 
-  it('200 seguido de GET canonico exibe pessoa, evento Reunião confirmada e Lia na ordem com dados reais do GET', async () => {
+  it('200 seguido de GET canonico exibe pessoa e Lia na ordem sem evento verde duplicado com dados reais do GET', async () => {
     await inicializarComOferta([slot1]);
     api.registrarAgendamento.and.resolveTo(confirmacaoSlot1);
     api.obterConversa.and.resolveTo(
@@ -2052,16 +2068,12 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.agendamentoSincronizacaoPendente()).toBeFalse();
 
     const itens = store.itens();
-    expect(itens.map((i) => i.tipo)).toEqual(['divisor', 'pessoa', 'evento', 'lia']);
+    expect(itens.map((i) => i.tipo)).toEqual(['divisor', 'pessoa', 'lia']);
     const itemPessoa = itens[1];
     expect(itemPessoa.tipo === 'pessoa' && itemPessoa.texto).toBe('Quero agendar reunião');
-    const itemEvento = itens[2];
-    expect(itemEvento.tipo === 'evento' && itemEvento.rotulo).toBe('Reunião confirmada');
-    expect(itemEvento.tipo === 'evento' && itemEvento.texto).toBe(
-      dataDoAgendamento(confirmacaoSlot1.horario!.inicio, confirmacaoSlot1.horario!.fim),
-    );
-    const itemLia = itens[3];
+    const itemLia = itens[2];
     expect(itemLia.tipo === 'lia' && itemLia.texto).toBe('Reunião agendada com Helena.');
+    expect(itens.some((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada')).toBeFalse();
   });
 
   it('GET inicial em conversa encerrada elegivel permite reserva por botao sem mensagem LLM extra', async () => {
@@ -2134,7 +2146,9 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.agendamentoSincronizacaoPendente()).toBeFalse();
     expect(store.agendamentoErro()).toBeNull();
     expect(store.agendamentoConfirmado()).toEqual(confirmacaoSlot1);
-    expect(store.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada')).toBeTrue();
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.cartaoAgendaVisivel()).toBeTrue();
+    expect(store.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada')).toBeFalse();
   });
 
   it('GET vazio valido apos 200 mantem confirmacao conhecida pendente sem chamar abrir nem Olá', async () => {
@@ -2279,7 +2293,7 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.ofertaAgendamento()).toEqual([slot2]);
   });
 
-  it('reload de conversa restaura horarioPerdido do memo quando elegivel sem confirmacao e recolhimento volta aberto', async () => {
+  it('reload de conversa restaura horarioPerdido do memo quando elegivel sem confirmacao e recolhimento persiste via sessionStorage', async () => {
     await inicializarComOferta([slot1, slot2]);
     api.registrarAgendamento.and.rejectWith(
       new HttpErrorResponse({
@@ -2303,7 +2317,8 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     await storeRecarregado.iniciar();
 
     expect(storeRecarregado.horarioPerdido()).toEqual(slot1);
-    expect(storeRecarregado.agendamentoRecolhido()).toBeFalse();
+    expect(storeRecarregado.agendamentoRecolhido()).toBeTrue();
+    expect(storeRecarregado.faixaAgendaVisivel()).toBeTrue();
   });
 
   it('limpa memo de perda quando slot volta a ser ofertado, quando ha confirmacao, ou em nova, troca e exclusao', async () => {
@@ -2831,6 +2846,105 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.itens().filter((i) => i.tipo === 'pessoa' || i.tipo === 'lia')).toEqual([]);
     expect(store.itens().some((i) => i.tipo === 'evento')).toBeFalse();
     expect(api.enviarMensagem).not.toHaveBeenCalled();
+  });
+
+  it('T9 item 7: recibo neutro Contato enviado persiste na reconstrucao do GET quando contato nao pendente e corretor definido', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'Quero comprar um imovel'),
+          fala('agente', 'Vou te passar para Helena.', 'agendar_reuniao', 0, 'Helena Braga'),
+        ],
+        false,
+        PERFIL_VAZIO,
+        [slot1],
+      ),
+    );
+
+    await store.iniciar();
+
+    const eventosContato = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(eventosContato.length).toBe(1);
+    const evento = eventosContato[0];
+    if (evento.tipo === 'evento') {
+      expect(evento.texto).toBe('O corretor usará o contato que você forneceu.');
+      expect(evento.variante).toBe('neutro');
+    }
+  });
+
+  it('T9 item 8: linha Encaminhado para corretor aparece no maximo uma vez no chat mesmo com multiplos turnos', async () => {
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'Oi'),
+          fala('agente', 'Encaminhando 1', 'agendar_reuniao', 0, 'Helena Braga'),
+          fala('lead', 'Qual horario?'),
+          fala('agente', 'Encaminhando 2', 'agendar_reuniao', 0, 'Helena Braga'),
+        ],
+        false,
+        PERFIL_VAZIO,
+        [slot1],
+      ),
+    );
+
+    await store.iniciar();
+
+    const encaminhados = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
+    expect(encaminhados.length).toBe(1);
+    if (encaminhados[0].tipo === 'evento') {
+      expect(encaminhados[0].texto).toContain('Helena Braga');
+    }
+
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'Oi'),
+          fala('agente', 'Encaminhando 1', 'agendar_reuniao', 0, 'Helena Braga'),
+          fala('lead', 'Qual horario?'),
+          fala('agente', 'Encaminhando 2', 'agendar_reuniao', 0, 'Helena Braga'),
+          fala('agente', 'Encaminhando 3', 'agendar_reuniao', 0, 'Helena Braga'),
+        ],
+        false,
+        PERFIL_VAZIO,
+        [slot1],
+      ),
+    );
+    await store.verificarNovasMensagens();
+    const encaminhadosApos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
+    expect(encaminhadosApos.length).toBe(1);
+  });
+
+  it('T9 item 5: gruposAgendamento apos confirmacao contem somente o slot confirmado e agendamentoPodeSelecionar e false', async () => {
+    await inicializarComOferta([slot1, slot2]);
+    api.registrarAgendamento.and.resolveTo(confirmacaoSlot1);
+    api.obterConversa.and.resolveTo(
+      conversa(
+        [
+          fala('lead', 'Quero slot 1'),
+          fala('agente', 'Confirmado!', 'continuar_conversa', 0, 'Helena Braga', confirmacaoSlot1),
+        ],
+        false,
+        PERFIL_VAZIO,
+        [],
+      ),
+    );
+
+    await store.registrarAgendamento(101);
+
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.agendamentoPodeSelecionar()).toBeFalse();
+    expect(store.agendaDisponivel()).toBeTrue();
+    expect(store.cartaoAgendaVisivel()).toBeTrue();
+    expect(store.faixaAgendaVisivel()).toBeFalse();
+
+    const grupos = store.gruposAgendamento();
+    expect(grupos.length).toBe(1);
+    expect(grupos[0].horarios.length).toBe(1);
+    expect(grupos[0].horarios[0].id).toBe(101);
+
+    store.recolherAgendamento();
+    expect(store.agendamentoRecolhido()).toBeFalse();
+    expect(store.cartaoAgendaVisivel()).toBeTrue();
   });
 });
 

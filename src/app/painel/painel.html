@@ -368,9 +368,9 @@
 
             <section class="card-secao secao-transcricao">
               <span class="rotulo-secao">Transcrição da conversa</span>
-              @if (detalhe.transcricao && detalhe.transcricao.length > 0) {
+              @if (transcricaoVisivel().length > 0) {
                 <div class="pilha-transcricao">
-                  @for (turno of detalhe.transcricao; track $index) {
+                  @for (turno of transcricaoVisivel(); track $index) {
                     @if (turno.papel === 'lia') {
                       <app-mensagem-lia [texto]="turno.texto" [hora]="formatarHora(turno.em)" />
                     } @else {

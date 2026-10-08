@@ -85,7 +85,6 @@
                     [rotulo]="item.rotulo"
                     [texto]="item.texto"
                     [acao]="item.acao"
-                    [compacto]="item.rotulo === 'Reunião confirmada' && item.variante === 'sucesso'"
                     (acionar)="atender($event)"
                   />
                 }
@@ -110,6 +109,7 @@
                 [enviando]="store.agendamentoEnviando()"
                 [sincronizacaoPendente]="store.agendamentoSincronizacaoPendente()"
                 [horarioPerdido]="store.horarioPerdido()"
+                [confirmado]="store.agendamentoEstaConfirmado()"
                 (selecionar)="registrarAgendamento($event)"
                 (recolher)="recolherAgendamento()"
                 (reabrir)="reabrirAgendamento()"

@@ -311,7 +311,7 @@ describe('CartaoAgendamento', () => {
     const faixa = fixture.nativeElement.querySelector('.faixa-recolhida');
     expect(faixa).not.toBeNull();
     expect(fixture.nativeElement.querySelector('.icone-calendario')).not.toBeNull();
-    expect(faixa.textContent).toContain('Reunião com Helena Braga');
+    expect(faixa.textContent).toContain('Agendar reunião com Helena Braga');
 
     expect(fixture.nativeElement.querySelector('.cartao')).toBeNull();
     expect(fixture.nativeElement.querySelector('.avatar')).toBeNull();
@@ -321,7 +321,7 @@ describe('CartaoAgendamento', () => {
     const botaoReabrir = fixture.nativeElement.querySelector('.link-reabrir') as HTMLButtonElement;
     expect(botaoReabrir).not.toBeNull();
     expect(botaoReabrir.getAttribute('type')).toBe('button');
-    expect(botaoReabrir.textContent.trim()).toBe('Ver horário');
+    expect(botaoReabrir.textContent.trim()).toBe('Ver horários');
 
     let reabrirEmitido = false;
     let selecionado: number | null = null;
@@ -383,5 +383,38 @@ describe('CartaoAgendamento', () => {
     expect(textoClaro).not.toBe(textoEscuro);
 
     document.documentElement.removeAttribute('data-tema');
+  });
+
+  it('modo confirmado exibe cartao aberto mesmo se recolhido, com slot selecionado desabilitado e sem Agora nao', () => {
+    fixture.componentRef.setInput('corretor', 'Helena Braga');
+    fixture.componentRef.setInput('grupos', [
+      {
+        dia: '2026-10-07',
+        rotulo: 'Quarta, 7 de outubro',
+        horarios: [slot1],
+      },
+    ]);
+    fixture.componentRef.setInput('recolhido', true);
+    fixture.componentRef.setInput('confirmado', true);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('.faixa-recolhida')).toBeNull();
+    const cartao = fixture.nativeElement.querySelector('.cartao');
+    expect(cartao).not.toBeNull();
+
+    const botao = fixture.nativeElement.querySelector('.slot-botao') as HTMLButtonElement;
+    expect(botao).not.toBeNull();
+    expect(botao.disabled).toBeTrue();
+    expect(botao.getAttribute('aria-pressed')).toBe('true');
+    expect(botao.classList.contains('selecionado')).toBeTrue();
+
+    expect(fixture.nativeElement.querySelector('.rodape')).toBeNull();
+    expect(fixture.nativeElement.querySelector('.link-recolher')).toBeNull();
+
+    let selecaoEmitida = false;
+    componente.selecionar.subscribe(() => (selecaoEmitida = true));
+    botao.click();
+    componente.aoSelecionar(slot1.id);
+    expect(selecaoEmitida).toBeFalse();
   });
 });

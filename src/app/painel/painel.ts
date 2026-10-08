@@ -18,7 +18,7 @@ import { SessaoStore } from '../sessao/sessao-store';
 import { AvisoAprovacao } from './aviso-aprovacao';
 import { FilaAprovacao } from './fila-aprovacao';
 import { PainelApi } from './painel-api';
-import { LeadDetalheResponse, LeadPainelItem } from './painel-contrato';
+import { LeadDetalheResponse, LeadPainelItem, TurnoTranscricao } from './painel-contrato';
 import {
   blocoDataDoAgendamento,
   diaDaSemanaDoAgendamento,
@@ -130,6 +130,17 @@ export class Painel implements OnInit, OnDestroy {
   readonly totalPontosQualificacao = computed(() => {
     const fatores = this.leadDetalhe()?.qualificacao?.fatores ?? [];
     return fatores.reduce((soma, f) => soma + (f.preenchido ? f.pontos : 0), 0);
+  });
+
+  readonly transcricaoVisivel = computed<TurnoTranscricao[]>(() => {
+    const t = this.leadDetalhe()?.transcricao;
+    if (!t || t.length === 0) {
+      return [];
+    }
+    if (t[0].papel === 'lead' && t[0].texto === 'Olá') {
+      return t.slice(1);
+    }
+    return t;
   });
 
   ngOnInit(): void {
