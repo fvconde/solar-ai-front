@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -13,6 +14,7 @@ import {
 } from '@angular/core';
 import { RouterLink } from '@angular/router';
 import { AvisoConsentimento } from '../componentes/aviso-consentimento';
+import { CartaoAgendamento } from '../componentes/cartao-agendamento';
 import { Composer } from '../componentes/composer';
 import { ConfirmacaoExclusao } from '../componentes/confirmacao-exclusao';
 import { DivisorData } from '../componentes/divisor-data';
@@ -25,16 +27,25 @@ import { ContaApi } from '../conta/conta-api';
 import { ConversaResumo } from '../conta/conta-contrato';
 import { ContatoRequest } from '../conversa/contrato';
 import { ConversaStore } from '../conversa/conversa-store';
-import { AcaoEvento } from '../conversa/trilha';
+import { AcaoEvento, ItemTrilha } from '../conversa/trilha';
 import { SessaoStore } from '../sessao/sessao-store';
 import { HistoricoConversas } from './historico-conversas';
 
 const CHAVE_CONVITE_DISPENSADO = 'solar.conviteDispensado';
+const TOLERANCIA_FIM_PX = 80;
+
+export interface MarcadorCartaoVisual {
+  readonly tipo: 'marcador-cartao';
+  readonly id: string;
+}
+
+export type ItemApresentacao = ItemTrilha | MarcadorCartaoVisual;
 
 @Component({
   selector: 'app-chat',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    NgTemplateOutlet,
     AvisoConsentimento,
     DivisorData,
     MensagemLia,
@@ -46,6 +57,7 @@ const CHAVE_CONVITE_DISPENSADO = 'solar.conviteDispensado';
     HistoricoConversas,
     RouterLink,
     ConfirmacaoExclusao,
+    CartaoAgendamento,
   ],
   templateUrl: './chat.html',
   styleUrl: './chat.scss',
@@ -65,6 +77,13 @@ export class Chat implements OnInit {
   readonly listaAberta = signal(false);
   private readonly conviteDispensadoEm = signal(lerLocal(CHAVE_CONVITE_DISPENSADO));
   private geracaoConversas = 0;
+  private ultimaAssinaturaPalco: string | null = null;
+  private ultimoEstado: string | null = null;
+  private ultimoPalcoEl: HTMLElement | null = null;
+  private ultimaConversa: string | null = null;
+  private ultimaAcaoPropria = false;
+  private ultimaAltura = 0;
+  private ultimoCliente = 0;
 
   readonly mostrarConvite = computed(() => {
     if (this.sessao.ativa() || !this.store.emConversa()) {
@@ -77,19 +96,121 @@ export class Chat implements OnInit {
     return houveResposta && this.conviteDispensadoEm() !== this.store.conversaAtual();
   });
 
+  readonly temMarcadorCartao = computed(() => {
+    return this.itensApresentacao().some((item) => item.tipo === 'marcador-cartao');
+  });
+
+  readonly itensApresentacao = computed<ItemApresentacao[]>(() => {
+    const itens = this.store.itens();
+    const confirmado = this.store.agendamentoEstaConfirmado();
+    const agendaDisponivel = this.store.agendaDisponivel();
+
+    if (!confirmado || !agendaDisponivel) {
+      return itens;
+    }
+
+    const idxEncaminhado = itens.findIndex(
+      (item) => item.tipo === 'evento' && item.rotulo === 'Encaminhado',
+    );
+    if (idxEncaminhado === -1) {
+      return itens;
+    }
+
+    const idConversa = this.store.conversaAtual() || 'conversa';
+    const reciboOriginal = itens.find(
+      (item) => item.tipo === 'evento' && item.rotulo === 'Contato enviado',
+    );
+
+    const semRecibo = itens.filter(
+      (item) => !(item.tipo === 'evento' && item.rotulo === 'Contato enviado'),
+    );
+    const novoIdxEncaminhado = semRecibo.findIndex(
+      (item) => item.tipo === 'evento' && item.rotulo === 'Encaminhado',
+    );
+    if (novoIdxEncaminhado === -1) {
+      return itens;
+    }
+
+    const resultado: ItemApresentacao[] = [];
+    for (let i = 0; i <= novoIdxEncaminhado; i++) {
+      resultado.push(semRecibo[i]);
+    }
+
+    if (reciboOriginal) {
+      resultado.push({
+        ...reciboOriginal,
+        id: `recibo:${idConversa}`,
+      });
+    }
+
+    resultado.push({
+      tipo: 'marcador-cartao',
+      id: `cartao:${idConversa}`,
+    });
+
+    for (let i = novoIdxEncaminhado + 1; i < semRecibo.length; i++) {
+      resultado.push(semRecibo[i]);
+    }
+
+    return resultado;
+  });
+
+  private readonly assinaturaPalco = computed(() => {
+    const confirmado = this.store.agendamentoConfirmado()?.horario;
+    const perdido = this.store.horarioPerdido();
+    return JSON.stringify([
+      this.itensApresentacao().map(assinaturaItem),
+      this.store.ofertaAgendamento().map((slot) => [slot.id, slot.inicio, slot.fim]),
+      confirmado ? [confirmado.id, confirmado.inicio, confirmado.fim] : null,
+      perdido ? [perdido.id, perdido.inicio, perdido.fim] : null,
+      this.store.corretorAgendamento(),
+      this.store.agendamentoRecolhido(),
+      this.store.agendamentoErro(),
+      this.store.contatoErro(),
+      this.store.agendamentoEnviando(),
+      this.store.contatoEnviando(),
+      this.store.agendamentoSincronizacaoPendente(),
+    ]);
+  });
+
   constructor() {
     afterRenderEffect(() => {
-      this.store.itens();
-      this.store.estado();
+      const assinatura = this.assinaturaPalco();
+      const estado = this.store.estado();
+      const conversa = this.store.conversaAtual();
       const apagada = this.store.conversaApagada();
+      const acaoPropria = this.store.agendamentoEnviando() || this.store.contatoEnviando();
       const elemento = this.palco()?.nativeElement;
+
       if (apagada) {
         this.bannerApagada()?.nativeElement.focus();
         return;
       }
-      if (elemento) {
+
+      if (!elemento) {
+        this.ultimoPalcoEl = null;
+        return;
+      }
+
+      const abertura = elemento !== this.ultimoPalcoEl || conversa !== this.ultimaConversa;
+      const envioProprio =
+        (estado === 'preparando' && this.ultimoEstado !== 'preparando') ||
+        (acaoPropria && !this.ultimaAcaoPropria);
+      const mudou = assinatura !== this.ultimaAssinaturaPalco || estado !== this.ultimoEstado;
+      const pertoDoFim =
+        this.ultimaAltura - elemento.scrollTop - this.ultimoCliente <= TOLERANCIA_FIM_PX;
+
+      this.ultimaAssinaturaPalco = assinatura;
+      this.ultimoEstado = estado;
+      this.ultimoPalcoEl = elemento;
+      this.ultimaConversa = conversa;
+      this.ultimaAcaoPropria = acaoPropria;
+
+      if (abertura || envioProprio || (mudou && pertoDoFim)) {
         elemento.scrollTop = elemento.scrollHeight;
       }
+      this.ultimaAltura = elemento.scrollHeight;
+      this.ultimoCliente = elemento.clientHeight;
     });
 
     effect(() => {
@@ -134,6 +255,22 @@ export class Chat implements OnInit {
 
   protected registrarContato(dados: ContatoRequest): void {
     void this.store.enviarContato(dados);
+  }
+
+  protected registrarAgendamento(slotId: number): void {
+    void this.store.registrarAgendamento(slotId);
+  }
+
+  protected recolherAgendamento(): void {
+    this.store.recolherAgendamento();
+  }
+
+  protected reabrirAgendamento(): void {
+    this.store.reabrirAgendamento();
+  }
+
+  protected sincronizarAgendamento(): void {
+    void this.store.sincronizarAgendamento();
   }
 
   protected abrirConversa(id: string): void {
@@ -204,6 +341,28 @@ export class Chat implements OnInit {
         this.conversas.set([]);
       },
     });
+  }
+}
+
+function assinaturaItem(item: ItemApresentacao): unknown[] {
+  switch (item.tipo) {
+    case 'divisor':
+      return [item.tipo, item.rotulo];
+    case 'pessoa':
+      return [item.tipo, item.texto, item.hora];
+    case 'lia':
+      return [item.tipo, item.texto, item.hora, item.intencao, item.imoveis];
+    case 'evento':
+      return [
+        item.tipo,
+        item.variante,
+        item.rotulo,
+        item.texto,
+        item.acao?.rotulo ?? null,
+        item.acao?.tipo ?? null,
+      ];
+    default:
+      return [item.tipo];
   }
 }
 
