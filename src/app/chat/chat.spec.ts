@@ -1295,13 +1295,36 @@ describe('Chat', () => {
 
       document.documentElement.setAttribute('data-tema', 'claro');
       fixture.detectChanges();
-      expect(window.getComputedStyle(slotConfirmadoEl).borderTopColor).toBeTruthy();
+      const bgClaro = estiloDoToken('--marca', 'backgroundColor');
+      const borderClaro = estiloDoToken('--marca', 'borderColor');
+      const textoClaro = estiloDoToken('--marca-contraste', 'color');
+      const estiloSlotClaro = window.getComputedStyle(slotConfirmadoEl);
+      expect(estiloSlotClaro.backgroundColor).toBe(bgClaro);
+      expect(estiloSlotClaro.borderTopColor).toBe(borderClaro);
+      expect(estiloSlotClaro.color).toBe(textoClaro);
+      expect(estiloSlotClaro.opacity).toBe('1');
 
       document.documentElement.setAttribute('data-tema', 'escuro');
       fixture.detectChanges();
-      expect(window.getComputedStyle(slotConfirmadoEl).borderTopColor).toBeTruthy();
+      const bgEscuro = estiloDoToken('--marca', 'backgroundColor');
+      const borderEscuro = estiloDoToken('--marca', 'borderColor');
+      const textoEscuro = estiloDoToken('--marca-contraste', 'color');
+      const estiloSlotEscuro = window.getComputedStyle(slotConfirmadoEl);
+      expect(estiloSlotEscuro.backgroundColor).toBe(bgEscuro);
+      expect(estiloSlotEscuro.borderTopColor).toBe(borderEscuro);
+      expect(estiloSlotEscuro.color).toBe(textoEscuro);
+      expect(estiloSlotEscuro.opacity).toBe('1');
+      expect(bgEscuro).not.toBe(bgClaro);
 
       document.documentElement.removeAttribute('data-tema');
+
+      // Prova de que clicar no slot confirmado não emite e não faz POST adicional
+      slotConfirmadoEl.click();
+      fixture.detectChanges();
+      httpMock.expectNone('/conversas/c-confirmada/agendamentos');
+
+      void store.registrarAgendamento(slotA1.id);
+      httpMock.expectNone('/conversas/c-confirmada/agendamentos');
       store.pararPolling();
       httpMock.verify();
       fixture.destroy();
@@ -1753,6 +1776,128 @@ describe('Chat', () => {
       if (hostEl.parentNode) {
         document.body.removeChild(hostEl);
       }
+      fixture.destroy();
+      flush();
+    }));
+
+    it('R3: GET inicial com confirmado + oferta[] mantem unico slot real selecionado, sem Agora nao e sem linha verde', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-init-conf');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const conf: AgendamentoDaConversa = {
+        estado: 'confirmado',
+        horario: slotA1,
+        alternativas: [],
+      };
+
+      const msgs: MensagemDaConversa[] = [
+        {
+          papel: 'lead',
+          texto: 'Quero agendar',
+          em: '2026-10-07T08:00:00Z',
+          proximaAcao: null,
+          corretor: null,
+          agendamento: null,
+        },
+        {
+          papel: 'agente',
+          texto: 'Reunião agendada com sucesso!',
+          em: '2026-10-07T08:01:00Z',
+          proximaAcao: 'continuar_conversa',
+          corretor: 'Helena Braga',
+          agendamento: conf,
+        },
+      ];
+
+      httpMock.expectOne('/conversas/c-init-conf').flush(
+        conversaComOferta('c-init-conf', [slotA1, slotA2], 'Helena Braga', false, conf, msgs),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const slots = html(fixture).querySelectorAll('.slot-botao');
+      expect(slots.length).toBe(1);
+      const slotUnico = slots[0] as HTMLButtonElement;
+      expect(slotUnico.classList.contains('selecionado')).toBeTrue();
+      expect(slotUnico.disabled).toBeTrue();
+      expect(slotUnico.getAttribute('aria-pressed')).toBe('true');
+      expect(slotUnico.textContent).toContain('9h');
+
+      expect(html(fixture).querySelector('.link-recolher')).toBeNull();
+      expect(html(fixture).querySelector('.linha-verde')).toBeNull();
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('R3: encaminhamento unico no chat no fluxo ao vivo, GET reconstruido, polling e reload preservando falas e eventos', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-enc-chat');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const msgs: MensagemDaConversa[] = [
+        {
+          papel: 'lead',
+          texto: 'Quero comprar imóvel',
+          em: '2026-10-07T08:00:00Z',
+          proximaAcao: null,
+          corretor: null,
+          agendamento: null,
+        },
+        {
+          papel: 'agente',
+          texto: 'Encaminhando seu caso para especialista',
+          em: '2026-10-07T08:01:00Z',
+          proximaAcao: 'agendar_reuniao',
+          corretor: 'Helena Braga',
+          agendamento: null,
+        },
+      ];
+
+      httpMock.expectOne('/conversas/c-enc-chat').flush(
+        conversaComOferta('c-enc-chat', [slotA1], 'Helena Braga', true, null, msgs),
+      );
+      tick();
+      fixture.detectChanges();
+
+      let eventos = Array.from(html(fixture).querySelectorAll('app-evento-sistema'));
+      let encs = eventos.filter((e) => e.textContent?.includes('Encaminhado'));
+      expect(encs.length).toBe(1);
+
+      tick(5000);
+      const pollReq = httpMock.match('/conversas/c-enc-chat');
+      if (pollReq.length > 0) {
+        pollReq[0].flush(
+          conversaComOferta('c-enc-chat', [slotA1], 'Helena Braga', true, null, [
+            ...msgs,
+            {
+              papel: 'agente',
+              texto: 'Ainda aguardo seu contato',
+              em: '2026-10-07T08:05:00Z',
+              proximaAcao: 'agendar_reuniao',
+              corretor: 'Helena Braga',
+              agendamento: null,
+            },
+          ]),
+        );
+        tick();
+        fixture.detectChanges();
+      }
+
+      eventos = Array.from(html(fixture).querySelectorAll('app-evento-sistema'));
+      encs = eventos.filter((e) => e.textContent?.includes('Encaminhado'));
+      expect(encs.length).toBe(1);
+
+      const mensagensLia = html(fixture).querySelectorAll('app-mensagem-lia');
+      expect(mensagensLia.length).toBeGreaterThanOrEqual(1);
+
+      store.pararPolling();
+      httpMock.verify();
       fixture.destroy();
       flush();
     }));

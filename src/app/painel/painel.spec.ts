@@ -1044,30 +1044,63 @@ describe('Painel (S-21)', () => {
     }
   });
 
-  it('oculta abertura sintetica inicial Ola e preserva mensagens reais posteriores (item 10)', () => {
+  it('oculta abertura sintetica inicial Ola e preserva mensagens reais posteriores, inclusive Ola posterior exato (item 10)', () => {
     const fixtureLocal = montarComponente();
     const comp = fixtureLocal.componentInstance;
     comp.leadSelecionadoId.set('l1');
+
+    const transcricaoOriginal = [
+      { papel: 'lead' as const, texto: 'Olá', em: '2026-09-15T15:00:00Z' },
+      { papel: 'lia' as const, texto: 'Oi! Sou a Lia. Como posso ajudar?', em: '2026-09-15T15:01:00Z' },
+      { papel: 'lead' as const, texto: 'Olá', em: '2026-09-15T15:02:00Z' },
+    ];
+
     comp.leadDetalhe.set({
       ...detalheMockComConversa,
-      transcricao: [
-        { papel: 'lead', texto: 'Olá', em: '2026-09-15T15:00:00Z' },
-        { papel: 'lia', texto: 'Oi! Sou a Lia. Como posso ajudar?', em: '2026-09-15T15:01:00Z' },
-        { papel: 'lead', texto: 'Olá novamente!', em: '2026-09-15T15:02:00Z' },
-      ],
+      transcricao: [...transcricaoOriginal],
     });
     fixtureLocal.detectChanges();
 
+    // Filtro apenas na apresentacao
     const itens = comp.transcricaoVisivel();
     expect(itens.length).toBe(2);
     expect(itens[0].papel).toBe('lia');
     expect(itens[0].texto).toBe('Oi! Sou a Lia. Como posso ajudar?');
+    // Ola EXATO posterior preservado intacto
     expect(itens[1].papel).toBe('lead');
-    expect(itens[1].texto).toBe('Olá novamente!');
+    expect(itens[1].texto).toBe('Olá');
+
+    // Payload original intacto
+    expect(comp.leadDetalhe()?.transcricao.length).toBe(3);
+    expect(comp.leadDetalhe()?.transcricao[0].texto).toBe('Olá');
 
     const mensagensLia = fixtureLocal.nativeElement.querySelectorAll('app-mensagem-lia');
     const mensagensPessoa = fixtureLocal.nativeElement.querySelectorAll('app-mensagem-pessoa');
     expect(mensagensLia.length).toBe(1);
     expect(mensagensPessoa.length).toBe(1);
+
+    // Outro texto inicial nao e removido
+    comp.leadDetalhe.set({
+      ...detalheMockComConversa,
+      transcricao: [
+        { papel: 'lead', texto: 'Olá, gostaria de ver casas.', em: '2026-09-15T15:00:00Z' },
+        { papel: 'lia', texto: 'Com certeza!', em: '2026-09-15T15:01:00Z' },
+      ],
+    });
+    fixtureLocal.detectChanges();
+    expect(comp.transcricaoVisivel().length).toBe(2);
+    expect(comp.transcricaoVisivel()[0].texto).toBe('Olá, gostaria de ver casas.');
+
+    // Primeira mensagem vinda da Lia nao e removida
+    comp.leadDetalhe.set({
+      ...detalheMockComConversa,
+      transcricao: [
+        { papel: 'lia', texto: 'Olá, como posso ajudar?', em: '2026-09-15T15:00:00Z' },
+        { papel: 'lead', texto: 'Busco apartamento.', em: '2026-09-15T15:01:00Z' },
+      ],
+    });
+    fixtureLocal.detectChanges();
+    expect(comp.transcricaoVisivel().length).toBe(2);
+    expect(comp.transcricaoVisivel()[0].papel).toBe('lia');
   });
 });

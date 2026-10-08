@@ -436,6 +436,7 @@ export class ConversaStore {
       this.contatoRegistrado.set(true);
       this.ofertaAgendamento.set(resposta.oferta ?? []);
       this.removerContato();
+      this.removerReciboContato();
       this.acrescentar({
         tipo: 'evento',
         id: this.proximoId(),
@@ -828,8 +829,25 @@ export class ConversaStore {
       }
     }
 
-    if (ehHandoff(resposta.proximaAcao) && resposta.contatoPendente) {
-      this.acrescentar({ tipo: 'contato', id: this.proximoId() });
+    if (ehHandoff(resposta.proximaAcao)) {
+      if (resposta.contatoPendente) {
+        this.removerReciboContato();
+        if (!this.itens().some((i) => i.tipo === 'contato')) {
+          this.acrescentar({ tipo: 'contato', id: this.proximoId() });
+        }
+      } else if (this.corretorAgendamento()) {
+        this.removerContato();
+        if (!this.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')) {
+          this.acrescentar({
+            tipo: 'evento',
+            id: this.proximoId(),
+            variante: 'neutro',
+            rotulo: 'Contato enviado',
+            texto: 'O corretor usará o contato que você forneceu.',
+            acao: null,
+          });
+        }
+      }
     }
 
     this.totalMensagens += 2;
@@ -957,17 +975,16 @@ export class ConversaStore {
                 }
               }
 
-              if (ehHandoff(msg.proximaAcao) && conversa.contatoPendente) {
-                this.acrescentar({ tipo: 'contato', id: this.proximoId() });
-              }
-
               if (msg.proximaAcao === 'encerrar') {
                 this.estado.set('encerrada');
                 this.pararPolling();
               }
             }
           }
+          this.sincronizarContatoERecibo(conversa);
         }
+      } else {
+        this.sincronizarContatoERecibo(conversa);
       }
     } catch {
     } finally {
@@ -1147,7 +1164,7 @@ export class ConversaStore {
     if (mensagens.some((mensagem) => ehHandoff(mensagem.proximaAcao))) {
       if (contatoPendente) {
         itens.push({ tipo: 'contato', id: this.proximoId() });
-      } else if (mensagens.some((m) => !!m.corretor)) {
+      } else if (mensagens.some((m) => !!m.corretor && !!m.corretor.trim())) {
         itens.push({
           tipo: 'evento',
           id: this.proximoId(),
@@ -1180,6 +1197,79 @@ export class ConversaStore {
 
   private removerContato(): void {
     this.itens.update((atual) => atual.filter((item) => item.tipo !== 'contato'));
+  }
+
+  private removerReciboContato(): void {
+    this.itens.update((atual) =>
+      atual.filter((item) => !(item.tipo === 'evento' && item.rotulo === 'Contato enviado')),
+    );
+  }
+
+  private sincronizarContatoERecibo(conversa: ConversaResponse): void {
+    if (!conversa.consentimentoEm || conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE) {
+      this.itens.update((atuais) =>
+        atuais.filter(
+          (i) => i.tipo !== 'contato' && !(i.tipo === 'evento' && i.rotulo === 'Contato enviado'),
+        ),
+      );
+      return;
+    }
+
+    const temHandoff = conversa.mensagens.some((m) => ehHandoff(m.proximaAcao));
+    let corretor: string | null = null;
+    for (let i = conversa.mensagens.length - 1; i >= 0; i--) {
+      const c = conversa.mensagens[i].corretor;
+      if (c && c.trim()) {
+        corretor = c.trim();
+        break;
+      }
+    }
+
+    const deveTerContato = temHandoff && conversa.contatoPendente;
+    const deveTerRecibo = temHandoff && !conversa.contatoPendente && !!corretor;
+
+    this.itens.update((atuais) => {
+      let lista = [...atuais];
+
+      if (deveTerContato) {
+        lista = lista.filter((i) => !(i.tipo === 'evento' && i.rotulo === 'Contato enviado'));
+        const temContato = lista.some((i) => i.tipo === 'contato');
+        if (!temContato) {
+          lista.push({ tipo: 'contato', id: this.proximoId() });
+        }
+      } else if (deveTerRecibo) {
+        lista = lista.filter((i) => i.tipo !== 'contato');
+        const recibos = lista.filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+        if (recibos.length === 0) {
+          lista.push({
+            tipo: 'evento',
+            id: this.proximoId(),
+            variante: 'neutro',
+            rotulo: 'Contato enviado',
+            texto: 'O corretor usará o contato que você forneceu.',
+            acao: null,
+          });
+        } else if (recibos.length > 1) {
+          let primeiro = false;
+          lista = lista.filter((i) => {
+            if (i.tipo === 'evento' && i.rotulo === 'Contato enviado') {
+              if (!primeiro) {
+                primeiro = true;
+                return true;
+              }
+              return false;
+            }
+            return true;
+          });
+        }
+      } else {
+        lista = lista.filter(
+          (i) => i.tipo !== 'contato' && !(i.tipo === 'evento' && i.rotulo === 'Contato enviado'),
+        );
+      }
+
+      return lista;
+    });
   }
 
   private removerEventoFinal(): void {

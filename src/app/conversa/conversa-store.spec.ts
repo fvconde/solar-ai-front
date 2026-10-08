@@ -2946,5 +2946,277 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.agendamentoRecolhido()).toBeFalse();
     expect(store.cartaoAgendaVisivel()).toBeTrue();
   });
+
+  it('R1: poll com mesma contagem e contatoPendente false->true remove recibo e exibe form; true->false repoem unico recibo sem novo POST', async () => {
+    const mensagensFixas = [
+      fala('lead', 'Quero atendimento'),
+      fala('agente', 'Encaminhando para Helena', 'agendar_reuniao', 0, 'Helena Braga'),
+    ];
+    localStorage.setItem('solar.conversaId', 'c1');
+    api.obterConversa.and.resolveTo(conversa(mensagensFixas, false, PERFIL_VAZIO, [slot1]));
+    await store.iniciar();
+
+    let recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+    expect(store.itens().some((i) => i.tipo === 'contato')).toBeFalse();
+
+    // Poll 1: mesma contagem de mensagens, contatoPendente vira true
+    api.obterConversa.and.resolveTo(conversa(mensagensFixas, true, PERFIL_VAZIO, []));
+    await store.verificarNovasMensagens();
+
+    recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(0);
+    expect(store.itens().some((i) => i.tipo === 'contato')).toBeTrue();
+    expect(store.contatoRegistrado()).toBeFalse();
+
+    // Poll 2: mesma contagem de mensagens, contatoPendente volta a false
+    api.obterConversa.and.resolveTo(conversa(mensagensFixas, false, PERFIL_VAZIO, [slot1]));
+    await store.verificarNovasMensagens();
+
+    recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+    expect(store.itens().some((i) => i.tipo === 'contato')).toBeFalse();
+    expect(store.contatoRegistrado()).toBeTrue();
+
+    // Confirmar que GET foi consumido e nao houve POST
+    expect(api.obterConversa).toHaveBeenCalledTimes(3);
+    expect(api.enviarMensagem).not.toHaveBeenCalled();
+    expect(api.registrarContato).not.toHaveBeenCalled();
+    expect(api.registrarAgendamento).not.toHaveBeenCalled();
+  });
+
+  it('R1: ciclo completo POST contato200 -> GET -> reserva -> GET/reload conserva exatamente um recibo antes do cartao e sem vazar sentinelas', async () => {
+    const mensagensFixas = [
+      fala('lead', 'Quero atendimento'),
+      fala('agente', 'Encaminhando para Helena', 'agendar_reuniao', 0, 'Helena Braga'),
+    ];
+    localStorage.setItem('solar.conversaId', 'c1');
+    api.obterConversa.and.resolveTo(conversa(mensagensFixas, true, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    expect(store.itens().some((i) => i.tipo === 'contato')).toBeTrue();
+    expect(store.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')).toBeFalse();
+
+    api.registrarContato.and.resolveTo({ leadId: 'lead-sentinela', oferta: [slot1] });
+    await store.enviarContato({
+      nome: 'Sentinela Nome',
+      telefone: '11988887777',
+      email: 'sentinela@teste.com',
+    });
+
+    let recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+    if (recibos[0].tipo === 'evento') {
+      expect(recibos[0].texto).toBe('O corretor usará o contato que você forneceu.');
+      expect(recibos[0].texto).not.toContain('Sentinela');
+      expect(recibos[0].texto).not.toContain('11988887777');
+      expect(recibos[0].texto).not.toContain('sentinela@teste.com');
+    }
+
+    // Polling GET com contatoPendente: false
+    api.obterConversa.and.resolveTo(conversa(mensagensFixas, false, PERFIL_VAZIO, [slot1]));
+    await store.verificarNovasMensagens();
+    recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+
+    // Reserva 200
+    api.registrarAgendamento.and.resolveTo(confirmacaoSlot1);
+    const mensagensConfirmadas = [
+      ...mensagensFixas,
+      fala('agente', 'Reunião agendada!', 'continuar_conversa', 0, 'Helena Braga', confirmacaoSlot1),
+    ];
+    api.obterConversa.and.resolveTo(conversa(mensagensConfirmadas, false, PERFIL_VAZIO, []));
+    await store.registrarAgendamento(101);
+
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+
+    // Reload da conversa
+    const storeReload = TestBed.runInInjectionContext(() => new ConversaStore());
+    api.obterConversa.and.resolveTo(conversa(mensagensConfirmadas, false, PERFIL_VAZIO, []));
+    await storeReload.abrirConversa('c1');
+
+    expect(storeReload.agendamentoEstaConfirmado()).toBeTrue();
+    const recibosReload = storeReload.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibosReload.length).toBe(1);
+
+    // Sentinelas ausentes de storage
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const k = sessionStorage.key(i)!;
+      const v = sessionStorage.getItem(k)!;
+      expect(v).not.toContain('Sentinela');
+      expect(v).not.toContain('11988887777');
+      expect(v).not.toContain('sentinela@teste.com');
+    }
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i)!;
+      const v = localStorage.getItem(k)!;
+      expect(v).not.toContain('Sentinela');
+      expect(v).not.toContain('11988887777');
+      expect(v).not.toContain('sentinela@teste.com');
+    }
+  });
+
+  it('R1: oferta[] sem confirmacao mantem recibo e apenas aviso vazio; falha no POST nao gera falso recibo e novaConversa limpa estado', async () => {
+    const mensagensFixas = [
+      fala('lead', 'Quero atendimento'),
+      fala('agente', 'Encaminhando para Helena', 'agendar_reuniao', 0, 'Helena Braga'),
+    ];
+    localStorage.setItem('solar.conversaId', 'c1');
+    api.obterConversa.and.resolveTo(conversa(mensagensFixas, true, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    // Falha no POST registrarContato
+    api.registrarContato.and.rejectWith(new Error('500 Internal Error'));
+    await store.enviarContato({ nome: 'Teste', telefone: '11999990000', email: null });
+
+    expect(store.contatoErro()).toBe('Não foi possível registrar seu contato. Tente novamente.');
+    expect(store.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')).toBeFalse();
+    expect(store.itens().some((i) => i.tipo === 'contato')).toBeTrue();
+
+    // Sucesso com oferta vazia []
+    api.registrarContato.and.resolveTo({ leadId: 'lead-vazio', oferta: [] });
+    await store.enviarContato({ nome: 'Teste', telefone: '11999990000', email: null });
+
+    expect(store.contatoRegistrado()).toBeTrue();
+    expect(store.ofertaAgendamento().length).toBe(0);
+    expect(store.agendamentoConfirmado()).toBeNull();
+    expect(store.avisoAgendaVazia()).toBeTrue();
+    expect(store.cartaoAgendaVisivel()).toBeFalse();
+    const recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+
+    // novaConversa limpa estado
+    await store.novaConversa();
+    expect(store.itens().length).toBe(0);
+    expect(store.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')).toBeFalse();
+  });
+
+  it('R2: chave versionada solar.agendamentoRecolhido.v1:<id> com valor 1, ciclo recolher/reload/reabrir e valor invalido', async () => {
+    await inicializarComOferta([slot1, slot2]);
+    const chave = 'solar.agendamentoRecolhido.v1:c1';
+
+    expect(sessionStorage.getItem(chave)).toBeNull();
+    expect(store.agendamentoRecolhido()).toBeFalse();
+
+    // Recolher
+    store.recolherAgendamento();
+    expect(store.agendamentoRecolhido()).toBeTrue();
+    expect(sessionStorage.getItem(chave)).toBe('1');
+
+    // Reload (F5)
+    const storeF5 = TestBed.runInInjectionContext(() => new ConversaStore());
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1, slot2]));
+    await storeF5.abrirConversa('c1');
+    expect(storeF5.agendamentoRecolhido()).toBeTrue();
+
+    // Reabrir
+    storeF5.reabrirAgendamento();
+    expect(storeF5.agendamentoRecolhido()).toBeFalse();
+    expect(sessionStorage.getItem(chave)).toBeNull();
+
+    // Valor invalido em storage e ignorado (trata como false)
+    sessionStorage.setItem(chave, 'qualquer-coisa');
+    const storeInvalido = TestBed.runInInjectionContext(() => new ConversaStore());
+    await storeInvalido.abrirConversa('c1');
+    expect(storeInvalido.agendamentoRecolhido()).toBeFalse();
+  });
+
+  it('R2: excecoes em getItem/setItem/removeItem de sessionStorage nao quebram UX nem lanca erro', async () => {
+    await inicializarComOferta([slot1, slot2]);
+
+    spyOn(sessionStorage, 'setItem').and.throwError(new DOMException('QuotaExceededError'));
+    spyOn(sessionStorage, 'getItem').and.throwError(new DOMException('SecurityError'));
+    spyOn(sessionStorage, 'removeItem').and.throwError(new DOMException('SecurityError'));
+
+    expect(() => store.recolherAgendamento()).not.toThrow();
+    expect(store.agendamentoRecolhido()).toBeTrue();
+
+    expect(() => store.reabrirAgendamento()).not.toThrow();
+    expect(store.agendamentoRecolhido()).toBeFalse();
+
+    expect(() => store.novaConversa()).not.toThrow();
+  });
+
+  it('R2: isolamento entre conversas, exclusao remove apenas a chave relevante e confirmacao prevalece', async () => {
+    sessionStorage.setItem('solar.agendamentoRecolhido.v1:c1', '1');
+    sessionStorage.setItem('solar.agendamentoRecolhido.v1:c2', '1');
+
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1]));
+    await store.abrirConversa('c1');
+    expect(store.agendamentoRecolhido()).toBeTrue();
+
+    api.obterConversa.and.resolveTo({
+      ...conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1]),
+      conversaId: 'c3',
+    });
+    await store.abrirConversa('c3');
+    expect(store.agendamentoRecolhido()).toBeFalse();
+
+    api.obterConversa.and.resolveTo(conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1]));
+    await store.abrirConversa('c1');
+    api.apagarConversa.and.resolveTo({ leadExcluido: true, removidoEm: new Date().toISOString(), escopo: 'lead_e_vinculos', mensagem: 'Apagado' });
+    await store.apagarConversa();
+
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c1')).toBeNull();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c2')).toBe('1');
+
+    // Confirmacao no GET prevalece sobre recolhimento e limpa marcador
+    sessionStorage.setItem('solar.agendamentoRecolhido.v1:c4', '1');
+    api.obterConversa.and.resolveTo({
+      ...conversa([fala('lead', 'Oi'), fala('agente', 'Confirmado!', 'continuar_conversa', 0, 'Helena Braga', confirmacaoSlot1)], false, PERFIL_VAZIO, []),
+      conversaId: 'c4',
+    });
+    await store.abrirConversa('c4');
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.agendamentoRecolhido()).toBeFalse();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c4')).toBeNull();
+  });
+
+  it('R3: encaminhamento unico no fluxo ao vivo, polling e reload preservando falas e eventos', async () => {
+    localStorage.setItem('solar.conversaId', 'c-enc');
+    api.obterConversa.and.resolveTo(conversa([], false, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    api.enviarMensagem.and.resolveTo({
+      conversaId: 'c-enc',
+      resposta: 'Encaminhando você',
+      intencao: 'COMPRA',
+      proximaAcao: 'agendar_reuniao',
+      perfilLead: PERFIL_VAZIO,
+      imoveisSugeridos: [],
+      corretor: 'Helena Braga',
+      contatoPendente: true,
+      agendamento: null,
+    });
+    await store.enviar('Quero agendar');
+
+    let encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
+    expect(encs.length).toBe(1);
+
+    const msgs = [
+      fala('lead', 'Quero agendar'),
+      fala('agente', 'Encaminhando você', 'agendar_reuniao', 0, 'Helena Braga'),
+    ];
+    api.obterConversa.and.resolveTo({
+      ...conversa(msgs, true, PERFIL_VAZIO, []),
+      conversaId: 'c-enc',
+    });
+    await store.verificarNovasMensagens();
+    encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
+    expect(encs.length).toBe(1);
+
+    const storeReload = TestBed.runInInjectionContext(() => new ConversaStore());
+    api.obterConversa.and.resolveTo({
+      ...conversa(msgs, true, PERFIL_VAZIO, []),
+      conversaId: 'c-enc',
+    });
+    await storeReload.abrirConversa('c-enc');
+    encs = storeReload.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
+    expect(encs.length).toBe(1);
+    expect(storeReload.itens().some((i) => i.tipo === 'lia')).toBeTrue();
+    expect(storeReload.itens().some((i) => i.tipo === 'pessoa')).toBeTrue();
+  });
 });
 
