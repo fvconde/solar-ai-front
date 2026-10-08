@@ -5,6 +5,7 @@ import { provideRouter } from '@angular/router';
 import { SessaoStore } from '../sessao/sessao-store';
 import { Painel } from './painel';
 import { metricasParaTeste } from './metricas-painel.fixture';
+import { formatadorMetricas } from './formatador-metricas';
 
 describe('Layout real das métricas por viewport (S-22/S-48)', () => {
   let http: HttpTestingController;
@@ -24,6 +25,7 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
     http.match('/api/painel/corretores/pendentes');
     http.verify();
     quadros.splice(0).forEach(q => q.remove());
+    window.focus();
     localStorage.removeItem('solar.metricas.teste-layout');
   });
 
@@ -191,6 +193,17 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
           const barras = Array.from(doc.querySelectorAll<HTMLElement>('.card-grafico .item-barra'));
           expect(barras.length).toBe(perfil === 'supervisor' ? 6 : 2);
 
+          const rotuloCard = doc.querySelector<HTMLElement>('.card-grafico .rotulo-etapa')!;
+          expect(rotuloCard).not.toBeNull();
+          if (largura > 860) {
+            expect(win.getComputedStyle(rotuloCard).webkitLineClamp).toBe('2');
+            expect(win.getComputedStyle(rotuloCard).overflow).toBe('hidden');
+          } else {
+            expect(win.getComputedStyle(rotuloCard).display).toBe('block');
+            expect(win.getComputedStyle(rotuloCard).overflow).toBe('visible');
+            expect(win.getComputedStyle(rotuloCard).webkitLineClamp).not.toBe('2');
+          }
+
           const cards = Array.from(doc.querySelectorAll<HTMLElement>('.principais .bloco-cards > .cartao'));
           expect(cards.length).toBe(perfil === 'supervisor' ? 4 : 3);
           for (const card of cards) {
@@ -304,5 +317,165 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
         });
       }
     }
+  }
+
+  for (const tema of ['claro', 'escuro'] as const) {
+    it(`supervisor, tema ${tema}, 390px: rótulos das seis etapas quebram dentro da coluna sem sobreposição`, async () => {
+      TestBed.inject(SessaoStore).definir({
+        usuario: { id: 'teste-layout', nome: 'Supervisor', email: 'supervisor@solar.com.br' },
+        perfil: 'supervisor',
+        statusCorretor: 'aprovado',
+        corretorId: null,
+        vinculoAtivo: true,
+        filtrosPermitidos: ['visao_geral'],
+        filtroInicial: 'visao_geral',
+        pendentesAprovacao: 1,
+      });
+
+      const fixture = TestBed.createComponent(Painel);
+      fixture.detectChanges();
+      fixture.componentInstance.selecionarFiltro('visao_geral');
+      fixture.detectChanges();
+
+      http.expectOne(r => r.url === '/api/painel/leads').flush({
+        total: 1,
+        itens: [{
+          id: 'lead-layout',
+          nomeExibicao: null,
+          referencia: '123',
+          pedidoResumo: 'Comprar · Moema',
+          criadoEm: '2026-10-03T15:00:00Z',
+          qualificacao: 50,
+          leadStatus: 'encaminhado',
+          encaminhamentoStatus: 'atribuido',
+          corretor: { id: 'c1', nome: 'Corretor', iniciais: 'CO' },
+        }],
+      });
+      fixture.detectChanges();
+
+      fixture.componentInstance.selecionarMetricas();
+      fixture.detectChanges();
+      const [bloco] = await fixture.getDeferBlocks();
+      await bloco.render(DeferBlockState.Complete);
+
+      const dados = metricasParaTeste();
+      http.expectOne('/api/painel/metricas?dias=30').flush(dados);
+      fixture.detectChanges();
+
+      const quadro = document.createElement('iframe');
+      quadros.push(quadro);
+      quadro.style.cssText = 'width:390px;height:844px;border:0;position:fixed;left:0;top:0;';
+      document.body.appendChild(quadro);
+      const doc = quadro.contentDocument!;
+      const obterCss = () => [...Array.from(document.styleSheets), ...document.adoptedStyleSheets]
+        .map(folha => {
+          try { return Array.from(folha.cssRules).map(regra => regra.cssText).join('\n'); }
+          catch { return ''; }
+        }).join('\n');
+
+      doc.open();
+      doc.write(`<!doctype html><html lang="pt-BR" data-tema="${tema}"><head><base href="${document.baseURI}"><style>${obterCss()}\nhtml,body{margin:0;height:100%;}body{display:flex;flex-direction:column;}</style></head><body>${fixture.nativeElement.outerHTML}</body></html>`);
+      doc.close();
+      await new Promise<void>(resolve => quadro.contentWindow!.requestAnimationFrame(() => resolve()));
+      const win = quadro.contentWindow!;
+
+      const cardGrafico = doc.querySelector<HTMLElement>('.principais .card-grafico')!;
+      const gradeCompleta = doc.querySelector<HTMLElement>('.grade-completa')!;
+      const areaRotulos = doc.querySelector<HTMLElement>('.area-rotulos')!;
+      const blocoCards = doc.querySelector<HTMLElement>('.principais .bloco-cards')!;
+      expect(cardGrafico).not.toBeNull();
+      expect(gradeCompleta).not.toBeNull();
+      expect(areaRotulos).not.toBeNull();
+      expect(blocoCards).not.toBeNull();
+
+      const barras = Array.from(doc.querySelectorAll<HTMLElement>('.card-grafico .item-barra'));
+      const blocos = Array.from(doc.querySelectorAll<HTMLElement>('.area-rotulos .bloco-rotulo'));
+      const rotulos = Array.from(doc.querySelectorAll<HTMLElement>('.area-rotulos .rotulo-etapa'));
+      const percentuais = Array.from(doc.querySelectorAll<HTMLElement>('.area-rotulos .percentual-etapa'));
+
+      expect(barras.length).toBe(6);
+      expect(blocos.length).toBe(6);
+      expect(rotulos.length).toBe(6);
+      expect(percentuais.length).toBe(6);
+
+      const etapasEsperadas = ['iniciadas', 'intencao', 'essenciais', 'encaminhamento', 'corretor', 'horario'] as const;
+      for (let i = 0; i < 6; i++) {
+        const etapa = etapasEsperadas[i];
+        const textoEsperado = formatadorMetricas.tituloEtapa(etapa);
+        expect(rotulos[i].textContent?.trim()).toBe(textoEsperado);
+
+        const partesTexto = textoEsperado.split(' ');
+        const ultimaPalavra = partesTexto[partesTexto.length - 1];
+        expect(rotulos[i].textContent).toContain(ultimaPalavra);
+
+        const valorTopo = barras[i].querySelector('.valor-topo')!;
+        expect(valorTopo.textContent?.trim()).toBe(formatadorMetricas.numero(dados.avanco[i].conversas));
+        expect(percentuais[i].textContent?.trim()).toBe(formatadorMetricas.percentual(dados.avanco[i].conversas, dados.avanco[0].conversas));
+
+        const blocoRect = blocos[i].getBoundingClientRect();
+        const barraRect = barras[i].getBoundingClientRect();
+        const rotuloRect = rotulos[i].getBoundingClientRect();
+
+        expect(Math.abs(blocoRect.left - barraRect.left)).toBeLessThanOrEqual(2);
+        expect(Math.abs(blocoRect.right - barraRect.right)).toBeLessThanOrEqual(2);
+
+        expect(rotuloRect.left).toBeGreaterThanOrEqual(blocoRect.left - 2);
+        expect(rotuloRect.right).toBeLessThanOrEqual(blocoRect.right + 2);
+
+        expect(win.getComputedStyle(rotulos[i]).display).toBe('block');
+        expect(win.getComputedStyle(rotulos[i]).overflow).toBe('visible');
+
+        const range = doc.createRange();
+        const textNode = rotulos[i].firstChild!;
+        expect(textNode).not.toBeNull();
+        range.selectNodeContents(textNode);
+        const rects = Array.from(range.getClientRects());
+        expect(rects.length).toBeGreaterThan(1);
+
+        for (const r of rects) {
+          expect(r.left).toBeGreaterThanOrEqual(blocoRect.left - 2);
+          expect(r.right).toBeLessThanOrEqual(blocoRect.right + 2);
+          expect(r.top).toBeGreaterThanOrEqual(rotuloRect.top - 2);
+          expect(r.bottom).toBeLessThanOrEqual(rotuloRect.bottom + 2);
+          expect(r.width).toBeLessThanOrEqual(blocoRect.width + 2);
+        }
+
+        const ultimoRect = rects[rects.length - 1];
+        expect(ultimoRect.bottom).toBeLessThanOrEqual(rotuloRect.bottom + 2);
+
+        const textoCompleto = textNode.textContent!;
+        const indiceUltimaPalavra = textoCompleto.lastIndexOf(ultimaPalavra);
+        expect(indiceUltimaPalavra).toBeGreaterThan(-1);
+        const rangeUltima = doc.createRange();
+        rangeUltima.setStart(textNode, indiceUltimaPalavra);
+        rangeUltima.setEnd(textNode, indiceUltimaPalavra + ultimaPalavra.length);
+        const rectsUltima = Array.from(rangeUltima.getClientRects());
+        expect(rectsUltima.length).toBeGreaterThanOrEqual(1);
+        for (const ru of rectsUltima) {
+          expect(ru.left).toBeGreaterThanOrEqual(blocoRect.left - 2);
+          expect(ru.right).toBeLessThanOrEqual(blocoRect.right + 2);
+          expect(ru.bottom).toBeLessThanOrEqual(rotuloRect.bottom + 2);
+          expect(ru.top).toBeGreaterThanOrEqual(rotuloRect.top - 2);
+        }
+
+        if (i < 5) {
+          const proximoBlocoRect = blocos[i + 1].getBoundingClientRect();
+          const proximoRotuloRect = rotulos[i + 1].getBoundingClientRect();
+          expect(blocoRect.right).toBeLessThanOrEqual(proximoBlocoRect.left + 2);
+          expect(rotuloRect.right).toBeLessThanOrEqual(proximoRotuloRect.left + 2);
+        }
+      }
+
+      expect(cardGrafico.scrollWidth).toBeLessThanOrEqual(cardGrafico.clientWidth + 1);
+      expect(gradeCompleta.scrollWidth).toBeLessThanOrEqual(gradeCompleta.clientWidth + 1);
+      expect(areaRotulos.scrollWidth).toBeLessThanOrEqual(areaRotulos.clientWidth + 1);
+
+      const areaRotulosRect = areaRotulos.getBoundingClientRect();
+      const cardGraficoRect = cardGrafico.getBoundingClientRect();
+      const blocoCardsRect = blocoCards.getBoundingClientRect();
+
+      expect(areaRotulosRect.bottom).toBeLessThanOrEqual(cardGraficoRect.bottom + 2);
+      expect(cardGraficoRect.bottom).toBeLessThanOrEqual(blocoCardsRect.top + 2);
+    });
   }
 });
