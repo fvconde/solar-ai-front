@@ -83,6 +83,7 @@ export class Chat implements OnInit {
   private ultimaConversa: string | null = null;
   private ultimaAcaoPropria = false;
   private ultimaAltura = 0;
+  private ultimoCliente = 0;
 
   readonly mostrarConvite = computed(() => {
     if (this.sessao.ativa() || !this.store.emConversa()) {
@@ -197,7 +198,7 @@ export class Chat implements OnInit {
         (acaoPropria && !this.ultimaAcaoPropria);
       const mudou = assinatura !== this.ultimaAssinaturaPalco || estado !== this.ultimoEstado;
       const pertoDoFim =
-        this.ultimaAltura - elemento.scrollTop - elemento.clientHeight <= TOLERANCIA_FIM_PX;
+        this.ultimaAltura - elemento.scrollTop - this.ultimoCliente <= TOLERANCIA_FIM_PX;
 
       this.ultimaAssinaturaPalco = assinatura;
       this.ultimoEstado = estado;
@@ -209,6 +210,7 @@ export class Chat implements OnInit {
         elemento.scrollTop = elemento.scrollHeight;
       }
       this.ultimaAltura = elemento.scrollHeight;
+      this.ultimoCliente = elemento.clientHeight;
     });
 
     effect(() => {

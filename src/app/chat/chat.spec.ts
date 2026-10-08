@@ -2053,6 +2053,50 @@ describe('Chat', () => {
         }
       }));
 
+      it('encerrar recolhe o composer, aumenta o palco e nao puxa o leitor que estava a 81px nem muda a medida seguinte', fakeAsync(() => {
+        const p = montarPalco('c-i12-encerra', { confirmado: true });
+        try {
+          p.ciclo();
+          expect(p.store.composerRemovido()).toBeFalse();
+          const clientAntes = p.palco.clientHeight;
+          const alturaAntes = p.palco.scrollHeight;
+          p.palco.scrollTop = maximo(p.palco) - 81;
+          const posicao = p.palco.scrollTop;
+          expect(Math.round(distancia(p.palco))).toBe(81);
+
+          p.mensagens.push(mensagemNova(51, 'encerrar'));
+          p.ciclo();
+
+          expect(p.store.estado()).toBe('encerrada');
+          expect(p.store.composerRemovido()).toBeTrue();
+          expect(p.palco.clientHeight).toBeGreaterThan(clientAntes);
+          expect(p.palco.scrollHeight).toBeGreaterThan(alturaAntes);
+          expect(p.palco.scrollTop).toBe(posicao);
+
+          const adicionar = (id: string) => {
+            p.store.itens.update((itens) => [
+              ...itens,
+              { tipo: 'pessoa', id, texto: `Texto ${id}`.repeat(40), hora: '10:30' },
+            ]);
+            p.fixture.detectChanges();
+            tick();
+          };
+
+          p.palco.scrollTop = maximo(p.palco) - 81;
+          const posicao81 = p.palco.scrollTop;
+          adicionar('novo-81');
+          expect(p.palco.scrollTop).toBe(posicao81);
+
+          p.palco.scrollTop = maximo(p.palco) - 80;
+          adicionar('novo-80');
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
       it('abertura, troca de conversa e reload abrem no fim', fakeAsync(() => {
         const p = montarPalco('c-i12-abre', { confirmado: true });
         let limparReload: () => void = () => undefined;
