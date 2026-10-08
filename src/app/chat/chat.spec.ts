@@ -1076,13 +1076,9 @@ describe('Chat', () => {
       fixture.detectChanges();
 
       const cartaoJaConfirmado = html(fixture).querySelector('app-cartao-agendamento');
-      expect(cartaoJaConfirmado).not.toBeNull();
-      const slotsJaConfirmados = cartaoJaConfirmado?.querySelectorAll('.slot-botao');
-      expect(slotsJaConfirmados?.length).toBe(1);
-      const btnConfirmado = slotsJaConfirmados?.[0] as HTMLButtonElement;
-      expect(btnConfirmado.disabled).toBeTrue();
-      expect(btnConfirmado.getAttribute('aria-pressed')).toBe('true');
-      expect(cartaoJaConfirmado?.querySelector('.link-recolher')).toBeNull();
+      expect(cartaoJaConfirmado).toBeNull();
+      const eventosJaConfirmado = Array.from(html(fixture).querySelectorAll('app-evento-sistema'));
+      expect(eventosJaConfirmado.some((e) => e.textContent?.includes('Reunião agendada'))).toBeTrue();
       expect(html(fixture).querySelector('.aviso-vazio-neutro')).toBeNull();
 
       store.pararPolling();
@@ -1248,7 +1244,7 @@ describe('Chat', () => {
             {
               papel: 'agente',
               texto: 'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
-              em: '2026-10-07T10:02:05Z',
+              em: '2026-10-07T10:02:00Z',
               proximaAcao: 'agendar_reuniao',
               corretor: 'Helena Braga',
               agendamento: { estado: 'confirmado', horario: slotA1, alternativas: [] },
@@ -1261,15 +1257,7 @@ describe('Chat', () => {
 
       httpMock.expectNone('/conversas/c-slot-post/mensagens');
       const cartaoAposConfirmacao = html(fixture).querySelector('app-cartao-agendamento');
-      expect(cartaoAposConfirmacao).not.toBeNull();
-
-      const slotsConfirmados = cartaoAposConfirmacao?.querySelectorAll('.slot-botao');
-      expect(slotsConfirmados?.length).toBe(1);
-      const slotConfirmadoEl = slotsConfirmados?.[0] as HTMLButtonElement;
-      expect(slotConfirmadoEl.disabled).toBeTrue();
-      expect(slotConfirmadoEl.getAttribute('aria-pressed')).toBe('true');
-      expect(slotConfirmadoEl.classList.contains('selecionado')).toBeTrue();
-      expect(cartaoAposConfirmacao?.querySelector('.link-recolher')).toBeNull();
+      expect(cartaoAposConfirmacao).toBeNull();
 
       const eventoCompacto = html(fixture).querySelector('.evento-compacto');
       expect(eventoCompacto).toBeNull();
@@ -1277,52 +1265,24 @@ describe('Chat', () => {
 
       const elementosNaColuna = Array.from(html(fixture).querySelector('.coluna')?.children ?? []);
       const elLead = elementosNaColuna.find((el) => el.tagName.toLowerCase() === 'app-mensagem-pessoa');
-      const elEvento = elementosNaColuna.find((el) => el.tagName.toLowerCase() === 'app-evento-sistema');
       const elLia = elementosNaColuna.find((el) => el.tagName.toLowerCase() === 'app-mensagem-lia');
+      expect(elLead).toBeUndefined();
+      expect(elLia).toBeUndefined();
 
-      expect(elLead).toBeDefined();
+      const elReuniao = elementosNaColuna.find(
+        (el) => el.tagName.toLowerCase() === 'app-evento-sistema' && el.textContent?.includes('Reunião agendada'),
+      );
+      expect(elReuniao).toBeDefined();
+      expect(elReuniao?.textContent).toContain(
+        'O corretor entrará em contato no horário agendado: quarta, 7 de outubro, 9h da manhã.',
+      );
+
+      const elEvento = elementosNaColuna.find(
+        (el) => el.tagName.toLowerCase() === 'app-evento-sistema' && el.textContent?.includes('Contato enviado'),
+      );
       expect(elEvento).toBeDefined();
       expect(elEvento?.textContent).toContain('Contato enviado');
       expect(elEvento?.textContent).toContain('O corretor usará o contato que você forneceu.');
-      expect(elLia).toBeDefined();
-
-      const idxLead = elementosNaColuna.indexOf(elLead!);
-      const idxLia = elementosNaColuna.indexOf(elLia!);
-
-      expect(idxLead).toBeLessThan(idxLia);
-      expect(elLia?.textContent).toContain(
-        'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
-      );
-
-      document.documentElement.setAttribute('data-tema', 'claro');
-      fixture.detectChanges();
-      const bgClaro = estiloDoToken('--marca', 'backgroundColor');
-      const borderClaro = estiloDoToken('--marca', 'borderColor');
-      const textoClaro = estiloDoToken('--marca-contraste', 'color');
-      const estiloSlotClaro = window.getComputedStyle(slotConfirmadoEl);
-      expect(estiloSlotClaro.backgroundColor).toBe(bgClaro);
-      expect(estiloSlotClaro.borderTopColor).toBe(borderClaro);
-      expect(estiloSlotClaro.color).toBe(textoClaro);
-      expect(estiloSlotClaro.opacity).toBe('1');
-
-      document.documentElement.setAttribute('data-tema', 'escuro');
-      fixture.detectChanges();
-      const bgEscuro = estiloDoToken('--marca', 'backgroundColor');
-      const borderEscuro = estiloDoToken('--marca', 'borderColor');
-      const textoEscuro = estiloDoToken('--marca-contraste', 'color');
-      const estiloSlotEscuro = window.getComputedStyle(slotConfirmadoEl);
-      expect(estiloSlotEscuro.backgroundColor).toBe(bgEscuro);
-      expect(estiloSlotEscuro.borderTopColor).toBe(borderEscuro);
-      expect(estiloSlotEscuro.color).toBe(textoEscuro);
-      expect(estiloSlotEscuro.opacity).toBe('1');
-      expect(bgEscuro).not.toBe(bgClaro);
-
-      document.documentElement.removeAttribute('data-tema');
-
-      slotConfirmadoEl.click();
-      fixture.detectChanges();
-      httpMock.expectNone('/conversas/c-slot-post/agendamentos');
-
       void store.registrarAgendamento(slotA1.id);
       httpMock.expectNone('/conversas/c-slot-post/agendamentos');
       store.pararPolling();
@@ -1512,13 +1472,9 @@ describe('Chat', () => {
       expect(html(fixture).querySelector('.aviso-erro-agendamento')).toBeNull();
       expect(html(fixture).querySelector('.evento-compacto')).toBeNull();
       const cartaoRecuperado = html(fixture).querySelector('app-cartao-agendamento');
-      expect(cartaoRecuperado).not.toBeNull();
-      const slotsRecuperados = cartaoRecuperado?.querySelectorAll('.slot-botao');
-      expect(slotsRecuperados?.length).toBe(1);
-      const btnSlot = slotsRecuperados?.[0] as HTMLButtonElement;
-      expect(btnSlot.disabled).toBeTrue();
-      expect(btnSlot.getAttribute('aria-pressed')).toBe('true');
-      expect(cartaoRecuperado?.querySelector('.link-recolher')).toBeNull();
+      expect(cartaoRecuperado).toBeNull();
+      const eventos = Array.from(html(fixture).querySelectorAll('app-evento-sistema'));
+      expect(eventos.some((e) => e.textContent?.includes('Reunião agendada'))).toBeTrue();
 
       store.pararPolling();
       httpMock.verify();
@@ -1664,7 +1620,7 @@ describe('Chat', () => {
       flush();
     }));
 
-    it('geometria wide centraliza cartao de agendamento confirmado com diferenca menor ou igual a 1px em relacao a coluna', fakeAsync(() => {
+    it('geometria wide e mobile alinha cartao ofertado a esquerda da coluna com diferenca menor ou igual a 1px nos dois temas', fakeAsync(() => {
       localStorage.setItem('solar.conversaId', 'c-wide');
       const fixture = TestBed.createComponent(Chat);
       const store = TestBed.inject(ConversaStore);
@@ -1677,40 +1633,40 @@ describe('Chat', () => {
       httpMock.expectOne('/conversas/c-wide').flush(
         conversaComOferta(
           'c-wide',
-          [],
+          [slotA1, slotA2],
           'Helena Braga',
           false,
-          { estado: 'confirmado', horario: slotA1, alternativas: [] },
-          [
-            {
-              papel: 'agente',
-              texto: 'Reunião confirmada.',
-              em: '2026-10-07T10:00:00Z',
-              proximaAcao: 'agendar_reuniao',
-              corretor: 'Helena Braga',
-              agendamento: { estado: 'confirmado', horario: slotA1, alternativas: [] },
-            },
-          ],
         ),
       );
       tick();
       fixture.detectChanges();
 
       const coluna = hostEl.querySelector('.coluna') as HTMLElement;
-      const cartao = hostEl.querySelector('.cartao') as HTMLElement;
+      const cartaoHost = hostEl.querySelector('app-cartao-agendamento') as HTMLElement;
       expect(coluna).not.toBeNull();
-      expect(cartao).not.toBeNull();
+      expect(cartaoHost).not.toBeNull();
       expect(hostEl.querySelector('.evento-compacto')).toBeNull();
 
-      const rectColuna = coluna.getBoundingClientRect();
-      const rectCartao = cartao.getBoundingClientRect();
+      for (const tema of ['claro', 'escuro']) {
+        document.documentElement.setAttribute('data-tema', tema);
+        fixture.detectChanges();
 
-      const centroColuna = rectColuna.left + rectColuna.width / 2;
-      const centroCartao = rectCartao.left + rectCartao.width / 2;
-      const diferenca = Math.abs(centroColuna - centroCartao);
+        hostEl.style.width = '960px';
+        fixture.detectChanges();
+        const paddingWide = parseFloat(window.getComputedStyle(coluna).paddingLeft);
+        const rectColunaWide = coluna.getBoundingClientRect();
+        const rectCartaoWide = cartaoHost.getBoundingClientRect();
+        expect(Math.abs(rectColunaWide.left + paddingWide - rectCartaoWide.left)).toBeLessThanOrEqual(1);
 
-      expect(diferenca).toBeLessThanOrEqual(1);
+        hostEl.style.width = '320px';
+        fixture.detectChanges();
+        const paddingMobile = parseFloat(window.getComputedStyle(coluna).paddingLeft);
+        const rectColunaMobile = coluna.getBoundingClientRect();
+        const rectCartaoMobile = cartaoHost.getBoundingClientRect();
+        expect(Math.abs(rectColunaMobile.left + paddingMobile - rectCartaoMobile.left)).toBeLessThanOrEqual(1);
+      }
 
+      document.documentElement.removeAttribute('data-tema');
       store.pararPolling();
       httpMock.verify();
       if (hostEl.parentNode) {
@@ -1942,7 +1898,10 @@ describe('Chat', () => {
           p.ciclo();
           const itensAntes = p.store.itens();
           const apresentacaoAntes = p.fixture.componentInstance.itensApresentacao();
-          expect(apresentacaoAntes.some((i) => i.tipo === 'marcador-cartao')).toBeTrue();
+          expect(apresentacaoAntes.some((i) => i.tipo === 'marcador-cartao')).toBeFalse();
+          expect(
+            apresentacaoAntes.some((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada'),
+          ).toBeTrue();
           expect(
             apresentacaoAntes.some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado'),
           ).toBeTrue();
@@ -2271,11 +2230,9 @@ describe('Chat', () => {
           p.fixture.detectChanges();
 
           expect(distancia(p.palco)).toBeLessThanOrEqual(1);
-          const confirmados = p.hostEl.querySelectorAll('app-cartao-agendamento .slot-botao');
-          expect(confirmados.length).toBe(1);
-          expect(confirmados[0].getAttribute('aria-pressed')).toBe('true');
-          expect((confirmados[0] as HTMLButtonElement).disabled).toBeTrue();
-          expect(p.hostEl.querySelectorAll('app-cartao-agendamento').length).toBe(1);
+          expect(p.hostEl.querySelectorAll('app-cartao-agendamento').length).toBe(0);
+          const eventosConfirmados = Array.from(p.hostEl.querySelectorAll('app-evento-sistema'));
+          expect(eventosConfirmados.some((e) => e.textContent?.includes('Reunião agendada'))).toBeTrue();
 
           p.encerrar();
         } finally {
@@ -2325,17 +2282,12 @@ describe('Chat', () => {
       expect(store.agendamentoEstaConfirmado()).toBeTrue();
 
       const slots = html(fixture).querySelectorAll('.slot-botao');
-      expect(slots.length).toBe(1);
-      const slotUnico = slots[0] as HTMLButtonElement;
-      expect(slotUnico.classList.contains('selecionado')).toBeTrue();
-      expect(slotUnico.disabled).toBeTrue();
-      expect(slotUnico.getAttribute('aria-pressed')).toBe('true');
-      expect(slotUnico.textContent).toContain('9h');
-
+      expect(slots.length).toBe(0);
+      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(0);
       expect(html(fixture).querySelector('.link-recolher')).toBeNull();
       expect(html(fixture).querySelector('.evento-compacto')).toBeNull();
       const eventos = Array.from(html(fixture).querySelectorAll('app-evento-sistema'));
-      expect(eventos.some((e) => e.textContent?.includes('Reunião confirmada'))).toBeFalse();
+      expect(eventos.some((e) => e.textContent?.includes('Reunião agendada'))).toBeTrue();
 
       store.pararPolling();
       httpMock.verify();
@@ -2381,9 +2333,10 @@ describe('Chat', () => {
       fixture.detectChanges();
 
       expect(store.ofertaAgendamento()).toEqual([]);
-      const slots = html(fixture).querySelectorAll('.slot-botao');
-      expect(slots.length).toBe(1);
-      expect((slots[0] as HTMLButtonElement).disabled).toBeTrue();
+      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(0);
+      expect(html(fixture).querySelectorAll('.slot-botao').length).toBe(0);
+      const eventosResidual = Array.from(html(fixture).querySelectorAll('app-evento-sistema'));
+      expect(eventosResidual.some((e) => e.textContent?.includes('Reunião agendada'))).toBeTrue();
 
       store.pararPolling();
       httpMock.verify();
@@ -2593,11 +2546,7 @@ describe('Chat', () => {
       fixture.detectChanges();
 
       cartao = html(fixture).querySelector('app-cartao-agendamento');
-      expect(cartao).not.toBeNull();
-      const slotsConf = cartao?.querySelectorAll('.slot-botao');
-      expect(slotsConf?.length).toBe(1);
-      expect((slotsConf?.[0] as HTMLButtonElement).disabled).toBeTrue();
-      expect(cartao?.querySelector('.link-recolher')).toBeNull();
+      expect(cartao).toBeNull();
 
       recibos = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
         (e) => e.textContent?.includes('Contato enviado'),
@@ -2608,10 +2557,13 @@ describe('Chat', () => {
       expect(recibos[0].textContent?.includes(sentinelaTel)).toBeFalse();
       expect(recibos[0].textContent?.includes(sentinelaEmail)).toBeFalse();
 
-      const cartaoTextoB = cartao?.textContent ?? '';
-      expect(cartaoTextoB.includes(sentinelaNome)).toBeFalse();
-      expect(cartaoTextoB.includes(sentinelaTel)).toBeFalse();
-      expect(cartaoTextoB.includes(sentinelaEmail)).toBeFalse();
+      const reunioes = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
+        (e) => e.textContent?.includes('Reunião agendada'),
+      );
+      expect(reunioes.length).toBe(1);
+      expect(reunioes[0].textContent?.includes(sentinelaNome)).toBeFalse();
+      expect(reunioes[0].textContent?.includes(sentinelaTel)).toBeFalse();
+      expect(reunioes[0].textContent?.includes(sentinelaEmail)).toBeFalse();
 
       store.pararPolling();
       fixture.destroy();
@@ -2643,21 +2595,20 @@ describe('Chat', () => {
       expect(recibosReload[0].textContent?.includes(sentinelaEmail)).toBeFalse();
 
       const cartaoReload = html(fixtureReload).querySelector('app-cartao-agendamento');
-      expect(cartaoReload).not.toBeNull();
-      const slotsReload = cartaoReload?.querySelectorAll('.slot-botao');
-      expect(slotsReload?.length).toBe(1);
-      expect((slotsReload?.[0] as HTMLButtonElement).disabled).toBeTrue();
-      expect(cartaoReload?.querySelector('.link-recolher')).toBeNull();
+      expect(cartaoReload).toBeNull();
 
-      const cartaoReloadTexto = cartaoReload?.textContent ?? '';
-      expect(cartaoReloadTexto.includes(sentinelaNome)).toBeFalse();
-      expect(cartaoReloadTexto.includes(sentinelaTel)).toBeFalse();
-      expect(cartaoReloadTexto.includes(sentinelaEmail)).toBeFalse();
+      const reunioesReload = Array.from(html(fixtureReload).querySelectorAll('app-evento-sistema')).filter(
+        (e) => e.textContent?.includes('Reunião agendada'),
+      );
+      expect(reunioesReload.length).toBe(1);
+      expect(reunioesReload[0].textContent?.includes(sentinelaNome)).toBeFalse();
+      expect(reunioesReload[0].textContent?.includes(sentinelaTel)).toBeFalse();
+      expect(reunioesReload[0].textContent?.includes(sentinelaEmail)).toBeFalse();
 
       const elementosColunaReload = Array.from(html(fixtureReload).querySelector('.coluna')?.children ?? []);
       const idxReciboReload = elementosColunaReload.indexOf(recibosReload[0]);
-      const idxCartaoReload = elementosColunaReload.indexOf(cartaoReload!);
-      expect(idxReciboReload).toBeLessThan(idxCartaoReload);
+      const idxReuniaoReload = elementosColunaReload.indexOf(reunioesReload[0]);
+      expect(idxReciboReload).toBeLessThan(idxReuniaoReload);
 
       for (let i = 0; i < sessionStorage.length; i++) {
         const k = sessionStorage.key(i) ?? '';
@@ -2760,8 +2711,8 @@ describe('Chat', () => {
         {
           papel: 'agente',
           texto: 'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
-          em: '2026-10-07T08:01:05Z',
-          proximaAcao: 'continuar_conversa',
+          em: '2026-10-07T08:01:00Z',
+          proximaAcao: 'agendar_reuniao',
           corretor: 'Helena Braga',
           agendamento: confData,
         },
@@ -2791,18 +2742,25 @@ describe('Chat', () => {
       );
       const itemCartaoPosConf = apresentacaoPosConf.find((i) => i.tipo === 'marcador-cartao');
       expect(itemReciboPosConf?.id).toBe(`recibo:${idConversa}`);
-      expect(itemCartaoPosConf?.id).toBe(`cartao:${idConversa}`);
+      expect(itemCartaoPosConf).toBeUndefined();
+      expect(apresentacaoPosConf.some((i) => i.tipo === 'marcador-cartao')).toBeFalse();
       const idReciboAntes = itemReciboPosConf?.id;
-      const idCartaoAntes = itemCartaoPosConf?.id;
 
       const domRecibosPosConf = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
         (e) => e.textContent?.includes('Contato enviado'),
       );
+      const domReuniaoPosConf = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
+        (e) => e.textContent?.includes('Reunião agendada'),
+      );
       const domCartoesPosConf = html(fixture).querySelectorAll('app-cartao-agendamento');
       expect(domRecibosPosConf.length).toBe(1);
-      expect(domCartoesPosConf.length).toBe(1);
+      expect(domReuniaoPosConf.length).toBe(1);
+      expect(domReuniaoPosConf[0].textContent).toContain(
+        'O corretor entrará em contato no horário agendado: quarta, 7 de outubro, 9h da manhã.',
+      );
+      expect(domCartoesPosConf.length).toBe(0);
       const refDomReciboAntes = domRecibosPosConf[0];
-      const refDomCartaoAntes = domCartoesPosConf[0];
+      const refDomReuniaoAntes = domReuniaoPosConf[0];
 
       void store.enviar('Tenho uma dúvida sobre a documentação.');
       fixture.detectChanges();
@@ -2843,8 +2801,8 @@ describe('Chat', () => {
       const idxRecAoVivo = elementosAoVivo.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Contato enviado'),
       );
-      const idxCarAoVivo = elementosAoVivo.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-cartao-agendamento',
+      const idxReuniaoAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Reunião agendada'),
       );
       const idxLeadHorarioAoVivo = elementosAoVivo.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('Quarta, 7 de outubro'),
@@ -2861,21 +2819,25 @@ describe('Chat', () => {
 
       expect(idxEncAoVivo).toBeGreaterThan(-1);
       expect(idxRecAoVivo).toBe(idxEncAoVivo + 1);
-      expect(idxCarAoVivo).toBe(idxRecAoVivo + 1);
-      expect(idxLeadHorarioAoVivo).toBeGreaterThan(idxCarAoVivo);
-      expect(idxCombAoVivo).toBeGreaterThan(idxLeadHorarioAoVivo);
-      expect(idxNovaPessoaAoVivo).toBeGreaterThan(idxCombAoVivo);
+      expect(idxReuniaoAoVivo).toBeGreaterThan(idxRecAoVivo);
+      expect(idxLeadHorarioAoVivo).toBe(-1);
+      expect(idxCombAoVivo).toBe(-1);
+      expect(idxNovaPessoaAoVivo).toBeGreaterThan(idxReuniaoAoVivo);
       expect(idxNovaLiaAoVivo).toBeGreaterThan(idxNovaPessoaAoVivo);
 
       const cartoesAoVivo = html(fixture).querySelectorAll('app-cartao-agendamento');
-      expect(cartoesAoVivo.length).toBe(1);
+      expect(cartoesAoVivo.length).toBe(0);
       const recibosAoVivo = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
         (e) => e.textContent?.includes('Contato enviado'),
       );
       expect(recibosAoVivo.length).toBe(1);
+      const reunioesAoVivo = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
+        (e) => e.textContent?.includes('Reunião agendada'),
+      );
+      expect(reunioesAoVivo.length).toBe(1);
 
       expect(recibosAoVivo[0]).toBe(refDomReciboAntes);
-      expect(cartoesAoVivo[0]).toBe(refDomCartaoAntes);
+      expect(reunioesAoVivo[0]).toBe(refDomReuniaoAntes);
 
       const apresentacaoAoVivo = fixture.componentInstance.itensApresentacao();
       const itemReciboAoVivo = apresentacaoAoVivo.find(
@@ -2883,15 +2845,7 @@ describe('Chat', () => {
       );
       const itemCartaoAoVivo = apresentacaoAoVivo.find((i) => i.tipo === 'marcador-cartao');
       expect(itemReciboAoVivo?.id).toBe(idReciboAntes);
-      expect(itemCartaoAoVivo?.id).toBe(idCartaoAntes);
-
-      const slotsAoVivo = cartoesAoVivo[0].querySelectorAll('.slot-botao');
-      expect(slotsAoVivo.length).toBe(1);
-      const btnSlotAoVivo = slotsAoVivo[0] as HTMLButtonElement;
-      expect(btnSlotAoVivo.disabled).toBeTrue();
-      expect(btnSlotAoVivo.getAttribute('aria-pressed')).toBe('true');
-      expect(btnSlotAoVivo.classList.contains('selecionado')).toBeTrue();
-      expect(cartoesAoVivo[0].querySelector('.link-recolher')).toBeNull();
+      expect(itemCartaoAoVivo).toBeUndefined();
 
       expect(elementosAoVivo[idxNovaPessoaAoVivo].textContent).toContain('Tenho uma dúvida sobre a documentação.');
       expect(elementosAoVivo[idxNovaLiaAoVivo].textContent).toContain(
@@ -2943,13 +2897,19 @@ describe('Chat', () => {
       );
       const itemCartaoAposPoll = apresentacaoAposPoll.find((i) => i.tipo === 'marcador-cartao');
       expect(itemReciboAposPoll?.id).toBe(idReciboAntes);
-      expect(itemCartaoAposPoll?.id).toBe(idCartaoAntes);
+      expect(itemCartaoAposPoll).toBeUndefined();
 
       const elementosAposPoll = Array.from(html(fixture).querySelector('.coluna')?.children ?? []);
       const idxLiaCatalogoAoVivo = elementosAposPoll.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('preparando o catálogo'),
       );
       expect(idxLiaCatalogoAoVivo).toBeGreaterThan(idxNovaLiaAoVivo);
+
+      const reunioesAposPoll = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
+        (e) => e.textContent?.includes('Reunião agendada'),
+      );
+      expect(reunioesAposPoll.length).toBe(1);
+      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(0);
 
       const container360 = document.createElement('div');
       container360.style.width = '360px';
@@ -2968,11 +2928,13 @@ describe('Chat', () => {
         expect(rectPalco.width).toBeGreaterThan(0);
         expect(rectPalco.width).toBeLessThanOrEqual(rectContainer.width);
 
-        const cartaoAtual = html(fixture).querySelector('app-cartao-agendamento') as HTMLElement;
-        expect(cartaoAtual).not.toBeNull();
-        const rectCartao = cartaoAtual.getBoundingClientRect();
-        expect(rectCartao.width).toBeGreaterThan(0);
-        expect(rectCartao.right).toBeLessThanOrEqual(rectContainer.right + 1);
+        const eventoReuniaoAtual = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).find(
+          (e) => e.textContent?.includes('Reunião agendada'),
+        ) as HTMLElement;
+        expect(eventoReuniaoAtual).toBeDefined();
+        const rectReuniao = eventoReuniaoAtual.getBoundingClientRect();
+        expect(rectReuniao.width).toBeGreaterThan(0);
+        expect(rectReuniao.right).toBeLessThanOrEqual(rectContainer.right + 1);
 
         const reciboAtual = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).find(
           (e) => e.textContent?.includes('Contato enviado'),
@@ -2981,40 +2943,10 @@ describe('Chat', () => {
         const rectRecibo = reciboAtual.getBoundingClientRect();
         expect(rectRecibo.width).toBeGreaterThan(0);
         expect(rectRecibo.right).toBeLessThanOrEqual(rectContainer.right + 1);
-
-        const btnSlotAtual = cartaoAtual.querySelector('.slot-botao') as HTMLButtonElement;
-        expect(btnSlotAtual).not.toBeNull();
-        const rectSlot = btnSlotAtual.getBoundingClientRect();
-        expect(rectSlot.width).toBeGreaterThan(0);
-        expect(rectSlot.right).toBeLessThanOrEqual(rectContainer.right + 1);
-
-        document.documentElement.setAttribute('data-tema', 'claro');
-        fixture.detectChanges();
-        const bgClaro = estiloDoToken('--marca', 'backgroundColor');
-        const borderClaro = estiloDoToken('--marca', 'borderColor');
-        const textoClaro = estiloDoToken('--marca-contraste', 'color');
-        const estiloSlotClaro = window.getComputedStyle(btnSlotAtual);
-        expect(estiloSlotClaro.backgroundColor).toBe(bgClaro);
-        expect(estiloSlotClaro.borderTopColor).toBe(borderClaro);
-        expect(estiloSlotClaro.color).toBe(textoClaro);
-        expect(estiloSlotClaro.opacity).toBe('1');
-
-        document.documentElement.setAttribute('data-tema', 'escuro');
-        fixture.detectChanges();
-        const bgEscuro = estiloDoToken('--marca', 'backgroundColor');
-        const borderEscuro = estiloDoToken('--marca', 'borderColor');
-        const textoEscuro = estiloDoToken('--marca-contraste', 'color');
-        const estiloSlotEscuro = window.getComputedStyle(btnSlotAtual);
-        expect(estiloSlotEscuro.backgroundColor).toBe(bgEscuro);
-        expect(estiloSlotEscuro.borderTopColor).toBe(borderEscuro);
-        expect(estiloSlotEscuro.color).toBe(textoEscuro);
-        expect(estiloSlotEscuro.opacity).toBe('1');
-        expect(bgEscuro).not.toBe(bgClaro);
       } finally {
         if (document.body.contains(container360)) {
           document.body.removeChild(container360);
         }
-        document.documentElement.removeAttribute('data-tema');
       }
 
       store.pararPolling();
@@ -3062,7 +2994,7 @@ describe('Chat', () => {
       );
       const itemCartaoReload = apresentacaoReload.find((i) => i.tipo === 'marcador-cartao');
       expect(itemReciboReload?.id).toBe(`recibo:${idConversa}`);
-      expect(itemCartaoReload?.id).toBe(`cartao:${idConversa}`);
+      expect(itemCartaoReload).toBeUndefined();
 
       const elementosReload = Array.from(html(fixtureReload).querySelector('.coluna')?.children ?? []);
       const idxEncReload = elementosReload.findIndex(
@@ -3071,8 +3003,8 @@ describe('Chat', () => {
       const idxRecReload = elementosReload.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Contato enviado'),
       );
-      const idxCarReload = elementosReload.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-cartao-agendamento',
+      const idxReuniaoReload = elementosReload.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Reunião agendada'),
       );
       const idxLeadReload = elementosReload.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('Quarta, 7 de outubro'),
@@ -3092,25 +3024,24 @@ describe('Chat', () => {
 
       expect(idxEncReload).toBeGreaterThan(-1);
       expect(idxRecReload).toBe(idxEncReload + 1);
-      expect(idxCarReload).toBe(idxRecReload + 1);
-      expect(idxLeadReload).toBeGreaterThan(idxCarReload);
-      expect(idxCombReload).toBeGreaterThan(idxLeadReload);
-      expect(idxPessoaDuvidaReload).toBeGreaterThan(idxCombReload);
+      expect(idxReuniaoReload).toBeGreaterThan(idxRecReload);
+      expect(idxLeadReload).toBe(-1);
+      expect(idxCombReload).toBe(-1);
+      expect(idxPessoaDuvidaReload).toBeGreaterThan(idxReuniaoReload);
       expect(idxLiaConfReload).toBeGreaterThan(idxPessoaDuvidaReload);
       expect(idxLiaCatalogoReload).toBeGreaterThan(idxLiaConfReload);
 
-      expect(html(fixtureReload).querySelectorAll('app-cartao-agendamento').length).toBe(1);
+      expect(html(fixtureReload).querySelectorAll('app-cartao-agendamento').length).toBe(0);
       expect(
         Array.from(html(fixtureReload).querySelectorAll('app-evento-sistema')).filter(
           (e) => e.textContent?.includes('Contato enviado'),
         ).length,
       ).toBe(1);
-
-      const slotReloadEl = html(fixtureReload).querySelector('.slot-botao') as HTMLButtonElement;
-      expect(slotReloadEl).not.toBeNull();
-      expect(slotReloadEl.disabled).toBeTrue();
-      expect(slotReloadEl.getAttribute('aria-pressed')).toBe('true');
-      expect(slotReloadEl.classList.contains('selecionado')).toBeTrue();
+      expect(
+        Array.from(html(fixtureReload).querySelectorAll('app-evento-sistema')).filter(
+          (e) => e.textContent?.includes('Reunião agendada'),
+        ).length,
+      ).toBe(1);
 
       const divisoresReload = apresentacaoReload.filter((i) => i.tipo === 'divisor');
       expect(divisoresReload.length).toBeGreaterThanOrEqual(1);
@@ -3121,7 +3052,7 @@ describe('Chat', () => {
       flush();
     }));
 
-    it('Item 11: fallback renderiza cartao ao final se Encaminhado estiver ausente e reancora quando historico completo chega', fakeAsync(() => {
+    it('Item 11: fallback nao renderiza cartao confirmado ao final se Encaminhado estiver ausente e ancora aviso Reunião agendada quando historico completo chega', fakeAsync(() => {
       const idConversa = 'c-item11-fallback';
       localStorage.setItem('solar.conversaId', idConversa);
       const fixture = TestBed.createComponent(Chat);
@@ -3159,23 +3090,12 @@ describe('Chat', () => {
       fixture.detectChanges();
 
       expect((fixture.componentInstance as Chat).temMarcadorCartao()).toBeFalse();
-      const cartaoFallback = html(fixture).querySelector('app-cartao-agendamento');
-      expect(cartaoFallback).not.toBeNull();
-      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(1);
-
-      const elementosColunaInicial = Array.from(
-        html(fixture).querySelector('.coluna')?.children ?? [],
-      );
-      const idxCartaoInicial = elementosColunaInicial.indexOf(cartaoFallback!);
-      const idxUltimaMsgInicial = elementosColunaInicial.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('Combinado!'),
-      );
-      expect(idxCartaoInicial).toBeGreaterThan(idxUltimaMsgInicial);
+      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(0);
       expect(
-        elementosColunaInicial.some(
-          (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Encaminhado'),
+        Array.from(html(fixture).querySelectorAll('app-evento-sistema')).some(
+          (e) => e.textContent?.includes('Reunião agendada'),
         ),
-      ).toBeFalse();
+      ).toBeTrue();
 
       tick(3000);
       const reqPolling = httpMock.expectOne(`/conversas/${idConversa}`);
@@ -3201,7 +3121,7 @@ describe('Chat', () => {
         {
           papel: 'lead',
           texto: 'Quarta, 7 de outubro às 9h',
-          em: '2026-10-07T08:00:50Z',
+          em: '2026-10-07T08:01:00Z',
           proximaAcao: null,
           corretor: null,
           agendamento: null,
@@ -3222,7 +3142,9 @@ describe('Chat', () => {
       tick();
       fixture.detectChanges();
 
-      expect((fixture.componentInstance as Chat).temMarcadorCartao()).toBeTrue();
+      expect((fixture.componentInstance as Chat).temMarcadorCartao()).toBeFalse();
+      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(0);
+
       const elementosReancorados = Array.from(
         html(fixture).querySelector('.coluna')?.children ?? [],
       );
@@ -3232,8 +3154,8 @@ describe('Chat', () => {
       const idxRec = elementosReancorados.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Contato enviado'),
       );
-      const idxCar = elementosReancorados.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-cartao-agendamento',
+      const idxReuniao = elementosReancorados.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Reunião agendada'),
       );
       const idxLead = elementosReancorados.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('Quarta, 7 de outubro'),
@@ -3244,10 +3166,9 @@ describe('Chat', () => {
 
       expect(idxEnc).toBeGreaterThan(-1);
       expect(idxRec).toBe(idxEnc + 1);
-      expect(idxCar).toBe(idxRec + 1);
-      expect(idxLead).toBeGreaterThan(idxCar);
-      expect(idxComb).toBeGreaterThan(idxLead);
-      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(1);
+      expect(idxReuniao).toBeGreaterThan(idxRec);
+      expect(idxLead).toBe(-1);
+      expect(idxComb).toBe(-1);
 
       store.pararPolling();
       httpMock.verify();

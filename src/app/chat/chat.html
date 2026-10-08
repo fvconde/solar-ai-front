@@ -63,7 +63,7 @@
           }
           @default {
             <ng-template #templateCartao>
-              @if (store.agendaDisponivel()) {
+              @if (store.agendaDisponivel() && !store.agendamentoEstaConfirmado()) {
                 <app-cartao-agendamento
                   [corretor]="store.corretorAgendamento() ?? ''"
                   [grupos]="store.gruposAgendamento()"

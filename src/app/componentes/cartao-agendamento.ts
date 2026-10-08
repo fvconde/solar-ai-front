@@ -141,7 +141,8 @@ import {
       display: block;
       width: 100%;
       max-width: 560px;
-      margin-inline: auto;
+      margin-inline-start: 0;
+      margin-inline-end: auto;
       box-sizing: border-box;
     }
 

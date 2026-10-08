@@ -184,8 +184,8 @@ describe('ConversaStore ao retomar', () => {
 
     await store.iniciar();
 
-    const eventoConfirmado = store.itens().find((item) => item.tipo === 'evento' && item.rotulo === 'Reunião confirmada');
-    expect(eventoConfirmado).toBeUndefined();
+    const eventoConfirmadaAntigo = store.itens().find((item) => item.tipo === 'evento' && item.rotulo === 'Reunião confirmada');
+    expect(eventoConfirmadaAntigo).toBeUndefined();
     expect(store.agendamentoConfirmado()).toEqual({
       estado: 'confirmado',
       horario: {
@@ -195,7 +195,9 @@ describe('ConversaStore ao retomar', () => {
       },
       alternativas: [],
     });
-    expect(tipos(store.itens())).toEqual(['divisor', 'pessoa', 'lia', 'evento']);
+    expect(tipos(store.itens())).toEqual(['divisor', 'pessoa', 'evento', 'evento']);
+    const eventoReuniao = store.itens().find((item) => item.tipo === 'evento' && item.rotulo === 'Reunião agendada');
+    expect(eventoReuniao).toBeDefined();
     const eventoContato = store.itens().find((item) => item.tipo === 'evento' && item.rotulo === 'Contato enviado');
     expect(eventoContato).toBeDefined();
   });
@@ -1419,13 +1421,15 @@ describe('ConversaStore agenda e historico T4b1', () => {
     expect(store.avisoAgendaVazia()).toBeFalse();
 
     const itens = store.itens();
-    const indiceLead = itens.findIndex((i) => i.tipo === 'pessoa' && i.texto === 'Quinta, 15 de outubro às 14h');
+    const indiceLead = itens.findIndex((i) => i.tipo === 'pessoa' && (i as any).texto === 'Quinta, 15 de outubro às 14h');
     const indiceEvento = itens.findIndex((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada');
-    const indiceLia = itens.findIndex((i) => i.tipo === 'lia' && i.texto === 'Perfeito! Sua reunião está confirmada.');
+    const indiceLia = itens.findIndex((i) => i.tipo === 'lia' && (i as any).texto === 'Perfeito! Sua reunião está confirmada.');
+    const indiceReuniaoAgendada = itens.findIndex((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
 
-    expect(indiceLead).toBeGreaterThanOrEqual(0);
+    expect(indiceLead).toBe(-1);
     expect(indiceEvento).toBe(-1);
-    expect(indiceLia).toBe(indiceLead + 1);
+    expect(indiceLia).toBe(-1);
+    expect(indiceReuniaoAgendada).toBeGreaterThanOrEqual(0);
 
     const confirmacoes = itens.filter((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada');
     expect(confirmacoes.length).toBe(0);
@@ -1572,13 +1576,15 @@ describe('ConversaStore agenda e historico T4b1', () => {
     });
 
     const itens = store.itens();
-    const idxLead = itens.findIndex((i) => i.tipo === 'pessoa' && i.texto === 'Sábado às 9h');
+    const idxLead = itens.findIndex((i) => i.tipo === 'pessoa' && (i as any).texto === 'Sábado às 9h');
     const idxEvento = itens.findIndex((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada');
-    const idxLia = itens.findIndex((i) => i.tipo === 'lia' && i.texto === 'Horário agendado com sucesso!');
+    const idxLia = itens.findIndex((i) => i.tipo === 'lia' && (i as any).texto === 'Horário agendado com sucesso!');
+    const idxEventoReuniao = itens.findIndex((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
 
     expect(idxLead).toBeGreaterThanOrEqual(0);
     expect(idxEvento).toBe(-1);
-    expect(idxLia).toBe(idxLead + 1);
+    expect(idxLia).toBe(-1);
+    expect(idxEventoReuniao).toBe(idxLead + 1);
 
     const totalApos = itens.length;
     await store.verificarNovasMensagens();
@@ -2068,12 +2074,12 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.agendamentoSincronizacaoPendente()).toBeFalse();
 
     const itens = store.itens();
-    expect(itens.map((i) => i.tipo)).toEqual(['divisor', 'pessoa', 'lia']);
+    expect(itens.map((i) => i.tipo)).toEqual(['divisor', 'pessoa', 'evento']);
     const itemPessoa = itens[1];
     expect(itemPessoa.tipo === 'pessoa' && itemPessoa.texto).toBe('Quero agendar reunião');
-    const itemLia = itens[2];
-    expect(itemLia.tipo === 'lia' && itemLia.texto).toBe('Reunião agendada com Helena.');
-    expect(itens.some((i) => i.tipo === 'evento' && i.rotulo === 'Reunião confirmada')).toBeFalse();
+    const itemEvento = itens[2];
+    expect(itemEvento.tipo === 'evento' && itemEvento.rotulo).toBe('Reunião agendada');
+    expect(itens.some((i) => i.tipo === 'lia')).toBeFalse();
   });
 
   it('GET inicial em conversa encerrada elegivel permite reserva por botao sem mensagem LLM extra', async () => {
@@ -3274,9 +3280,13 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     const falasLiaAoVivo = store.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
     expect(falasLiaAoVivo).toEqual([
       'Encaminhando seu caso para especialista',
-      'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
       'Ainda estou encaminhando você para Helena Braga',
     ]);
+    const eventoReuniaoAoVivo = store.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+    expect(eventoReuniaoAoVivo).toBeDefined();
+    expect((eventoReuniaoAoVivo as any).texto).toBe(
+      'O corretor entrará em contato no horário agendado: quinta, 15 de outubro, 14h da tarde.',
+    );
     expect(api.registrarAgendamento).toHaveBeenCalledTimes(1);
 
     const msgsCompletas = [
@@ -3314,9 +3324,13 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     const falasLiaPoll = store.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
     expect(falasLiaPoll).toEqual([
       'Encaminhando seu caso para especialista',
-      'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
       'Ainda estou encaminhando você para Helena Braga',
     ]);
+    const eventoReuniaoPoll = store.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+    expect(eventoReuniaoPoll).toBeDefined();
+    expect((eventoReuniaoPoll as any).texto).toBe(
+      'O corretor entrará em contato no horário agendado: quinta, 15 de outubro, 14h da tarde.',
+    );
     expect(api.registrarAgendamento).toHaveBeenCalledTimes(1);
 
     const storeReload = TestBed.runInInjectionContext(() => new ConversaStore());
@@ -3341,12 +3355,318 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     const falasLiaReload = storeReload.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
     expect(falasLiaReload).toEqual([
       'Encaminhando seu caso para especialista',
-      'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
       'Ainda estou encaminhando você para Helena Braga',
     ]);
+    const eventoReuniaoReload = storeReload.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+    expect(eventoReuniaoReload).toBeDefined();
+    expect((eventoReuniaoReload as any).texto).toBe(
+      'O corretor entrará em contato no horário agendado: quinta, 15 de outubro, 14h da tarde.',
+    );
     const falasPessoaReload = storeReload.itens().filter((i) => i.tipo === 'pessoa').map((i) => (i as any).texto);
     expect(falasPessoaReload).toEqual(['Quero agendar', 'Mais uma dúvida']);
     expect(api.registrarAgendamento).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('ConversaStore S-48 Tarefa 2: aviso Reunião agendada e regras de ocultação', () => {
+  let store: ConversaStore;
+  let api: jasmine.SpyObj<ConversaApi>;
+
+  const isoInicioManha = '2026-10-09T09:00:00-03:00';
+  const isoFimManha = '2026-10-09T10:00:00-03:00';
+  const slotManha: SlotOferecido = { id: 201, inicio: isoInicioManha, fim: isoFimManha };
+  const confManha: AgendamentoDaConversa = {
+    estado: 'confirmado',
+    horario: slotManha,
+    alternativas: [],
+  };
+
+  const isoInicioTardeMin = '2026-10-07T14:30:00-03:00';
+  const isoFimTardeMin = '2026-10-07T15:30:00-03:00';
+  const slotTardeMin: SlotOferecido = { id: 202, inicio: isoInicioTardeMin, fim: isoFimTardeMin };
+  const confTardeMin: AgendamentoDaConversa = {
+    estado: 'confirmado',
+    horario: slotTardeMin,
+    alternativas: [],
+  };
+
+  const isoInicioNoite = '2026-10-08T19:00:00-03:00';
+  const isoFimNoite = '2026-10-08T20:00:00-03:00';
+  const slotNoite: SlotOferecido = { id: 203, inicio: isoInicioNoite, fim: isoFimNoite };
+  const confNoite: AgendamentoDaConversa = {
+    estado: 'confirmado',
+    horario: slotNoite,
+    alternativas: [],
+  };
+
+  const isoInicioNoiteMin = '2026-10-08T20:15:00-03:00';
+  const isoFimNoiteMin = '2026-10-08T21:15:00-03:00';
+  const slotNoiteMin: SlotOferecido = { id: 204, inicio: isoInicioNoiteMin, fim: isoFimNoiteMin };
+  const confNoiteMin: AgendamentoDaConversa = {
+    estado: 'confirmado',
+    horario: slotNoiteMin,
+    alternativas: [],
+  };
+
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    localStorage.setItem('solar.conversaId', 'c-t2');
+
+    api = jasmine.createSpyObj<ConversaApi>('ConversaApi', [
+      'obterConversa',
+      'enviarMensagem',
+      'registrarContato',
+      'registrarConsentimento',
+      'apagarConversa',
+      'registrarAgendamento',
+    ]);
+
+    TestBed.configureTestingModule({
+      providers: [
+        provideHttpClient(),
+        provideHttpClientTesting(),
+        { provide: ConversaApi, useValue: api },
+      ],
+    });
+
+    store = TestBed.inject(ConversaStore);
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+
+  it('par completo com mesmo em, papel lead e texto exato oculta lead e fala da Lia gerando aviso unico e sem divisor vazio', async () => {
+    const timestamp = '2026-10-08T15:00:00.000Z';
+    const msgs: MensagemDaConversa[] = [
+      {
+        papel: 'lead',
+        texto: 'Sexta, 9 de outubro às 9h',
+        em: timestamp,
+        proximaAcao: null,
+        corretor: null,
+        agendamento: null,
+      },
+      {
+        papel: 'agente',
+        texto: 'Combinado! O corretor assume no horário.',
+        em: timestamp,
+        proximaAcao: 'continuar_conversa',
+        corretor: 'Helena Braga',
+        agendamento: confManha,
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    const itens = store.itens();
+    expect(itens.some((i) => i.tipo === 'pessoa')).toBeFalse();
+    expect(itens.some((i) => i.tipo === 'lia')).toBeFalse();
+
+    const eventos = itens.filter((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+    expect(eventos.length).toBe(1);
+    expect((eventos[0] as any).texto).toBe(
+      'O corretor entrará em contato no horário agendado: sexta, 9 de outubro, 9h da manhã.',
+    );
+
+    const divisores = itens.filter((i) => i.tipo === 'divisor');
+    expect(divisores.length).toBe(1);
+    expect(itens.indexOf(divisores[0])).toBe(0);
+    expect(itens.indexOf(eventos[0])).toBe(1);
+  });
+
+  it('fallback: preserva fala do lead quando o em for distinto', async () => {
+    const msgs: MensagemDaConversa[] = [
+      {
+        papel: 'lead',
+        texto: 'Sexta, 9 de outubro às 9h',
+        em: '2026-10-08T15:00:00.000Z',
+        proximaAcao: null,
+        corretor: null,
+        agendamento: null,
+      },
+      {
+        papel: 'agente',
+        texto: 'Combinado!',
+        em: '2026-10-08T15:00:02.000Z',
+        proximaAcao: 'continuar_conversa',
+        corretor: 'Helena Braga',
+        agendamento: confManha,
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    const itens = store.itens();
+    const itemPessoa = itens.find((i) => i.tipo === 'pessoa');
+    expect(itemPessoa).toBeDefined();
+    expect((itemPessoa as any).texto).toBe('Sexta, 9 de outubro às 9h');
+
+    const eventos = itens.filter((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+    expect(eventos.length).toBe(1);
+    expect(itens.some((i) => i.tipo === 'lia')).toBeFalse();
+  });
+
+  it('fallback: preserva fala do lead quando o texto for diferente do formato do slot', async () => {
+    const timestamp = '2026-10-08T15:00:00.000Z';
+    const msgs: MensagemDaConversa[] = [
+      {
+        papel: 'lead',
+        texto: 'Prefiro na sexta de manha',
+        em: timestamp,
+        proximaAcao: null,
+        corretor: null,
+        agendamento: null,
+      },
+      {
+        papel: 'agente',
+        texto: 'Combinado!',
+        em: timestamp,
+        proximaAcao: 'continuar_conversa',
+        corretor: 'Helena Braga',
+        agendamento: confManha,
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    const itens = store.itens();
+    const itemPessoa = itens.find((i) => i.tipo === 'pessoa');
+    expect(itemPessoa).toBeDefined();
+    expect((itemPessoa as any).texto).toBe('Prefiro na sexta de manha');
+
+    const eventos = itens.filter((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+    expect(eventos.length).toBe(1);
+    expect(itens.some((i) => i.tipo === 'lia')).toBeFalse();
+  });
+
+  it('fallback: preserva quando lead estiver ausente antes da confirmacao', async () => {
+    const msgs: MensagemDaConversa[] = [
+      {
+        papel: 'agente',
+        texto: 'Agendamento restaurado.',
+        em: '2026-10-08T15:00:00.000Z',
+        proximaAcao: 'continuar_conversa',
+        corretor: 'Helena Braga',
+        agendamento: confManha,
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    const itens = store.itens();
+    expect(itens.some((i) => i.tipo === 'pessoa')).toBeFalse();
+    expect(itens.some((i) => i.tipo === 'lia')).toBeFalse();
+    const eventos = itens.filter((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+    expect(eventos.length).toBe(1);
+  });
+
+  it('fallback: confirmacao sem slot valido preserva fala da Lia sem inventar data ou evento', async () => {
+    const semSlot: AgendamentoDaConversa = {
+      estado: 'confirmado',
+      horario: null as any,
+      alternativas: [],
+    };
+    const msgs: MensagemDaConversa[] = [
+      {
+        papel: 'agente',
+        texto: 'Confirmamos sua intencao.',
+        em: '2026-10-08T15:00:00.000Z',
+        proximaAcao: 'continuar_conversa',
+        corretor: 'Helena Braga',
+        agendamento: semSlot,
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    const itens = store.itens();
+    expect(itens.some((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada')).toBeFalse();
+    const lia = itens.find((i) => i.tipo === 'lia');
+    expect(lia).toBeDefined();
+    expect((lia as any).texto).toBe('Confirmamos sua intencao.');
+  });
+
+  it('preserva mensagens alheias que contenham Combinado ou texto de horario sem confirmacao associada', async () => {
+    const msgs: MensagemDaConversa[] = [
+      {
+        papel: 'lead',
+        texto: 'Combinado! Sexta, 9 de outubro às 9h é um ótimo horário.',
+        em: '2026-10-08T10:00:00.000Z',
+        proximaAcao: null,
+        corretor: null,
+        agendamento: null,
+      },
+      {
+        papel: 'agente',
+        texto: 'Combinado! Vou verificar as opções.',
+        em: '2026-10-08T10:00:05.000Z',
+        proximaAcao: 'continuar_conversa',
+        corretor: null,
+        agendamento: null,
+      },
+    ];
+
+    api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+    await store.iniciar();
+
+    const itens = store.itens();
+    const pessoa = itens.find((i) => i.tipo === 'pessoa');
+    expect(pessoa).toBeDefined();
+    expect((pessoa as any).texto).toBe('Combinado! Sexta, 9 de outubro às 9h é um ótimo horário.');
+
+    const lia = itens.find((i) => i.tipo === 'lia');
+    expect(lia).toBeDefined();
+    expect((lia as any).texto).toBe('Combinado! Vou verificar as opções.');
+
+    expect(itens.some((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada')).toBeFalse();
+  });
+
+  it('formata periodos manha, tarde, noite e minutos em slots distintos', async () => {
+    const casos = [
+      {
+        conf: confManha,
+        esperado: 'O corretor entrará em contato no horário agendado: sexta, 9 de outubro, 9h da manhã.',
+      },
+      {
+        conf: confTardeMin,
+        esperado: 'O corretor entrará em contato no horário agendado: quarta, 7 de outubro, 14h30 da tarde.',
+      },
+      {
+        conf: confNoite,
+        esperado: 'O corretor entrará em contato no horário agendado: quinta, 8 de outubro, 19h da noite.',
+      },
+      {
+        conf: confNoiteMin,
+        esperado: 'O corretor entrará em contato no horário agendado: quinta, 8 de outubro, 20h15 da noite.',
+      },
+    ];
+
+    for (const { conf, esperado } of casos) {
+      const msgs: MensagemDaConversa[] = [
+        {
+          papel: 'agente',
+          texto: 'Confirmado.',
+          em: '2026-10-08T12:00:00.000Z',
+          proximaAcao: 'continuar_conversa',
+          corretor: 'Helena Braga',
+          agendamento: conf,
+        },
+      ];
+      api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+      await store.iniciar();
+
+      const evento = store.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Reunião agendada');
+      expect(evento).toBeDefined();
+      expect((evento as any).texto).toBe(esperado);
+    }
   });
 });
 

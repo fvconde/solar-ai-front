@@ -16,8 +16,11 @@ import {
   agruparSlotsPorDia,
   dataDoAgendamento,
   diaDe,
+  diaExtensoDoAgendamento,
   horaAgora,
   horaDe,
+  horaDoAgendamento,
+  periodoDoAgendamento,
   rotuloDeDia,
 } from './horario';
 import { AcaoEvento, EstadoConversa, ItemTrilha } from './trilha';
@@ -805,19 +808,23 @@ export class ConversaStore {
 
     const eventoAgendamento = this.eventoDoAgendamento(resposta.agendamento);
     const ehConfirmacao =
-      resposta.agendamento?.estado === 'confirmado' && !!resposta.agendamento.horario;
+      resposta.agendamento?.estado === 'confirmado' &&
+      !!resposta.agendamento.horario &&
+      !!resposta.agendamento.horario.inicio;
 
-    this.acrescentar({
-      tipo: 'lia',
-      id: this.proximoId(),
-      texto: resposta.resposta,
-      hora: horaAgora(),
-      imoveis: resposta.imoveisSugeridos ?? [],
-      intencao: resposta.intencao,
-      revelar: true,
-    });
+    if (ehConfirmacao && eventoAgendamento) {
+      this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...eventoAgendamento });
+    } else {
+      this.acrescentar({
+        tipo: 'lia',
+        id: this.proximoId(),
+        texto: resposta.resposta,
+        hora: horaAgora(),
+        imoveis: resposta.imoveisSugeridos ?? [],
+        intencao: resposta.intencao,
+        revelar: true,
+      });
 
-    if (!ehConfirmacao) {
       const evento = eventoAgendamento ?? this.desfecho(resposta.proximaAcao, resposta.corretor);
       if (evento) {
         const jaExisteEncaminhado =
@@ -949,19 +956,23 @@ export class ConversaStore {
             if (msg.papel === 'agente') {
               const eventoAgendamento = this.eventoDoAgendamento(msg.agendamento);
               const ehConfirmacao =
-                msg.agendamento?.estado === 'confirmado' && !!msg.agendamento.horario;
+                msg.agendamento?.estado === 'confirmado' &&
+                !!msg.agendamento.horario &&
+                !!msg.agendamento.horario.inicio;
 
-              this.acrescentar({
-                tipo: 'lia',
-                id: this.proximoId(),
-                texto: msg.texto,
-                hora: horaDe(msg.em),
-                imoveis: msg.imoveisSugeridos ?? [],
-                intencao: conversa.perfilLead?.intencao ?? null,
-                revelar: true,
-              });
+              if (ehConfirmacao && eventoAgendamento) {
+                this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...eventoAgendamento });
+              } else {
+                this.acrescentar({
+                  tipo: 'lia',
+                  id: this.proximoId(),
+                  texto: msg.texto,
+                  hora: horaDe(msg.em),
+                  imoveis: msg.imoveisSugeridos ?? [],
+                  intencao: conversa.perfilLead?.intencao ?? null,
+                  revelar: true,
+                });
 
-              if (!ehConfirmacao) {
                 const evento =
                   eventoAgendamento ??
                   (msg.proximaAcao && this.desfecho(msg.proximaAcao, msg.corretor));
@@ -1032,8 +1043,27 @@ export class ConversaStore {
   private eventoDoAgendamento(
     agendamento: AgendamentoDaConversa | null,
   ): Omit<Extract<ItemTrilha, { tipo: 'evento' }>, 'tipo' | 'id'> | null {
-    if (!agendamento || agendamento.estado === 'confirmado') {
+    if (!agendamento) {
       return null;
+    }
+
+    if (agendamento.estado === 'confirmado') {
+      if (!agendamento.horario || !agendamento.horario.inicio) {
+        return null;
+      }
+      const inicio = agendamento.horario.inicio;
+      const diaExtenso = diaExtensoDoAgendamento(inicio);
+      const hora = horaDoAgendamento(inicio);
+      const periodo = periodoDoAgendamento(inicio);
+      if (!diaExtenso || !hora || !periodo) {
+        return null;
+      }
+      return {
+        variante: 'sucesso',
+        rotulo: 'Reunião agendada',
+        texto: `O corretor entrará em contato no horário agendado: ${diaExtenso.toLowerCase()}, ${hora} da ${periodo}.`,
+        acao: null,
+      };
     }
 
     const alternativas = agendamento.alternativas.map((slot) => this.rotuloDoHorario(slot));
@@ -1101,8 +1131,36 @@ export class ConversaStore {
     let dia = '';
     let jaEncaminhado = false;
 
+    const indicesOcultarLead = new Set<number>();
+    for (let i = 0; i < mensagens.length; i++) {
+      const msg = mensagens[i];
+      if (
+        msg.papel === 'agente' &&
+        msg.agendamento?.estado === 'confirmado' &&
+        msg.agendamento.horario?.inicio
+      ) {
+        if (i > 0) {
+          const anterior = mensagens[i - 1];
+          const inicio = msg.agendamento.horario.inicio;
+          const diaExtenso = diaExtensoDoAgendamento(inicio);
+          const hora = horaDoAgendamento(inicio);
+          const textoEsperado = `${diaExtenso} às ${hora}`;
+          if (
+            anterior.papel === 'lead' &&
+            anterior.em === msg.em &&
+            anterior.texto === textoEsperado
+          ) {
+            indicesOcultarLead.add(i - 1);
+          }
+        }
+      }
+    }
+
     for (const [indice, mensagem] of mensagens.entries()) {
       if (indice === 0 && mensagem.papel === 'lead' && mensagem.texto === ABERTURA) {
+        continue;
+      }
+      if (indicesOcultarLead.has(indice)) {
         continue;
       }
 
@@ -1128,19 +1186,27 @@ export class ConversaStore {
 
       const eventoAgendamento = this.eventoDoAgendamento(mensagem.agendamento);
       const ehConfirmacao =
-        mensagem.agendamento?.estado === 'confirmado' && !!mensagem.agendamento.horario;
+        mensagem.agendamento?.estado === 'confirmado' &&
+        !!mensagem.agendamento.horario &&
+        !!mensagem.agendamento.horario.inicio;
 
-      itens.push({
-        tipo: 'lia',
-        id: this.proximoId(),
-        texto: mensagem.texto,
-        hora: horaDe(mensagem.em),
-        imoveis: mensagem.imoveisSugeridos ?? [],
-        intencao,
-        revelar: false,
-      });
+      if (ehConfirmacao && eventoAgendamento) {
+        itens.push({
+          tipo: 'evento',
+          id: this.proximoId(),
+          ...eventoAgendamento,
+        });
+      } else {
+        itens.push({
+          tipo: 'lia',
+          id: this.proximoId(),
+          texto: mensagem.texto,
+          hora: horaDe(mensagem.em),
+          imoveis: mensagem.imoveisSugeridos ?? [],
+          intencao,
+          revelar: false,
+        });
 
-      if (!ehConfirmacao) {
         const evento =
           eventoAgendamento ??
           (mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao, mensagem.corretor));

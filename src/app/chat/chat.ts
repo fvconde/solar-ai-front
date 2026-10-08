@@ -143,11 +143,6 @@ export class Chat implements OnInit {
       });
     }
 
-    resultado.push({
-      tipo: 'marcador-cartao',
-      id: `cartao:${idConversa}`,
-    });
-
     for (let i = novoIdxEncaminhado + 1; i < semRecibo.length; i++) {
       resultado.push(semRecibo[i]);
     }
