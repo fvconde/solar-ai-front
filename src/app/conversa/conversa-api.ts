@@ -2,6 +2,8 @@ import { HttpClient } from '@angular/common/http';
 import { Injectable, inject } from '@angular/core';
 import { firstValueFrom } from 'rxjs';
 import {
+  AgendamentoDaConversa,
+  AgendamentoRequest,
   ContatoRequest,
   ContatoResponse,
   ConsentimentoRequest,
@@ -20,6 +22,13 @@ export class ConversaApi {
     const corpo: NovaMensagemRequest = { texto };
     return firstValueFrom(
       this.http.post<MensagemResponse>(`/conversas/${conversaId}/mensagens`, corpo),
+    );
+  }
+
+  registrarAgendamento(conversaId: string, slotId: number): Promise<AgendamentoDaConversa> {
+    const corpo: AgendamentoRequest = { slotId };
+    return firstValueFrom(
+      this.http.post<AgendamentoDaConversa>(`/conversas/${conversaId}/agendamentos`, corpo),
     );
   }
 

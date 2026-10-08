@@ -107,6 +107,58 @@
   }
 }
 
+.status-confirmacao {
+  align-self: center;
+  max-width: 560px;
+  width: 100%;
+  text-align: center;
+  font-size: 13px;
+  color: var(--texto-secundario);
+}
+
+.aviso-erro-agendamento {
+  align-self: center;
+  max-width: 560px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px 14px;
+  background: var(--inativo-fundo);
+  color: var(--atencao);
+  border-radius: var(--raio-card);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.texto-erro-agendamento {
+  font-size: 13.5px;
+  line-height: 1.45;
+  color: var(--atencao);
+}
+
+.botao-sincronizar-agendamento {
+  align-self: flex-start;
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: var(--raio-acao-evento);
+  border: 1px solid var(--borda-componente);
+  background: var(--superficie-elevada);
+  color: var(--texto-primario);
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+
+  &:focus-visible {
+    outline: 2px solid var(--foco);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    cursor: not-allowed;
+    opacity: 0.55;
+  }
+}
+
 @media (max-width: 860px) {
   .coluna-historico {
     display: none;

@@ -62,7 +62,24 @@
             </div>
           }
           @default {
-            @for (item of store.itens(); track item.id) {
+            <ng-template #templateCartao>
+              @if (store.agendaDisponivel()) {
+                <app-cartao-agendamento
+                  [corretor]="store.corretorAgendamento() ?? ''"
+                  [grupos]="store.gruposAgendamento()"
+                  [recolhido]="store.agendamentoRecolhido()"
+                  [podeSelecionar]="store.agendamentoPodeSelecionar()"
+                  [enviando]="store.agendamentoEnviando()"
+                  [sincronizacaoPendente]="store.agendamentoSincronizacaoPendente()"
+                  [horarioPerdido]="store.horarioPerdido()"
+                  [confirmado]="store.agendamentoEstaConfirmado()"
+                  (selecionar)="registrarAgendamento($event)"
+                  (recolher)="recolherAgendamento()"
+                  (reabrir)="reabrirAgendamento()"
+                />
+              }
+            </ng-template>
+            @for (item of itensApresentacao(); track item.id) {
               @switch (item.tipo) {
                 @case ('divisor') {
                   <app-divisor-data [rotulo]="item.rotulo" />
@@ -95,7 +112,31 @@
                     (enviar)="registrarContato($event)"
                   />
                 }
+                @case ('marcador-cartao') {
+                  <ng-container *ngTemplateOutlet="templateCartao" />
+                }
               }
+            }
+            @if (store.agendamentoEnviando() && store.agendamentoConfirmado() && !store.agendamentoErro()) {
+              <p class="status-confirmacao" role="status">Carregando a confirmação...</p>
+            }
+            @if (!temMarcadorCartao()) {
+              <ng-container *ngTemplateOutlet="templateCartao" />
+            }
+            @if (store.agendamentoErro(); as erro) {
+              <div class="aviso-erro-agendamento" role="alert">
+                <p class="texto-erro-agendamento">{{ erro }}</p>
+                @if (store.agendamentoSincronizacaoPendente()) {
+                  <button
+                    type="button"
+                    class="botao-sincronizar-agendamento"
+                    [disabled]="store.agendamentoEnviando()"
+                    (click)="sincronizarAgendamento()"
+                  >
+                    {{ store.agendamentoConfirmado() ? 'Atualizar confirmação' : 'Atualizar horários' }}
+                  </button>
+                }
+              </div>
             }
             @if (mostrarConvite()) {
               <aside class="convite" aria-label="Guardar conversa">
