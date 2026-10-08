@@ -2042,23 +2042,16 @@ describe('Chat', () => {
       primeiroSlot.click();
       fixture.detectChanges();
 
-      const reqReserva = httpMock.expectOne(`/conversas/${idConversa}/agendamentos`);
-      expect(reqReserva.request.method).toBe('POST');
-      reqReserva.flush({
-        agendamentoId: 501,
-        conversaId: idConversa,
-        horario: slotA1,
-        corretor: 'Helena Braga',
-        status: 'confirmado',
-      });
-      tick();
-      fixture.detectChanges();
-
       const confData: AgendamentoDaConversa = {
         estado: 'confirmado',
         horario: slotA1,
         alternativas: [],
       };
+      const reqReserva = httpMock.expectOne(`/conversas/${idConversa}/agendamentos`);
+      expect(reqReserva.request.method).toBe('POST');
+      reqReserva.flush(confData);
+      tick();
+      fixture.detectChanges();
       const msgsAposReserva: MensagemDaConversa[] = [
         {
           papel: 'lead',

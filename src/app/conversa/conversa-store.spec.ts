@@ -3209,8 +3209,44 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     let encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(encs.length).toBe(1);
 
-    store.agendamentoConfirmado.set(confirmacaoSlot1);
-    store.ofertaAgendamento.set([]);
+    api.registrarContato.and.resolveTo({ leadId: 'lead-1', oferta: [slot1] });
+    await store.enviarContato({ nome: 'Ana', telefone: '11999990000', email: 'ana@teste.com' });
+
+    let recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+    expect(store.ofertaAgendamento()).toEqual([slot1]);
+    expect(store.agendamentoPodeSelecionar()).toBeTrue();
+
+    api.registrarAgendamento.and.resolveTo(confirmacaoSlot1);
+    const msgsAposReserva: MensagemDaConversa[] = [
+      fala('lead', 'Quero agendar'),
+      fala('agente', 'Encaminhando seu caso para especialista', 'agendar_reuniao', 0, 'Helena Braga'),
+      fala(
+        'agente',
+        'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
+        'continuar_conversa',
+        0,
+        'Helena Braga',
+        confirmacaoSlot1,
+      ),
+    ];
+    api.obterConversa.and.resolveTo({
+      ...conversa(msgsAposReserva, false, PERFIL_VAZIO, []),
+      conversaId: 'c-enc',
+    });
+    await store.registrarAgendamento(101);
+
+    expect(api.registrarAgendamento).toHaveBeenCalledWith('c-enc', 101);
+    expect(api.registrarAgendamento).toHaveBeenCalledTimes(1);
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.agendamentoConfirmado()).toEqual(confirmacaoSlot1);
+    expect(store.ofertaAgendamento()).toEqual([]);
+    expect(store.agendamentoPodeSelecionar()).toBeFalse();
+
+    encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
+    expect(encs.length).toBe(1);
+    recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
 
     api.enviarMensagem.and.resolveTo({
       conversaId: 'c-enc',
@@ -3221,56 +3257,96 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
       imoveisSugeridos: [],
       corretor: 'Helena Braga',
       contatoPendente: false,
-      agendamento: confirmacaoSlot1,
+      agendamento: null,
     });
     await store.enviar('Mais uma dúvida');
 
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.agendamentoConfirmado()).toEqual(confirmacaoSlot1);
+    expect(store.ofertaAgendamento()).toEqual([]);
+    expect(store.agendamentoPodeSelecionar()).toBeFalse();
+
     encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(encs.length).toBe(1);
+    recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
 
     const falasLiaAoVivo = store.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
     expect(falasLiaAoVivo).toEqual([
       'Encaminhando seu caso para especialista',
+      'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
       'Ainda estou encaminhando você para Helena Braga',
     ]);
-    expect(api.registrarAgendamento).not.toHaveBeenCalled();
+    expect(api.registrarAgendamento).toHaveBeenCalledTimes(1);
 
-    const msgs = [
+    const msgsCompletas = [
       fala('lead', 'Quero agendar'),
       fala('agente', 'Encaminhando seu caso para especialista', 'agendar_reuniao', 0, 'Helena Braga'),
+      fala(
+        'agente',
+        'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
+        'continuar_conversa',
+        0,
+        'Helena Braga',
+        confirmacaoSlot1,
+      ),
       fala('lead', 'Mais uma dúvida'),
-      fala('agente', 'Ainda estou encaminhando você para Helena Braga', 'agendar_reuniao', 0, 'Helena Braga', confirmacaoSlot1),
+      fala('agente', 'Ainda estou encaminhando você para Helena Braga', 'agendar_reuniao', 0, 'Helena Braga', null),
     ];
     api.obterConversa.and.resolveTo({
-      ...conversa(msgs, false, PERFIL_VAZIO, []),
+      ...conversa(msgsCompletas, false, PERFIL_VAZIO, []),
       conversaId: 'c-enc',
     });
+    const contagemGetAntesPoll = api.obterConversa.calls.count();
     await store.verificarNovasMensagens();
+    expect(api.obterConversa.calls.count()).toBe(contagemGetAntesPoll + 1);
+
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.agendamentoConfirmado()).toEqual(confirmacaoSlot1);
+    expect(store.ofertaAgendamento()).toEqual([]);
+    expect(store.agendamentoPodeSelecionar()).toBeFalse();
 
     encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(encs.length).toBe(1);
+    recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+
     const falasLiaPoll = store.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
     expect(falasLiaPoll).toEqual([
       'Encaminhando seu caso para especialista',
+      'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
       'Ainda estou encaminhando você para Helena Braga',
     ]);
+    expect(api.registrarAgendamento).toHaveBeenCalledTimes(1);
 
     const storeReload = TestBed.runInInjectionContext(() => new ConversaStore());
     api.obterConversa.and.resolveTo({
-      ...conversa(msgs, false, PERFIL_VAZIO, []),
+      ...conversa(msgsCompletas, false, PERFIL_VAZIO, []),
       conversaId: 'c-enc',
     });
+    const contagemGetAntesReload = api.obterConversa.calls.count();
     await storeReload.abrirConversa('c-enc');
+    expect(api.obterConversa.calls.count()).toBe(contagemGetAntesReload + 1);
+
+    expect(storeReload.agendamentoEstaConfirmado()).toBeTrue();
+    expect(storeReload.agendamentoConfirmado()).toEqual(confirmacaoSlot1);
+    expect(storeReload.ofertaAgendamento()).toEqual([]);
+    expect(storeReload.agendamentoPodeSelecionar()).toBeFalse();
 
     encs = storeReload.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(encs.length).toBe(1);
+    recibos = storeReload.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
+    expect(recibos.length).toBe(1);
+
     const falasLiaReload = storeReload.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
     expect(falasLiaReload).toEqual([
       'Encaminhando seu caso para especialista',
+      'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
       'Ainda estou encaminhando você para Helena Braga',
     ]);
     const falasPessoaReload = storeReload.itens().filter((i) => i.tipo === 'pessoa').map((i) => (i as any).texto);
     expect(falasPessoaReload).toEqual(['Quero agendar', 'Mais uma dúvida']);
+    expect(api.registrarAgendamento).toHaveBeenCalledTimes(1);
   });
 });
 
