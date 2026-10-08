@@ -1898,6 +1898,75 @@ describe('Chat', () => {
         };
       }
 
+      async function montarPalcoAsync(
+        id: string,
+        opcoes: {
+          confirmado?: boolean;
+          oferta?: SlotOferecido[];
+          contatoPendente?: boolean;
+          altura?: string;
+        } = {},
+      ) {
+        const mensagens = historicoLongo(opcoes.confirmado ? confItem12 : null);
+        let oferta = opcoes.oferta ?? [];
+        const contatoPendente = opcoes.contatoPendente ?? false;
+        localStorage.setItem('solar.conversaId', id);
+        const fixture = TestBed.createComponent(Chat);
+        const store = TestBed.inject(ConversaStore);
+        const hostEl = html(fixture);
+        hostEl.style.height = opcoes.altura ?? '350px';
+        hostEl.style.display = 'flex';
+        document.body.appendChild(hostEl);
+        fixture.autoDetectChanges(true);
+
+        const corpo = () =>
+          conversaComOferta(
+            id,
+            oferta.map((s) => ({ ...s })),
+            'Helena Braga',
+            contatoPendente,
+            null,
+            structuredClone(mensagens),
+          );
+
+        httpMock.expectOne(`/conversas/${id}`).flush(corpo());
+        await new Promise((resolve) => setTimeout(resolve, 30));
+        fixture.detectChanges();
+
+        const palco = hostEl.querySelector('.palco') as HTMLElement;
+        expect(palco).not.toBeNull();
+        expect(palco.scrollHeight).toBeGreaterThan(palco.clientHeight + 200);
+
+        let destruido = false;
+        const limpar = () => {
+          if (destruido) {
+            return;
+          }
+          destruido = true;
+          store.pararPolling();
+          hostEl.remove();
+          fixture.destroy();
+        };
+
+        return {
+          fixture,
+          store,
+          hostEl,
+          palco,
+          mensagens,
+          corpo,
+          definirOferta: (nova: SlotOferecido[]) => {
+            oferta = nova;
+          },
+          limpar,
+          encerrar: () => {
+            store.pararPolling();
+            httpMock.verify();
+            limpar();
+          },
+        };
+      }
+
       it('polling GET real com conteudo igual e referencias novas nunca escreve scroll, no topo nem perto do fim', fakeAsync(() => {
         const p = montarPalco('c-i12-igual', { confirmado: true });
         try {
@@ -2271,8 +2340,9 @@ describe('Chat', () => {
         }
       }));
 
-      it('resposta longa e cartoes de imoveis levam o espaco extra a zero mantendo scrollTop e ResizeObserver recalcula crescimento fisico', fakeAsync(() => {
-        const p = montarPalco('c-s48-resp-longa', { confirmado: true, altura: '600px' });
+      it('resposta longa e cartoes de imoveis levam o espaco extra a zero mantendo scrollTop e ResizeObserver recalcula crescimento fisico', async () => {
+        const spyDisconnect = spyOn(ResizeObserver.prototype, 'disconnect').and.callThrough();
+        const p = await montarPalcoAsync('c-s48-resp-longa', { confirmado: true, altura: '600px' });
         try {
           p.palco.scrollTop = 0;
           const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
@@ -2295,12 +2365,18 @@ describe('Chat', () => {
           cardExtra.style.height = '100px';
           coluna.appendChild(cardExtra);
 
-          (p.fixture.componentInstance as any).recalcularExtra();
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                setTimeout(resolve, 50);
+              });
+            });
+          });
           p.fixture.detectChanges();
 
           const paddingAposCrescimentoFisico = parseFloat(coluna.style.paddingBottom) || 0;
           expect(paddingAposCrescimentoFisico).toBeLessThan(paddingAntesCrescimento);
-          cardExtra.remove();
+          expect(Math.abs(p.palco.scrollTop - scrollEsperado)).toBeLessThanOrEqual(1);
 
           req.flush({
             conversaId: 'c-s48-resp-longa',
@@ -2325,7 +2401,13 @@ describe('Chat', () => {
             contatoPendente: false,
             agendamento: null,
           });
-          tick();
+          await new Promise<void>((resolve) => {
+            requestAnimationFrame(() => {
+              requestAnimationFrame(() => {
+                setTimeout(resolve, 50);
+              });
+            });
+          });
           p.fixture.detectChanges();
 
           expect(coluna.style.paddingBottom).toBe('');
@@ -2335,10 +2417,11 @@ describe('Chat', () => {
           expect(Math.abs(topoAinda)).toBeLessThanOrEqual(1);
 
           p.encerrar();
+          expect(spyDisconnect).toHaveBeenCalled();
         } finally {
           p.limpar();
         }
-      }));
+      });
 
       it('rolagem manual por wheel abandona o espaco extra e resposta posterior nao puxa o leitor', fakeAsync(() => {
         const p = montarPalco('c-s48-wheel', { confirmado: true, altura: '600px' });
@@ -2424,6 +2507,197 @@ describe('Chat', () => {
           p.fixture.detectChanges();
 
           expect(p.palco.scrollTop).toBe(posicaoFimReal);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('gesto direto na scrollbar ou tecla End com padding positivo remove extra sem mover a outro ponto primeiro e preserva cliques em conteudo', fakeAsync(() => {
+        const p = montarPalco('c-s48-scrollbar-direto', { confirmado: true, altura: '600px' });
+        try {
+          p.palco.scrollTop = 0;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Pergunta resposta curta com padding';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-s48-scrollbar-direto/mensagens');
+          req.flush({
+            conversaId: 'c-s48-scrollbar-direto',
+            resposta: 'Resposta curta da Lia.',
+            intencao: 'indefinida',
+            proximaAcao: 'continuar_conversa',
+            perfilLead: null,
+            imoveisSugeridos: [],
+            corretor: 'Helena Braga',
+            contatoPendente: false,
+            agendamento: null,
+          });
+          tick();
+          p.fixture.detectChanges();
+
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          const paddingComExtra = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingComExtra).toBeGreaterThan(0);
+          const scrollHeightComExtra = p.palco.scrollHeight;
+
+          const rectPalco = p.palco.getBoundingClientRect();
+          const cliqueConteudo = new MouseEvent('mousedown', {
+            bubbles: true,
+            clientX: rectPalco.left + 50,
+            clientY: rectPalco.top + 50,
+          });
+          p.palco.dispatchEvent(cliqueConteudo);
+          p.fixture.detectChanges();
+          expect(parseFloat(coluna.style.paddingBottom) || 0).toBe(paddingComExtra);
+
+          const cliqueScrollbar = new MouseEvent('mousedown', {
+            bubbles: true,
+            clientX: rectPalco.left + p.palco.clientWidth + 5,
+            clientY: rectPalco.top + 50,
+          });
+          p.palco.dispatchEvent(cliqueScrollbar);
+          p.fixture.detectChanges();
+
+          expect(coluna.style.paddingBottom).toBe('');
+          expect(p.palco.scrollHeight).toBeLessThan(scrollHeightComExtra);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('tecla End direta com padding positivo remove extra sem mover a outro ponto primeiro e nao puxa o leitor na resposta', fakeAsync(() => {
+        const p = montarPalco('c-s48-end-direto', { confirmado: true, altura: '600px' });
+        try {
+          p.palco.scrollTop = 0;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Pergunta para testar tecla End direta';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-s48-end-direto/mensagens');
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(coluna.style.paddingBottom).not.toBe('');
+
+          p.palco.dispatchEvent(new KeyboardEvent('keydown', { key: 'End', bubbles: true }));
+          p.fixture.detectChanges();
+
+          expect(coluna.style.paddingBottom).toBe('');
+
+          p.palco.scrollTop = maximo(p.palco);
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+          const posicaoDepoisEnd = p.palco.scrollTop;
+
+          req.flush({
+            conversaId: 'c-s48-end-direto',
+            resposta: 'Resposta posterior que nao deve rolar o leitor.'.repeat(8),
+            intencao: 'indefinida',
+            proximaAcao: 'continuar_conversa',
+            perfilLead: null,
+            imoveisSugeridos: [],
+            corretor: 'Helena Braga',
+            contatoPendente: false,
+            agendamento: null,
+          });
+          tick();
+          p.fixture.detectChanges();
+
+          expect(p.palco.scrollTop).toBe(posicaoDepoisEnd);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('envio novo apos resposta com falha identifica nova pessoa por diferenca de IDs, ancora no topo e reserva espaco temporario', fakeAsync(() => {
+        const p = montarPalco('c-s48-falha-envio', { confirmado: true, altura: '600px' });
+        try {
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Primeira pergunta antes da falha';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req1 = httpMock.expectOne('/conversas/c-s48-falha-envio/mensagens');
+          req1.flush(null, { status: 500, statusText: 'Internal Server Error' });
+          tick();
+          p.fixture.detectChanges();
+
+          expect(p.store.estado()).toBe('falha');
+
+          area.value = 'Segunda pergunta nova apos falha';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req2 = httpMock.expectOne('/conversas/c-s48-falha-envio/mensagens');
+          expect(req2.request.method).toBe('POST');
+          expect(req2.request.body).toEqual({ texto: 'Segunda pergunta nova apos falha' });
+
+          const msgsPessoa = p.hostEl.querySelectorAll('app-mensagem-pessoa');
+          const ultimaMsg = msgsPessoa[msgsPessoa.length - 1] as HTMLElement;
+          expect(ultimaMsg.textContent).toContain('Segunda pergunta nova apos falha');
+
+          const topoRelativo =
+            ultimaMsg.getBoundingClientRect().top - p.palco.getBoundingClientRect().top;
+          expect(Math.abs(topoRelativo)).toBeLessThanOrEqual(1);
+
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(coluna.style.paddingBottom).not.toBe('');
+          const paddingAntesResp = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingAntesResp).toBeGreaterThan(0);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('troca do palco na mesma conversa via lista de historico descarta ancora e espaco extra sem inflar altura ao reabrir e desconecta observer', fakeAsync(() => {
+        const spyDisconnect = spyOn(ResizeObserver.prototype, 'disconnect').and.callThrough();
+        const idConversa = 'c-s48-troca-palco';
+        const p = montarPalco(idConversa, { confirmado: true, altura: '600px' });
+        try {
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Mensagem com espaco positivo';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne(`/conversas/${idConversa}/mensagens`);
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(coluna.style.paddingBottom).not.toBe('');
+          const paddingComExtra = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingComExtra).toBeGreaterThan(0);
+          const scrollHeightComExtra = p.palco.scrollHeight;
+
+          (p.fixture.componentInstance as any).listaAberta.set(true);
+          p.fixture.detectChanges();
+
+          expect(p.hostEl.querySelector('.palco')).toBeNull();
+          expect(spyDisconnect).toHaveBeenCalled();
+
+          (p.fixture.componentInstance as any).abrirConversa(idConversa);
+          p.fixture.detectChanges();
+          tick();
+
+          const palcoReaberto = p.hostEl.querySelector('.palco') as HTMLElement;
+          expect(palcoReaberto).not.toBeNull();
+          const colunaReaberta = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(colunaReaberta.style.paddingBottom).toBe('');
+          expect(palcoReaberto.scrollHeight).toBeLessThan(scrollHeightComExtra);
 
           p.encerrar();
         } finally {

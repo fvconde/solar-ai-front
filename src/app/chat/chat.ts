@@ -97,6 +97,7 @@ export class Chat implements OnInit, OnDestroy {
 
   private colunaElObservado: HTMLElement | null = null;
   private resizeObserverColuna: ResizeObserver | null = null;
+  private rafResizeObserver: number | null = null;
   private palcoElOuvintes: HTMLElement | null = null;
 
   private readonly onWheel = () => {
@@ -117,6 +118,17 @@ export class Chat implements OnInit, OnDestroy {
       return;
     }
     this.tratarInteracaoManual();
+  };
+
+  private readonly onPointerDown = (event: MouseEvent | PointerEvent) => {
+    const palcoEl = this.palco()?.nativeElement;
+    if (!palcoEl) {
+      return;
+    }
+    const rect = palcoEl.getBoundingClientRect();
+    if (event.clientX >= rect.left + palcoEl.clientWidth && event.clientX <= rect.right) {
+      this.tratarInteracaoManual();
+    }
   };
 
   private readonly onScroll = () => {
@@ -234,8 +246,21 @@ export class Chat implements OnInit, OnDestroy {
       }
 
       if (!elemento || !colunaEl) {
-        this.ultimoPalcoEl = null;
+        if (this.ultimoPalcoEl || this.extraAtual > 0 || this.ancoraItemId !== null) {
+          this.removerOuvintesPalco();
+          this.desconectarResizeObserver();
+          this.abandonarAncora();
+          this.aguardandoRespostaEnvio = false;
+          this.ultimoPalcoEl = null;
+        }
         return;
+      }
+
+      if (this.ultimoPalcoEl && elemento !== this.ultimoPalcoEl) {
+        this.removerOuvintesPalco();
+        this.desconectarResizeObserver();
+        this.abandonarAncora();
+        this.aguardandoRespostaEnvio = false;
       }
 
       this.configurarOuvintesPalco(elemento);
@@ -353,7 +378,13 @@ export class Chat implements OnInit, OnDestroy {
     const itensAntes = this.store.itens();
     void this.store.enviar(texto);
     const itensDepois = this.store.itens();
-    const novaPessoa = itensDepois.slice(itensAntes.length).find((it) => it.tipo === 'pessoa');
+    const idsPessoaAntes = new Set(
+      itensAntes.filter((it) => it.tipo === 'pessoa').map((it) => it.id),
+    );
+    const novasPessoas = itensDepois.filter(
+      (it) => it.tipo === 'pessoa' && !idsPessoaAntes.has(it.id),
+    );
+    const novaPessoa = novasPessoas[novasPessoas.length - 1];
     if (novaPessoa) {
       this.ancoraItemId = novaPessoa.id;
       this.ancoraConversaId = this.store.conversaAtual();
@@ -456,6 +487,8 @@ export class Chat implements OnInit, OnDestroy {
     palcoEl.addEventListener('touchmove', this.onTouchMove, { passive: true });
     palcoEl.addEventListener('keydown', this.onKeyDown);
     palcoEl.addEventListener('scroll', this.onScroll, { passive: true });
+    palcoEl.addEventListener('pointerdown', this.onPointerDown, { passive: true });
+    palcoEl.addEventListener('mousedown', this.onPointerDown, { passive: true });
   }
 
   private removerOuvintesPalco(): void {
@@ -464,6 +497,8 @@ export class Chat implements OnInit, OnDestroy {
       this.palcoElOuvintes.removeEventListener('touchmove', this.onTouchMove);
       this.palcoElOuvintes.removeEventListener('keydown', this.onKeyDown);
       this.palcoElOuvintes.removeEventListener('scroll', this.onScroll);
+      this.palcoElOuvintes.removeEventListener('pointerdown', this.onPointerDown);
+      this.palcoElOuvintes.removeEventListener('mousedown', this.onPointerDown);
       this.palcoElOuvintes = null;
     }
   }
@@ -478,12 +513,22 @@ export class Chat implements OnInit, OnDestroy {
       return;
     }
     this.resizeObserverColuna = new ResizeObserver(() => {
-      this.recalcularExtra();
+      if (this.rafResizeObserver !== null) {
+        cancelAnimationFrame(this.rafResizeObserver);
+      }
+      this.rafResizeObserver = requestAnimationFrame(() => {
+        this.rafResizeObserver = null;
+        this.recalcularExtra();
+      });
     });
     this.resizeObserverColuna.observe(colunaEl);
   }
 
   private desconectarResizeObserver(): void {
+    if (this.rafResizeObserver !== null) {
+      cancelAnimationFrame(this.rafResizeObserver);
+      this.rafResizeObserver = null;
+    }
     if (this.resizeObserverColuna) {
       this.resizeObserverColuna.disconnect();
       this.resizeObserverColuna = null;
