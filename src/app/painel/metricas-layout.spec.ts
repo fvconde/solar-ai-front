@@ -204,6 +204,41 @@ describe('Layout real das métricas por viewport (S-22/S-48)', () => {
             expect(win.getComputedStyle(rotuloCard).webkitLineClamp).not.toBe('2');
           }
 
+          if (perfil === 'supervisor') {
+            const blocosSupervisor = Array.from(doc.querySelectorAll<HTMLElement>('.area-rotulos .bloco-rotulo'));
+            const rotulosSupervisor = Array.from(doc.querySelectorAll<HTMLElement>('.area-rotulos .rotulo-etapa'));
+            expect(blocosSupervisor.length).toBe(6);
+            expect(rotulosSupervisor.length).toBe(6);
+
+            for (let i = 0; i < 6; i++) {
+              const bRect = blocosSupervisor[i].getBoundingClientRect();
+              const rRect = rotulosSupervisor[i].getBoundingClientRect();
+              const barraRect = barras[i].getBoundingClientRect();
+
+              expect(Math.abs(bRect.left - barraRect.left)).toBeLessThanOrEqual(2);
+              expect(Math.abs(bRect.right - barraRect.right)).toBeLessThanOrEqual(2);
+
+              expect(rRect.left).toBeGreaterThanOrEqual(bRect.left - 2);
+              expect(rRect.right).toBeLessThanOrEqual(bRect.right + 2);
+
+              const range = doc.createRange();
+              const textNode = rotulosSupervisor[i].firstChild;
+              if (textNode) {
+                range.selectNodeContents(textNode);
+                const rects = Array.from(range.getClientRects());
+                for (const r of rects) {
+                  expect(r.left).toBeGreaterThanOrEqual(bRect.left - 2);
+                  expect(r.right).toBeLessThanOrEqual(bRect.right + 2);
+                }
+              }
+
+              if (i < 5) {
+                const proxRRect = rotulosSupervisor[i + 1].getBoundingClientRect();
+                expect(rRect.right).toBeLessThanOrEqual(proxRRect.left + 2);
+              }
+            }
+          }
+
           const cards = Array.from(doc.querySelectorAll<HTMLElement>('.principais .bloco-cards > .cartao'));
           expect(cards.length).toBe(perfil === 'supervisor' ? 4 : 3);
           for (const card of cards) {
