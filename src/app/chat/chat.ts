@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   Component,
@@ -26,16 +27,24 @@ import { ContaApi } from '../conta/conta-api';
 import { ConversaResumo } from '../conta/conta-contrato';
 import { ContatoRequest } from '../conversa/contrato';
 import { ConversaStore } from '../conversa/conversa-store';
-import { AcaoEvento } from '../conversa/trilha';
+import { AcaoEvento, ItemTrilha } from '../conversa/trilha';
 import { SessaoStore } from '../sessao/sessao-store';
 import { HistoricoConversas } from './historico-conversas';
 
 const CHAVE_CONVITE_DISPENSADO = 'solar.conviteDispensado';
 
+export interface MarcadorCartaoVisual {
+  readonly tipo: 'marcador-cartao';
+  readonly id: string;
+}
+
+export type ItemApresentacao = ItemTrilha | MarcadorCartaoVisual;
+
 @Component({
   selector: 'app-chat',
   changeDetection: ChangeDetectionStrategy.OnPush,
   imports: [
+    NgTemplateOutlet,
     AvisoConsentimento,
     DivisorData,
     MensagemLia,
@@ -83,9 +92,68 @@ export class Chat implements OnInit {
     return houveResposta && this.conviteDispensadoEm() !== this.store.conversaAtual();
   });
 
+  readonly temMarcadorCartao = computed(() => {
+    return this.itensApresentacao().some((item) => item.tipo === 'marcador-cartao');
+  });
+
+  readonly itensApresentacao = computed<ItemApresentacao[]>(() => {
+    const itens = this.store.itens();
+    const confirmado = this.store.agendamentoEstaConfirmado();
+    const agendaDisponivel = this.store.agendaDisponivel();
+
+    if (!confirmado || !agendaDisponivel) {
+      return itens;
+    }
+
+    const idxEncaminhado = itens.findIndex(
+      (item) => item.tipo === 'evento' && item.rotulo === 'Encaminhado',
+    );
+    if (idxEncaminhado === -1) {
+      return itens;
+    }
+
+    const idConversa = this.store.conversaAtual() || 'conversa';
+    const reciboOriginal = itens.find(
+      (item) => item.tipo === 'evento' && item.rotulo === 'Contato enviado',
+    );
+
+    const semRecibo = itens.filter(
+      (item) => !(item.tipo === 'evento' && item.rotulo === 'Contato enviado'),
+    );
+    const novoIdxEncaminhado = semRecibo.findIndex(
+      (item) => item.tipo === 'evento' && item.rotulo === 'Encaminhado',
+    );
+    if (novoIdxEncaminhado === -1) {
+      return itens;
+    }
+
+    const resultado: ItemApresentacao[] = [];
+    for (let i = 0; i <= novoIdxEncaminhado; i++) {
+      resultado.push(semRecibo[i]);
+    }
+
+    if (reciboOriginal) {
+      resultado.push({
+        ...reciboOriginal,
+        id: `recibo:${idConversa}`,
+      });
+    }
+
+    resultado.push({
+      tipo: 'marcador-cartao',
+      id: `cartao:${idConversa}`,
+    });
+
+    for (let i = novoIdxEncaminhado + 1; i < semRecibo.length; i++) {
+      resultado.push(semRecibo[i]);
+    }
+
+    return resultado;
+  });
+
   constructor() {
     afterRenderEffect(() => {
-      const itens = this.store.itens();
+      const itens = this.itensApresentacao();
       const estado = this.store.estado();
       const apagada = this.store.conversaApagada();
       const elemento = this.palco()?.nativeElement;
