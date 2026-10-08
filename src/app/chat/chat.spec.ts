@@ -970,6 +970,7 @@ describe('Chat', () => {
       mensagens?: MensagemDaConversa[],
       consentimentoEm: string | null = '2026-10-07T10:00:00Z',
       versaoAvisoPrivacidade: string | null = VERSAO_AVISO_PRIVACIDADE,
+      contatoEm: string | null = null,
     ) {
       return {
         conversaId: id,
@@ -996,6 +997,7 @@ describe('Chat', () => {
         consentimentoEm,
         versaoAvisoPrivacidade,
         oferta,
+        contatoEm,
       };
     }
 
@@ -4395,6 +4397,151 @@ describe('Chat', () => {
 
       store.pararPolling();
       httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+  });
+
+  describe('S-48 Tarefa 6: horas nos avisos no DOM e rolagem', () => {
+    it('renderiza as horas dos tres avisos no DOM e preserva apos recarregar conversa', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t6-dom-horas');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const emEncaminhado = '2026-10-07T10:01:00-03:00';
+      const emContato = '2026-10-07T10:05:00-03:00';
+      const emConfirmado = '2026-10-07T10:10:00-03:00';
+
+      const conf: AgendamentoDaConversa = {
+        estado: 'confirmado',
+        horario: {
+          id: 501,
+          inicio: '2026-10-15T14:00:00-03:00',
+          fim: '2026-10-15T15:00:00-03:00',
+        },
+        alternativas: [],
+      };
+
+      const msgs: MensagemDaConversa[] = [
+        {
+          papel: 'lead',
+          texto: 'Quero um apartamento.',
+          em: '2026-10-07T10:00:00-03:00',
+          proximaAcao: null,
+          corretor: null,
+          agendamento: null,
+        },
+        {
+          papel: 'agente',
+          texto: 'Encaminhando para Helena Braga.',
+          em: emEncaminhado,
+          proximaAcao: 'agendar_reuniao',
+          corretor: 'Helena Braga',
+          agendamento: null,
+        },
+        {
+          papel: 'agente',
+          texto: 'Reunião agendada com Helena Braga.',
+          em: emConfirmado,
+          proximaAcao: 'continuar_conversa',
+          corretor: 'Helena Braga',
+          agendamento: conf,
+        },
+      ];
+
+      httpMock.expectOne('/conversas/c-t6-dom-horas').flush(
+        conversaComOferta(
+          'c-t6-dom-horas',
+          [],
+          'Helena Braga',
+          false,
+          conf,
+          msgs,
+          '2026-10-07T10:00:00Z',
+          VERSAO_AVISO_PRIVACIDADE,
+          emContato,
+        ),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const eventos = html(fixture).querySelectorAll('app-evento-sistema');
+      expect(eventos.length).toBe(3);
+
+      const eventoEnc = Array.from(eventos).find((el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Encaminhado');
+      const eventoContato = Array.from(eventos).find((el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Contato enviado');
+      const eventoReuniao = Array.from(eventos).find((el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Reunião agendada');
+
+      expect(eventoEnc).not.toBeNull();
+      expect(eventoEnc?.querySelector('.hora')?.textContent?.trim()).toBe(horaDe(emEncaminhado));
+
+      expect(eventoContato).not.toBeNull();
+      expect(eventoContato?.querySelector('.hora')?.textContent?.trim()).toBe(horaDe(emContato));
+
+      expect(eventoReuniao).not.toBeNull();
+      expect(eventoReuniao?.querySelector('.hora')?.textContent?.trim()).toBe(horaDe(emConfirmado));
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('atualizacao isolada de hora em evento e fala da Lia nao altera assinatura nem aciona auto-scroll', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t6-scroll');
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      const hostEl = fixture.nativeElement as HTMLElement;
+      document.body.appendChild(hostEl);
+      fixture.detectChanges();
+
+      const muitasMensagens: MensagemDaConversa[] = [];
+      for (let i = 0; i < 30; i++) {
+        muitasMensagens.push({
+          papel: i % 2 === 0 ? 'lead' : 'agente',
+          texto: `Mensagem historico ${i} com texto suficiente para gerar rolagem no palco do chat.`,
+          em: '2026-10-07T10:00:00Z',
+          proximaAcao: i === 29 ? 'agendar_reuniao' : null,
+          corretor: i === 29 ? 'Helena Braga' : null,
+          agendamento: null,
+        });
+      }
+
+      httpMock.expectOne('/conversas/c-t6-scroll').flush(
+        conversaComOferta('c-t6-scroll', [], 'Helena Braga', false, null, muitasMensagens),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const palco = hostEl.querySelector('.palco') as HTMLElement;
+      expect(palco).not.toBeNull();
+      expect(palco.scrollHeight).toBeGreaterThan(palco.clientHeight);
+
+      palco.scrollTop = 0;
+      expect(palco.scrollTop).toBe(0);
+
+      store.itens.update((itens) =>
+        itens.map((item) => {
+          if (item.tipo === 'evento' && item.rotulo === 'Encaminhado') {
+            return { ...item, hora: '10:01' };
+          }
+          if (item.tipo === 'lia') {
+            return { ...item, hora: '10:01' };
+          }
+          return item;
+        }),
+      );
+      fixture.detectChanges();
+      tick();
+
+      expect(palco.scrollTop).toBe(0);
+
+      store.pararPolling();
+      httpMock.verify();
+      if (hostEl.parentNode) {
+        document.body.removeChild(hostEl);
+      }
       fixture.destroy();
       flush();
     }));

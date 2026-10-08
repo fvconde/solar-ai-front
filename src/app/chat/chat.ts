@@ -709,9 +709,9 @@ function assinaturaItem(item: ItemApresentacao): unknown[] {
     case 'divisor':
       return [item.tipo, item.rotulo];
     case 'pessoa':
-      return [item.tipo, item.texto, item.hora];
+      return [item.tipo, item.texto];
     case 'lia':
-      return [item.tipo, item.texto, item.hora, item.intencao, item.imoveis];
+      return [item.tipo, item.texto, item.intencao, item.imoveis];
     case 'evento':
       return [
         item.tipo,

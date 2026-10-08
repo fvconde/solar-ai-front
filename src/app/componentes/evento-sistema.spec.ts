@@ -112,4 +112,48 @@ describe('EventoSistema', () => {
 
     document.documentElement.removeAttribute('data-tema');
   });
+
+  it('exibe hora formatada ao lado do rotulo com tipografia de numeros tabulares e herda cor nos dois temas', () => {
+    fixture.componentRef.setInput('variante', 'sucesso');
+    fixture.componentRef.setInput('rotulo', 'Encaminhado');
+    fixture.componentRef.setInput('texto', 'Sua conversa foi encaminhada.');
+    fixture.componentRef.setInput('hora', '14:30');
+    fixture.detectChanges();
+
+    const raiz = fixture.nativeElement as HTMLElement;
+    const horaEl = raiz.querySelector('.hora') as HTMLElement;
+    expect(horaEl).not.toBeNull();
+    expect(horaEl.textContent?.trim()).toBe('14:30');
+
+    const cabecaEl = raiz.querySelector('.cabeca') as HTMLElement;
+    expect(cabecaEl.contains(horaEl)).toBeTrue();
+
+    const estiloHora = window.getComputedStyle(horaEl);
+    expect(estiloHora.fontSize).toBe('13px');
+    expect(estiloHora.fontVariantNumeric).toBe('tabular-nums');
+
+    document.documentElement.setAttribute('data-tema', 'claro');
+    fixture.detectChanges();
+    expect(window.getComputedStyle(horaEl).color).toBe(corDoToken('--texto-secundario'));
+
+    document.documentElement.setAttribute('data-tema', 'escuro');
+    fixture.detectChanges();
+    expect(window.getComputedStyle(horaEl).color).toBe(corDoToken('--texto-secundario'));
+
+    document.documentElement.removeAttribute('data-tema');
+  });
+
+  it('nao renderiza span de hora quando hora for ausente, null, undefined, vazia, traco ou literais invalidos', () => {
+    fixture.componentRef.setInput('variante', 'neutro');
+    fixture.componentRef.setInput('rotulo', 'Contato enviado');
+    fixture.componentRef.setInput('texto', 'O corretor usara seu contato.');
+
+    const invalidos = [null, undefined, '', '   ', '-', 'null', 'undefined'];
+    for (const inv of invalidos) {
+      fixture.componentRef.setInput('hora', inv);
+      fixture.detectChanges();
+      const horaEl = (fixture.nativeElement as HTMLElement).querySelector('.hora');
+      expect(horaEl).toBeNull();
+    }
+  });
 });
