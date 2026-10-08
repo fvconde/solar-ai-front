@@ -29,6 +29,24 @@ function ehHandoff(acao: ProximaAcao | null): boolean {
   return acao === 'agendar_reuniao' || acao === 'direcionar_especialista';
 }
 
+function extrairHoraContato(iso: string | null | undefined): {
+  hora: string | null;
+  isoValido: string | null;
+} {
+  if (!iso || typeof iso !== 'string') {
+    return { hora: null, isoValido: null };
+  }
+  const limpo = iso.trim();
+  if (!limpo) {
+    return { hora: null, isoValido: null };
+  }
+  const h = horaDe(limpo);
+  if (!h || h.trim() === '') {
+    return { hora: null, isoValido: null };
+  }
+  return { hora: h, isoValido: limpo };
+}
+
 const CHAVE_CONVERSA = 'solar.conversaId';
 const PREFIXO_MEMO_PERDA = 'solar.agendamentoPerdido.';
 const PREFIXO_RECOLHIDO = 'solar.agendamentoRecolhido.v1:';
@@ -439,8 +457,8 @@ export class ConversaStore {
       }
       this.contatoRegistrado.set(true);
       this.ofertaAgendamento.set(resposta.oferta ?? []);
-      this.timestampContato = resposta.contatoEm ?? null;
-      const horaContato = (resposta.contatoEm ? horaDe(resposta.contatoEm) : null) || null;
+      const { hora: horaContato, isoValido } = extrairHoraContato(resposta.contatoEm);
+      this.timestampContato = isoValido;
       this.removerContato();
       this.removerReciboContato();
       this.acrescentar({
@@ -850,7 +868,7 @@ export class ConversaStore {
       } else if (this.corretorAgendamento()) {
         this.removerContato();
         if (!this.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')) {
-          const horaContato = (this.timestampContato ? horaDe(this.timestampContato) : null) || null;
+          const { hora: horaContato } = extrairHoraContato(this.timestampContato);
           this.acrescentar({
             tipo: 'evento',
             id: this.proximoId(),
@@ -1160,9 +1178,9 @@ export class ConversaStore {
     let dia = '';
     let jaEncaminhado = false;
 
-    if (contatoEm) {
-      this.timestampContato = contatoEm;
-    }
+    const { hora: horaContatoReconstrucao, isoValido: isoContatoReconstrucao } =
+      extrairHoraContato(contatoEm);
+    this.timestampContato = isoContatoReconstrucao;
 
     const indicesOcultarLead = new Set<number>();
     for (let i = 0; i < mensagens.length; i++) {
@@ -1272,7 +1290,6 @@ export class ConversaStore {
       if (contatoPendente) {
         itens.push({ tipo: 'contato', id: this.proximoId() });
       } else if (mensagens.some((m) => !!m.corretor && !!m.corretor.trim())) {
-        const horaContato = (contatoEm ? horaDe(contatoEm) : null) || null;
         itens.push({
           tipo: 'evento',
           id: this.proximoId(),
@@ -1280,7 +1297,7 @@ export class ConversaStore {
           rotulo: 'Contato enviado',
           texto: 'O corretor usará o contato que você forneceu.',
           acao: null,
-          hora: horaContato,
+          hora: horaContatoReconstrucao,
         });
       }
     }
@@ -1347,10 +1364,8 @@ export class ConversaStore {
           lista.push({ tipo: 'contato', id: this.proximoId() });
         }
       } else if (deveTerRecibo) {
-        if (conversa.contatoEm) {
-          this.timestampContato = conversa.contatoEm;
-        }
-        const horaRecibo = (conversa.contatoEm ? horaDe(conversa.contatoEm) : null) || null;
+        const { hora: horaRecibo, isoValido } = extrairHoraContato(conversa.contatoEm);
+        this.timestampContato = isoValido;
         lista = lista.filter((i) => i.tipo !== 'contato');
         const recibos = lista.filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
         if (recibos.length === 0) {
@@ -1378,7 +1393,7 @@ export class ConversaStore {
             })
             .map((i) => {
               if (i.tipo === 'evento' && i.rotulo === 'Contato enviado') {
-                if (horaRecibo && i.hora !== horaRecibo) {
+                if (i.hora !== horaRecibo) {
                   return { ...i, hora: horaRecibo };
                 }
               }
@@ -1395,17 +1410,29 @@ export class ConversaStore {
     });
   }
 
+  private ehOrigemDoEncaminhado(m: MensagemDaConversa): boolean {
+    if (m.papel !== 'agente') {
+      return false;
+    }
+    const ehConfirmacao =
+      m.agendamento?.estado === 'confirmado' &&
+      !!m.agendamento.horario &&
+      !!m.agendamento.horario.inicio;
+    const eventoAgendamento = this.eventoDoAgendamento(m.agendamento);
+    if (ehConfirmacao && eventoAgendamento) {
+      return false;
+    }
+    const evento =
+      eventoAgendamento ?? (m.proximaAcao ? this.desfecho(m.proximaAcao, m.corretor) : null);
+    return evento?.rotulo === 'Encaminhado';
+  }
+
   private reconciliarHoras(conversa: ConversaResponse): void {
     if (!conversa.consentimentoEm || conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE) {
       return;
     }
 
-    const primeiraMsgEncaminhado = conversa.mensagens.find(
-      (m) =>
-        m.papel === 'agente' &&
-        !(m.agendamento?.estado === 'confirmado' && !!m.agendamento?.horario?.inicio) &&
-        m.proximaAcao === 'agendar_reuniao',
-    );
+    const primeiraMsgEncaminhado = conversa.mensagens.find((m) => this.ehOrigemDoEncaminhado(m));
     const horaEncaminhado =
       primeiraMsgEncaminhado?.em ? horaDe(primeiraMsgEncaminhado.em) || null : null;
 
@@ -1417,10 +1444,8 @@ export class ConversaStore {
     );
     const horaConfirmacao = msgConfirmacao?.em ? horaDe(msgConfirmacao.em) || null : null;
 
-    const horaContato = conversa.contatoEm ? horaDe(conversa.contatoEm) || null : null;
-    if (conversa.contatoEm) {
-      this.timestampContato = conversa.contatoEm;
-    }
+    const { hora: horaContato, isoValido: isoContato } = extrairHoraContato(conversa.contatoEm);
+    this.timestampContato = isoContato;
 
     this.itens.update((atuais) => {
       let modificou = false;
@@ -1451,7 +1476,7 @@ export class ConversaStore {
             modificou = true;
             return { ...item, hora: horaConfirmacao };
           }
-          if (item.rotulo === 'Contato enviado' && horaContato && item.hora !== horaContato) {
+          if (item.rotulo === 'Contato enviado' && item.hora !== horaContato) {
             modificou = true;
             return { ...item, hora: horaContato };
           }

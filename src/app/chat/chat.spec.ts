@@ -4413,17 +4413,19 @@ describe('Chat', () => {
       const emContato = '2026-10-07T10:05:00-03:00';
       const emConfirmado = '2026-10-07T10:10:00-03:00';
 
+      const slot501: SlotOferecido = {
+        id: 501,
+        inicio: '2026-10-15T14:00:00-03:00',
+        fim: '2026-10-15T15:00:00-03:00',
+      };
+
       const conf: AgendamentoDaConversa = {
         estado: 'confirmado',
-        horario: {
-          id: 501,
-          inicio: '2026-10-15T14:00:00-03:00',
-          fim: '2026-10-15T15:00:00-03:00',
-        },
+        horario: slot501,
         alternativas: [],
       };
 
-      const msgs: MensagemDaConversa[] = [
+      const msgsIniciais: MensagemDaConversa[] = [
         {
           papel: 'lead',
           texto: 'Quero um apartamento.',
@@ -4440,6 +4442,40 @@ describe('Chat', () => {
           corretor: 'Helena Braga',
           agendamento: null,
         },
+      ];
+
+      httpMock.expectOne('/conversas/c-t6-dom-horas').flush(
+        conversaComOferta(
+          'c-t6-dom-horas',
+          [slot501],
+          'Helena Braga',
+          false,
+          null,
+          msgsIniciais,
+          '2026-10-07T10:00:00Z',
+          VERSAO_AVISO_PRIVACIDADE,
+          emContato,
+        ),
+      );
+      tick();
+      fixture.detectChanges();
+
+      void store.registrarAgendamento(501);
+      const reqPost = httpMock.expectOne({ method: 'POST', url: '/conversas/c-t6-dom-horas/agendamentos' });
+      expect(reqPost.request.body).toEqual({ slotId: 501 });
+      reqPost.flush(conf);
+      tick();
+
+      const msgsPersistidas: MensagemDaConversa[] = [
+        ...msgsIniciais,
+        {
+          papel: 'lead',
+          texto: 'Quinta, 15 de outubro às 14h',
+          em: emConfirmado,
+          proximaAcao: null,
+          corretor: null,
+          agendamento: null,
+        },
         {
           papel: 'agente',
           texto: 'Reunião agendada com Helena Braga.',
@@ -4450,14 +4486,14 @@ describe('Chat', () => {
         },
       ];
 
-      httpMock.expectOne('/conversas/c-t6-dom-horas').flush(
+      httpMock.expectOne({ method: 'GET', url: '/conversas/c-t6-dom-horas' }).flush(
         conversaComOferta(
           'c-t6-dom-horas',
           [],
           'Helena Braga',
           false,
           conf,
-          msgs,
+          msgsPersistidas,
           '2026-10-07T10:00:00Z',
           VERSAO_AVISO_PRIVACIDADE,
           emContato,
@@ -4466,33 +4502,93 @@ describe('Chat', () => {
       tick();
       fixture.detectChanges();
 
-      const eventos = html(fixture).querySelectorAll('app-evento-sistema');
-      expect(eventos.length).toBe(3);
+      expect(html(fixture).querySelector('app-agendamento-card')).toBeNull();
+      const falasPessoaAoVivo = Array.from(html(fixture).querySelectorAll('.pessoa'));
+      expect(falasPessoaAoVivo.some((el) => el.textContent?.includes('Quinta, 15 de outubro'))).toBeFalse();
 
-      const eventoEnc = Array.from(eventos).find((el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Encaminhado');
-      const eventoContato = Array.from(eventos).find((el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Contato enviado');
-      const eventoReuniao = Array.from(eventos).find((el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Reunião agendada');
+      const eventosAoVivo = html(fixture).querySelectorAll('app-evento-sistema');
+      expect(eventosAoVivo.length).toBe(3);
 
-      expect(eventoEnc).not.toBeNull();
-      expect(eventoEnc?.querySelector('.hora')?.textContent?.trim()).toBe(horaDe(emEncaminhado));
+      const eventoEncAoVivo = Array.from(eventosAoVivo).find(
+        (el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Encaminhado',
+      );
+      const eventoContatoAoVivo = Array.from(eventosAoVivo).find(
+        (el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Contato enviado',
+      );
+      const eventoReuniaoAoVivo = Array.from(eventosAoVivo).find(
+        (el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Reunião agendada',
+      );
 
-      expect(eventoContato).not.toBeNull();
-      expect(eventoContato?.querySelector('.hora')?.textContent?.trim()).toBe(horaDe(emContato));
+      expect(eventoEncAoVivo).not.toBeNull();
+      expect(eventoContatoAoVivo).not.toBeNull();
+      expect(eventoReuniaoAoVivo).not.toBeNull();
 
-      expect(eventoReuniao).not.toBeNull();
-      expect(eventoReuniao?.querySelector('.hora')?.textContent?.trim()).toBe(horaDe(emConfirmado));
+      const horaEncAoVivo = eventoEncAoVivo?.querySelector('.hora')?.textContent?.trim();
+      const horaContatoAoVivo = eventoContatoAoVivo?.querySelector('.hora')?.textContent?.trim();
+      const horaReuniaoAoVivo = eventoReuniaoAoVivo?.querySelector('.hora')?.textContent?.trim();
+
+      expect(horaEncAoVivo).toBe(horaDe(emEncaminhado));
+      expect(horaContatoAoVivo).toBe(horaDe(emContato));
+      expect(horaReuniaoAoVivo).toBe(horaDe(emConfirmado));
 
       store.pararPolling();
-      httpMock.verify();
       fixture.destroy();
+      flush();
+
+      const fixtureReload = TestBed.createComponent(Chat);
+      const storeReload = TestBed.inject(ConversaStore);
+      fixtureReload.detectChanges();
+
+      httpMock.expectOne({ method: 'GET', url: '/conversas/c-t6-dom-horas' }).flush(
+        conversaComOferta(
+          'c-t6-dom-horas',
+          [],
+          'Helena Braga',
+          false,
+          conf,
+          msgsPersistidas,
+          '2026-10-07T10:00:00Z',
+          VERSAO_AVISO_PRIVACIDADE,
+          emContato,
+        ),
+      );
+      tick();
+      fixtureReload.detectChanges();
+
+      expect(html(fixtureReload).querySelector('app-agendamento-card')).toBeNull();
+      const falasPessoaReload = Array.from(html(fixtureReload).querySelectorAll('.pessoa'));
+      expect(falasPessoaReload.some((el) => el.textContent?.includes('Quinta, 15 de outubro'))).toBeFalse();
+
+      const eventosReload = html(fixtureReload).querySelectorAll('app-evento-sistema');
+      expect(eventosReload.length).toBe(3);
+
+      const eventoEncReload = Array.from(eventosReload).find(
+        (el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Encaminhado',
+      );
+      const eventoContatoReload = Array.from(eventosReload).find(
+        (el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Contato enviado',
+      );
+      const eventoReuniaoReload = Array.from(eventosReload).find(
+        (el) => el.querySelector('.rotulo')?.textContent?.trim() === 'Reunião agendada',
+      );
+
+      expect(eventoEncReload?.querySelector('.hora')?.textContent?.trim()).toBe(horaEncAoVivo);
+      expect(eventoContatoReload?.querySelector('.hora')?.textContent?.trim()).toBe(horaContatoAoVivo);
+      expect(eventoReuniaoReload?.querySelector('.hora')?.textContent?.trim()).toBe(horaReuniaoAoVivo);
+
+      storeReload.pararPolling();
+      httpMock.verify();
+      fixtureReload.destroy();
       flush();
     }));
 
-    it('atualizacao isolada de hora em evento e fala da Lia nao altera assinatura nem aciona auto-scroll', fakeAsync(() => {
+    it('atualizacao isolada de hora em evento e fala da Lia nao executa setter de scroll nem no topo nem perto do fim', fakeAsync(() => {
       localStorage.setItem('solar.conversaId', 'c-t6-scroll');
       const fixture = TestBed.createComponent(Chat);
       const store = TestBed.inject(ConversaStore);
       const hostEl = fixture.nativeElement as HTMLElement;
+      hostEl.style.height = '350px';
+      hostEl.style.display = 'flex';
       document.body.appendChild(hostEl);
       fixture.detectChanges();
 
@@ -4516,10 +4612,15 @@ describe('Chat', () => {
 
       const palco = hostEl.querySelector('.palco') as HTMLElement;
       expect(palco).not.toBeNull();
-      expect(palco.scrollHeight).toBeGreaterThan(palco.clientHeight);
+      const maximo = (el: HTMLElement) => el.scrollHeight - el.clientHeight;
+      expect(maximo(palco)).toBeGreaterThan(200);
+
+      const spyScrollTop = spyOnProperty(Element.prototype, 'scrollTop', 'set').and.callThrough();
 
       palco.scrollTop = 0;
-      expect(palco.scrollTop).toBe(0);
+      fixture.detectChanges();
+      tick();
+      spyScrollTop.calls.reset();
 
       store.itens.update((itens) =>
         itens.map((item) => {
@@ -4535,7 +4636,32 @@ describe('Chat', () => {
       fixture.detectChanges();
       tick();
 
+      expect(spyScrollTop).not.toHaveBeenCalled();
       expect(palco.scrollTop).toBe(0);
+
+      const posicaoPerto = maximo(palco) - 30;
+      expect(maximo(palco) - posicaoPerto).toBeLessThanOrEqual(80);
+      palco.scrollTop = posicaoPerto;
+      fixture.detectChanges();
+      tick();
+      spyScrollTop.calls.reset();
+
+      store.itens.update((itens) =>
+        itens.map((item) => {
+          if (item.tipo === 'evento' && item.rotulo === 'Encaminhado') {
+            return { ...item, hora: '10:02' };
+          }
+          if (item.tipo === 'lia') {
+            return { ...item, hora: '10:02' };
+          }
+          return item;
+        }),
+      );
+      fixture.detectChanges();
+      tick();
+
+      expect(spyScrollTop).not.toHaveBeenCalled();
+      expect(palco.scrollTop).toBe(posicaoPerto);
 
       store.pararPolling();
       httpMock.verify();

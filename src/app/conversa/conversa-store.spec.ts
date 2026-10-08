@@ -3922,6 +3922,185 @@ describe('ConversaStore S-48 Tarefa 2: aviso Reunião agendada e regras de ocult
       expect(apagou).toBeTrue();
       expect((store as any).timestampContato).toBeNull();
     });
+
+    it('origem de Encaminhado ignora indisponibilidade previa e mantem hora 11:00 em polling na mesma conversa com IDs estaveis', async () => {
+      localStorage.setItem('solar.conversaId', 'c-encaminhado-origem');
+      const emIndisponivel = '2026-10-08T10:00:00-03:00';
+      const emHandoffEfetivo = '2026-10-08T11:00:00-03:00';
+      const emHandoffPosterior = '2026-10-08T12:00:00-03:00';
+
+      const msgs: MensagemDaConversa[] = [
+        fala('lead', 'Quero agendar horario', null, 0),
+        {
+          papel: 'agente',
+          texto: 'Horário indisponível.',
+          em: emIndisponivel,
+          proximaAcao: 'agendar_reuniao',
+          corretor: null,
+          agendamento: {
+            estado: 'indisponivel',
+            horario: null,
+            alternativas: [],
+          },
+        },
+        {
+          papel: 'agente',
+          texto: 'Encaminhando para Helena Braga.',
+          em: emHandoffEfetivo,
+          proximaAcao: 'agendar_reuniao',
+          corretor: 'Helena Braga',
+          agendamento: null,
+        },
+        {
+          papel: 'agente',
+          texto: 'Mais um direcionamento.',
+          em: emHandoffPosterior,
+          proximaAcao: 'agendar_reuniao',
+          corretor: 'Helena Braga',
+          agendamento: null,
+        },
+      ];
+
+      api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+      await store.iniciar();
+
+      const itensIniciais = store.itens();
+      const eventosEncaminhado = itensIniciais.filter(
+        (i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado',
+      );
+      expect(eventosEncaminhado.length).toBe(1);
+      const eventoEnc = eventosEncaminhado[0] as any;
+      expect(eventoEnc.hora).toBe(horaDe(emHandoffEfetivo));
+
+      const falaEfetiva = itensIniciais.find(
+        (i) => i.tipo === 'lia' && i.texto === 'Encaminhando para Helena Braga.',
+      ) as any;
+      expect(falaEfetiva).toBeDefined();
+      expect(falaEfetiva.hora).toBe(horaDe(emHandoffEfetivo));
+
+      const idsAntes = itensIniciais.map((i) => i.id);
+
+      api.obterConversa.and.resolveTo(conversa(msgs, false, PERFIL_VAZIO, []));
+      await store.verificarNovasMensagens();
+
+      const itensApos = store.itens();
+      const eventosEncaminhadoApos = itensApos.filter(
+        (i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado',
+      );
+      expect(eventosEncaminhadoApos.length).toBe(1);
+      expect((eventosEncaminhadoApos[0] as any).hora).toBe(horaDe(emHandoffEfetivo));
+
+      const falaEfetivaApos = itensApos.find(
+        (i) => i.tipo === 'lia' && i.texto === 'Encaminhando para Helena Braga.',
+      ) as any;
+      expect(falaEfetivaApos.hora).toBe(horaDe(emHandoffEfetivo));
+
+      const idsApos = itensApos.map((i) => i.id);
+      expect(idsApos).toEqual(idsAntes);
+    });
+
+    it('recibo com hora valida fica sem hora com null, omitido e invalido preservando ID unico, reaparece com nova data e nao ressuscita de cache', async () => {
+      localStorage.setItem('solar.conversaId', 'c-contato-limpeza');
+      const msgsComCorretor: MensagemDaConversa[] = [
+        fala('agente', 'Atendimento com corretor', 'agendar_reuniao', 0, 'Helena Braga'),
+      ];
+
+      const emInicial = '2026-10-08T12:34:00-03:00';
+      api.obterConversa.and.resolveTo({
+        ...conversa(msgsComCorretor, false, PERFIL_VAZIO, []),
+        conversaId: 'c-contato-limpeza',
+        contatoEm: emInicial,
+      });
+      await store.iniciar();
+
+      let recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado') as any[];
+      expect(recibos.length).toBe(1);
+      expect(recibos[0].hora).toBe(horaDe(emInicial));
+      const idRecibo = recibos[0].id;
+
+      api.obterConversa.and.resolveTo({
+        ...conversa(msgsComCorretor, false, PERFIL_VAZIO, []),
+        conversaId: 'c-contato-limpeza',
+        contatoEm: null,
+      });
+      await store.verificarNovasMensagens();
+
+      recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado') as any[];
+      expect(recibos.length).toBe(1);
+      expect(recibos[0].id).toBe(idRecibo);
+      expect(recibos[0].hora).toBeNull();
+      expect((store as any).timestampContato).toBeNull();
+
+      const semCampo = { ...conversa(msgsComCorretor, false, PERFIL_VAZIO, []), conversaId: 'c-contato-limpeza' };
+      delete (semCampo as any).contatoEm;
+      api.obterConversa.and.resolveTo(semCampo);
+      await store.verificarNovasMensagens();
+
+      recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado') as any[];
+      expect(recibos.length).toBe(1);
+      expect(recibos[0].id).toBe(idRecibo);
+      expect(recibos[0].hora).toBeNull();
+      expect((store as any).timestampContato).toBeNull();
+
+      api.obterConversa.and.resolveTo({
+        ...conversa(msgsComCorretor, false, PERFIL_VAZIO, []),
+        conversaId: 'c-contato-limpeza',
+        contatoEm: 'data-invalida-iso',
+      });
+      await store.verificarNovasMensagens();
+
+      recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado') as any[];
+      expect(recibos.length).toBe(1);
+      expect(recibos[0].id).toBe(idRecibo);
+      expect(recibos[0].hora).toBeNull();
+      expect((store as any).timestampContato).toBeNull();
+
+      const emNova = '2026-10-08T15:20:00-03:00';
+      api.obterConversa.and.resolveTo({
+        ...conversa(msgsComCorretor, false, PERFIL_VAZIO, []),
+        conversaId: 'c-contato-limpeza',
+        contatoEm: emNova,
+      });
+      await store.verificarNovasMensagens();
+
+      recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado') as any[];
+      expect(recibos.length).toBe(1);
+      expect(recibos[0].id).toBe(idRecibo);
+      expect(recibos[0].hora).toBe(horaDe(emNova));
+      expect((store as any).timestampContato).toBe(emNova);
+
+      api.obterConversa.and.resolveTo({
+        ...conversa(msgsComCorretor, false, PERFIL_VAZIO, []),
+        conversaId: 'c-contato-limpeza',
+        contatoEm: null,
+      });
+      await store.verificarNovasMensagens();
+
+      recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado') as any[];
+      expect(recibos.length).toBe(1);
+      expect(recibos[0].id).toBe(idRecibo);
+      expect(recibos[0].hora).toBeNull();
+      expect((store as any).timestampContato).toBeNull();
+
+      store.itens.set(store.itens().filter((i) => !(i.tipo === 'evento' && i.rotulo === 'Contato enviado')));
+      api.enviarMensagem.and.resolveTo({
+        conversaId: 'c-contato-limpeza',
+        resposta: 'Entendido, transferindo.',
+        intencao: 'compra',
+        proximaAcao: 'agendar_reuniao',
+        perfilLead: PERFIL_VAZIO,
+        imoveisSugeridos: [],
+        corretor: 'Helena Braga',
+        contatoPendente: false,
+        agendamento: null,
+      });
+      await store.enviar('preciso falar com corretor');
+
+      const reciboNovo = store.itens().find((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado') as any;
+      expect(reciboNovo).toBeDefined();
+      expect(reciboNovo.hora).toBeNull();
+      expect((store as any).timestampContato).toBeNull();
+    });
   });
 });
 
