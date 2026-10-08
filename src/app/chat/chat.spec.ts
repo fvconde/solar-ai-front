@@ -9,6 +9,7 @@ import {
   AgendamentoDaConversa,
   ExclusaoTitularResponse,
   MensagemDaConversa,
+  MensagemResponse,
   ProximaAcao,
   SlotOferecido,
   VERSAO_AVISO_PRIVACIDADE,
@@ -2270,17 +2271,151 @@ describe('Chat', () => {
       tick();
       fixture.detectChanges();
 
+      const snapshotFonteAntes = store.itens().map((i) => ({ ...i }));
+      const apresentacaoPosConf = fixture.componentInstance.itensApresentacao();
+      const snapshotFonteDepois = store.itens();
+      expect(snapshotFonteDepois.length).toBe(snapshotFonteAntes.length);
+      expect(snapshotFonteDepois).toEqual(snapshotFonteAntes);
+      for (let i = 0; i < snapshotFonteAntes.length; i++) {
+        expect(snapshotFonteDepois[i].id).toBe(snapshotFonteAntes[i].id);
+        expect(snapshotFonteDepois[i].tipo).toBe(snapshotFonteAntes[i].tipo);
+      }
+      expect((store.itens() as { tipo: string }[]).some((i) => i.tipo === 'marcador-cartao')).toBeFalse();
+
+      const itemReciboPosConf = apresentacaoPosConf.find(
+        (i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado',
+      );
+      const itemCartaoPosConf = apresentacaoPosConf.find((i) => i.tipo === 'marcador-cartao');
+      expect(itemReciboPosConf?.id).toBe(`recibo:${idConversa}`);
+      expect(itemCartaoPosConf?.id).toBe(`cartao:${idConversa}`);
+      const idReciboAntes = itemReciboPosConf?.id;
+      const idCartaoAntes = itemCartaoPosConf?.id;
+
+      const domRecibosPosConf = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
+        (e) => e.textContent?.includes('Contato enviado'),
+      );
+      const domCartoesPosConf = html(fixture).querySelectorAll('app-cartao-agendamento');
+      expect(domRecibosPosConf.length).toBe(1);
+      expect(domCartoesPosConf.length).toBe(1);
+      const refDomReciboAntes = domRecibosPosConf[0];
+      const refDomCartaoAntes = domCartoesPosConf[0];
+
+      void store.enviar('Tenho uma dúvida sobre a documentação.');
+      fixture.detectChanges();
+
+      const reqEnvio = httpMock.expectOne(`/conversas/${idConversa}/mensagens`);
+      expect(reqEnvio.request.method).toBe('POST');
+      expect(reqEnvio.request.body).toEqual({ texto: 'Tenho uma dúvida sobre a documentação.' });
+
+      const respostaAoVivo: MensagemResponse = {
+        conversaId: idConversa,
+        resposta: 'Sua reunião já está confirmada e o corretor dará continuidade ao atendimento.',
+        intencao: 'compra',
+        proximaAcao: 'agendar_reuniao',
+        perfilLead: {
+          nome: null,
+          intencao: 'compra',
+          precoMin: null,
+          precoMax: null,
+          quartos: null,
+          regiao: null,
+          urgencia: null,
+          expectativaRetorno: null,
+          score: null,
+        },
+        imoveisSugeridos: [],
+        corretor: 'Helena Braga',
+        contatoPendente: false,
+        agendamento: null,
+      };
+      reqEnvio.flush(respostaAoVivo);
+      tick();
+      fixture.detectChanges();
+
+      const elementosAoVivo = Array.from(html(fixture).querySelector('.coluna')?.children ?? []);
+      const idxEncAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Encaminhado'),
+      );
+      const idxRecAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Contato enviado'),
+      );
+      const idxCarAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-cartao-agendamento',
+      );
+      const idxLeadHorarioAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('Quarta, 7 de outubro'),
+      );
+      const idxCombAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('Combinado!'),
+      );
+      const idxNovaPessoaAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('Tenho uma dúvida'),
+      );
+      const idxNovaLiaAoVivo = elementosAoVivo.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('Sua reunião já está confirmada'),
+      );
+
+      expect(idxEncAoVivo).toBeGreaterThan(-1);
+      expect(idxRecAoVivo).toBe(idxEncAoVivo + 1);
+      expect(idxCarAoVivo).toBe(idxRecAoVivo + 1);
+      expect(idxLeadHorarioAoVivo).toBeGreaterThan(idxCarAoVivo);
+      expect(idxCombAoVivo).toBeGreaterThan(idxLeadHorarioAoVivo);
+      expect(idxNovaPessoaAoVivo).toBeGreaterThan(idxCombAoVivo);
+      expect(idxNovaLiaAoVivo).toBeGreaterThan(idxNovaPessoaAoVivo);
+
+      const cartoesAoVivo = html(fixture).querySelectorAll('app-cartao-agendamento');
+      expect(cartoesAoVivo.length).toBe(1);
+      const recibosAoVivo = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
+        (e) => e.textContent?.includes('Contato enviado'),
+      );
+      expect(recibosAoVivo.length).toBe(1);
+
+      expect(recibosAoVivo[0]).toBe(refDomReciboAntes);
+      expect(cartoesAoVivo[0]).toBe(refDomCartaoAntes);
+
+      const apresentacaoAoVivo = fixture.componentInstance.itensApresentacao();
+      const itemReciboAoVivo = apresentacaoAoVivo.find(
+        (i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado',
+      );
+      const itemCartaoAoVivo = apresentacaoAoVivo.find((i) => i.tipo === 'marcador-cartao');
+      expect(itemReciboAoVivo?.id).toBe(idReciboAntes);
+      expect(itemCartaoAoVivo?.id).toBe(idCartaoAntes);
+
+      const slotsAoVivo = cartoesAoVivo[0].querySelectorAll('.slot-botao');
+      expect(slotsAoVivo.length).toBe(1);
+      const btnSlotAoVivo = slotsAoVivo[0] as HTMLButtonElement;
+      expect(btnSlotAoVivo.disabled).toBeTrue();
+      expect(btnSlotAoVivo.getAttribute('aria-pressed')).toBe('true');
+      expect(btnSlotAoVivo.classList.contains('selecionado')).toBeTrue();
+      expect(cartoesAoVivo[0].querySelector('.link-recolher')).toBeNull();
+
+      expect(elementosAoVivo[idxNovaPessoaAoVivo].textContent).toContain('Tenho uma dúvida sobre a documentação.');
+      expect(elementosAoVivo[idxNovaLiaAoVivo].textContent).toContain(
+        'Sua reunião já está confirmada e o corretor dará continuidade ao atendimento.',
+      );
+
+      httpMock.expectNone(`/conversas/${idConversa}/agendamentos`);
+      httpMock.expectNone(`/conversas/${idConversa}/contato`);
+
       tick(3000);
       const reqPolling = httpMock.expectOne(`/conversas/${idConversa}`);
       expect(reqPolling.request.method).toBe('GET');
-      const msgsAposNovas: MensagemDaConversa[] = [
+      const msgsAposPolling: MensagemDaConversa[] = [
         ...msgsAposReserva,
         {
           papel: 'lead',
-          texto: 'Pode me enviar o catálogo antes?',
+          texto: 'Tenho uma dúvida sobre a documentação.',
           em: '2026-10-07T08:02:00Z',
           proximaAcao: null,
           corretor: null,
+          agendamento: null,
+        },
+        {
+          papel: 'agente',
+          texto: 'Sua reunião já está confirmada e o corretor dará continuidade ao atendimento.',
+          em: '2026-10-07T08:02:05Z',
+          proximaAcao: 'agendar_reuniao',
+          corretor: 'Helena Braga',
           agendamento: null,
         },
         {
@@ -2293,86 +2428,89 @@ describe('Chat', () => {
         },
       ];
       reqPolling.flush(
-        conversaComOferta(idConversa, [], 'Helena Braga', false, confData, msgsAposNovas),
+        conversaComOferta(idConversa, [], 'Helena Braga', false, confData, msgsAposPolling),
       );
       tick();
       fixture.detectChanges();
 
-      const elementosColuna = Array.from(html(fixture).querySelector('.coluna')?.children ?? []);
-      const idxEnc = elementosColuna.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Encaminhado'),
-      );
-      const idxRec = elementosColuna.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-evento-sistema' && e.textContent?.includes('Contato enviado'),
-      );
-      const idxCar = elementosColuna.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-cartao-agendamento',
-      );
-      const idxLead = elementosColuna.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('Quarta, 7 de outubro'),
-      );
-      const idxComb = elementosColuna.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('Combinado!'),
-      );
-      const idxNovaLead = elementosColuna.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('catálogo'),
-      );
-      const idxNovaLia = elementosColuna.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('preparando o catálogo'),
-      );
-
-      expect(idxEnc).toBeGreaterThan(-1);
-      expect(idxRec).toBe(idxEnc + 1);
-      expect(idxCar).toBe(idxRec + 1);
-      expect(idxLead).toBeGreaterThan(idxCar);
-      expect(idxComb).toBeGreaterThan(idxLead);
-      expect(idxNovaLead).toBeGreaterThan(idxComb);
-      expect(idxNovaLia).toBeGreaterThan(idxNovaLead);
-
-      const cartoes = html(fixture).querySelectorAll('app-cartao-agendamento');
-      expect(cartoes.length).toBe(1);
-      const recibos = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).filter(
-        (e) => e.textContent?.includes('Contato enviado'),
-      );
-      expect(recibos.length).toBe(1);
-
-      const slotConfirmado = cartoes[0].querySelectorAll('.slot-botao');
-      expect(slotConfirmado.length).toBe(1);
-      const btnSlot = slotConfirmado[0] as HTMLButtonElement;
-      expect(btnSlot.disabled).toBeTrue();
-      expect(btnSlot.getAttribute('aria-pressed')).toBe('true');
-      expect(btnSlot.classList.contains('selecionado')).toBeTrue();
-      expect(cartoes[0].querySelector('.link-recolher')).toBeNull();
-
-      const itensApresentacao = (fixture.componentInstance as Chat).itensApresentacao();
-      const itemRecibo = itensApresentacao.find(
+      const apresentacaoAposPoll = fixture.componentInstance.itensApresentacao();
+      const itemReciboAposPoll = apresentacaoAposPoll.find(
         (i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado',
       );
-      const itemMarcador = itensApresentacao.find((i) => i.tipo === 'marcador-cartao');
-      expect(itemRecibo?.id).toBe(`recibo:${idConversa}`);
-      expect(itemMarcador?.id).toBe(`cartao:${idConversa}`);
+      const itemCartaoAposPoll = apresentacaoAposPoll.find((i) => i.tipo === 'marcador-cartao');
+      expect(itemReciboAposPoll?.id).toBe(idReciboAntes);
+      expect(itemCartaoAposPoll?.id).toBe(idCartaoAntes);
 
-      const falasPessoa = itensApresentacao.filter((i) => i.tipo === 'pessoa');
-      const falasLia = itensApresentacao.filter((i) => i.tipo === 'lia');
-      const divisores = itensApresentacao.filter((i) => i.tipo === 'divisor');
-      expect(falasPessoa.length).toBe(3);
-      expect(falasLia.length).toBe(3);
-      expect(divisores.length).toBeGreaterThanOrEqual(1);
+      const elementosAposPoll = Array.from(html(fixture).querySelector('.coluna')?.children ?? []);
+      const idxLiaCatalogoAoVivo = elementosAposPoll.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('preparando o catálogo'),
+      );
+      expect(idxLiaCatalogoAoVivo).toBeGreaterThan(idxNovaLiaAoVivo);
 
-      document.documentElement.setAttribute('data-tema', 'claro');
+      const container360 = document.createElement('div');
+      container360.style.width = '360px';
+      container360.style.boxSizing = 'border-box';
+      document.body.appendChild(container360);
+      container360.appendChild(fixture.nativeElement);
       fixture.detectChanges();
-      expect(estiloDoToken('--marca', 'backgroundColor')).toBeDefined();
 
-      document.documentElement.setAttribute('data-tema', 'escuro');
-      fixture.detectChanges();
-      expect(estiloDoToken('--marca', 'backgroundColor')).toBeDefined();
+      try {
+        const rectContainer = container360.getBoundingClientRect();
+        expect(rectContainer.width).toBe(360);
 
-      const palco = html(fixture).querySelector('.palco') as HTMLElement;
-      if (palco) {
-        palco.style.maxWidth = '360px';
+        const palco = html(fixture).querySelector('.palco') as HTMLElement;
+        expect(palco).not.toBeNull();
+        const rectPalco = palco.getBoundingClientRect();
+        expect(rectPalco.width).toBeGreaterThan(0);
+        expect(rectPalco.width).toBeLessThanOrEqual(rectContainer.width);
+
+        const cartaoAtual = html(fixture).querySelector('app-cartao-agendamento') as HTMLElement;
+        expect(cartaoAtual).not.toBeNull();
+        const rectCartao = cartaoAtual.getBoundingClientRect();
+        expect(rectCartao.width).toBeGreaterThan(0);
+        expect(rectCartao.right).toBeLessThanOrEqual(rectContainer.right + 1);
+
+        const reciboAtual = Array.from(html(fixture).querySelectorAll('app-evento-sistema')).find(
+          (e) => e.textContent?.includes('Contato enviado'),
+        ) as HTMLElement;
+        expect(reciboAtual).toBeDefined();
+        const rectRecibo = reciboAtual.getBoundingClientRect();
+        expect(rectRecibo.width).toBeGreaterThan(0);
+        expect(rectRecibo.right).toBeLessThanOrEqual(rectContainer.right + 1);
+
+        const btnSlotAtual = cartaoAtual.querySelector('.slot-botao') as HTMLButtonElement;
+        expect(btnSlotAtual).not.toBeNull();
+        const rectSlot = btnSlotAtual.getBoundingClientRect();
+        expect(rectSlot.width).toBeGreaterThan(0);
+        expect(rectSlot.right).toBeLessThanOrEqual(rectContainer.right + 1);
+
+        document.documentElement.setAttribute('data-tema', 'claro');
         fixture.detectChanges();
-        expect(palco.getBoundingClientRect().width).toBeLessThanOrEqual(360);
-        palco.style.maxWidth = '';
+        const bgClaro = estiloDoToken('--marca', 'backgroundColor');
+        const borderClaro = estiloDoToken('--marca', 'borderColor');
+        const textoClaro = estiloDoToken('--marca-contraste', 'color');
+        const estiloSlotClaro = window.getComputedStyle(btnSlotAtual);
+        expect(estiloSlotClaro.backgroundColor).toBe(bgClaro);
+        expect(estiloSlotClaro.borderTopColor).toBe(borderClaro);
+        expect(estiloSlotClaro.color).toBe(textoClaro);
+        expect(estiloSlotClaro.opacity).toBe('1');
+
+        document.documentElement.setAttribute('data-tema', 'escuro');
+        fixture.detectChanges();
+        const bgEscuro = estiloDoToken('--marca', 'backgroundColor');
+        const borderEscuro = estiloDoToken('--marca', 'borderColor');
+        const textoEscuro = estiloDoToken('--marca-contraste', 'color');
+        const estiloSlotEscuro = window.getComputedStyle(btnSlotAtual);
+        expect(estiloSlotEscuro.backgroundColor).toBe(bgEscuro);
+        expect(estiloSlotEscuro.borderTopColor).toBe(borderEscuro);
+        expect(estiloSlotEscuro.color).toBe(textoEscuro);
+        expect(estiloSlotEscuro.opacity).toBe('1');
+        expect(bgEscuro).not.toBe(bgClaro);
+      } finally {
+        if (document.body.contains(container360)) {
+          document.body.removeChild(container360);
+        }
+        document.documentElement.removeAttribute('data-tema');
       }
 
       store.pararPolling();
@@ -2380,21 +2518,47 @@ describe('Chat', () => {
       fixture.destroy();
       flush();
 
-      const fixtureReload = TestBed.createComponent(Chat);
+      TestBed.resetTestingModule();
+      TestBed.configureTestingModule({
+        imports: [Chat],
+        providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+      });
+      const httpMockReload = TestBed.inject(HttpTestingController);
       const storeReload = TestBed.inject(ConversaStore);
+      expect(storeReload).not.toBe(store);
+
+      const fixtureReload = TestBed.createComponent(Chat);
       fixtureReload.detectChanges();
 
-      const reqReload = httpMock.expectOne(`/conversas/${idConversa}`);
+      const reqReload = httpMockReload.expectOne(`/conversas/${idConversa}`);
       expect(reqReload.request.method).toBe('GET');
       reqReload.flush(
-        conversaComOferta(idConversa, [], 'Helena Braga', false, confData, msgsAposNovas),
+        conversaComOferta(idConversa, [], 'Helena Braga', false, confData, msgsAposPolling),
       );
       tick();
       fixtureReload.detectChanges();
 
-      httpMock.expectNone(`/conversas/${idConversa}/mensagens`);
-      httpMock.expectNone(`/conversas/${idConversa}/agendamentos`);
-      httpMock.expectNone(`/conversas/${idConversa}/contato`);
+      httpMockReload.expectNone(`/conversas/${idConversa}/mensagens`);
+      httpMockReload.expectNone(`/conversas/${idConversa}/agendamentos`);
+      httpMockReload.expectNone(`/conversas/${idConversa}/contato`);
+
+      const snapshotFonteReloadAntes = storeReload.itens().map((i) => ({ ...i }));
+      const apresentacaoReload = fixtureReload.componentInstance.itensApresentacao();
+      const snapshotFonteReloadDepois = storeReload.itens();
+      expect(snapshotFonteReloadDepois.length).toBe(snapshotFonteReloadAntes.length);
+      expect(snapshotFonteReloadDepois).toEqual(snapshotFonteReloadAntes);
+      for (let i = 0; i < snapshotFonteReloadAntes.length; i++) {
+        expect(snapshotFonteReloadDepois[i].id).toBe(snapshotFonteReloadAntes[i].id);
+        expect(snapshotFonteReloadDepois[i].tipo).toBe(snapshotFonteReloadAntes[i].tipo);
+      }
+      expect((storeReload.itens() as { tipo: string }[]).some((i) => i.tipo === 'marcador-cartao')).toBeFalse();
+
+      const itemReciboReload = apresentacaoReload.find(
+        (i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado',
+      );
+      const itemCartaoReload = apresentacaoReload.find((i) => i.tipo === 'marcador-cartao');
+      expect(itemReciboReload?.id).toBe(`recibo:${idConversa}`);
+      expect(itemCartaoReload?.id).toBe(`cartao:${idConversa}`);
 
       const elementosReload = Array.from(html(fixtureReload).querySelector('.coluna')?.children ?? []);
       const idxEncReload = elementosReload.findIndex(
@@ -2412,10 +2576,13 @@ describe('Chat', () => {
       const idxCombReload = elementosReload.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('Combinado!'),
       );
-      const idxNovaLeadReload = elementosReload.findIndex(
-        (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('catálogo'),
+      const idxPessoaDuvidaReload = elementosReload.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-mensagem-pessoa' && e.textContent?.includes('Tenho uma dúvida'),
       );
-      const idxNovaLiaReload = elementosReload.findIndex(
+      const idxLiaConfReload = elementosReload.findIndex(
+        (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('Sua reunião já está confirmada'),
+      );
+      const idxLiaCatalogoReload = elementosReload.findIndex(
         (e) => e.tagName.toLowerCase() === 'app-mensagem-lia' && e.textContent?.includes('preparando o catálogo'),
       );
 
@@ -2424,8 +2591,9 @@ describe('Chat', () => {
       expect(idxCarReload).toBe(idxRecReload + 1);
       expect(idxLeadReload).toBeGreaterThan(idxCarReload);
       expect(idxCombReload).toBeGreaterThan(idxLeadReload);
-      expect(idxNovaLeadReload).toBeGreaterThan(idxCombReload);
-      expect(idxNovaLiaReload).toBeGreaterThan(idxNovaLeadReload);
+      expect(idxPessoaDuvidaReload).toBeGreaterThan(idxCombReload);
+      expect(idxLiaConfReload).toBeGreaterThan(idxPessoaDuvidaReload);
+      expect(idxLiaCatalogoReload).toBeGreaterThan(idxLiaConfReload);
 
       expect(html(fixtureReload).querySelectorAll('app-cartao-agendamento').length).toBe(1);
       expect(
@@ -2434,8 +2602,17 @@ describe('Chat', () => {
         ).length,
       ).toBe(1);
 
+      const slotReloadEl = html(fixtureReload).querySelector('.slot-botao') as HTMLButtonElement;
+      expect(slotReloadEl).not.toBeNull();
+      expect(slotReloadEl.disabled).toBeTrue();
+      expect(slotReloadEl.getAttribute('aria-pressed')).toBe('true');
+      expect(slotReloadEl.classList.contains('selecionado')).toBeTrue();
+
+      const divisoresReload = apresentacaoReload.filter((i) => i.tipo === 'divisor');
+      expect(divisoresReload.length).toBeGreaterThanOrEqual(1);
+
       storeReload.pararPolling();
-      httpMock.verify();
+      httpMockReload.verify();
       fixtureReload.destroy();
       flush();
     }));
