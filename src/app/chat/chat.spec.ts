@@ -4460,6 +4460,11 @@ describe('Chat', () => {
       tick();
       fixture.detectChanges();
 
+      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(1);
+      const msgsPessoaAntes = Array.from(html(fixture).querySelectorAll('app-mensagem-pessoa'));
+      expect(msgsPessoaAntes.length).toBeGreaterThanOrEqual(1);
+      expect(msgsPessoaAntes.some((el) => el.textContent?.includes('Quero um apartamento.'))).toBeTrue();
+
       void store.registrarAgendamento(501);
       const reqPost = httpMock.expectOne({ method: 'POST', url: '/conversas/c-t6-dom-horas/agendamentos' });
       expect(reqPost.request.body).toEqual({ slotId: 501 });
@@ -4502,9 +4507,15 @@ describe('Chat', () => {
       tick();
       fixture.detectChanges();
 
-      expect(html(fixture).querySelector('app-agendamento-card')).toBeNull();
-      const falasPessoaAoVivo = Array.from(html(fixture).querySelectorAll('.pessoa'));
-      expect(falasPessoaAoVivo.some((el) => el.textContent?.includes('Quinta, 15 de outubro'))).toBeFalse();
+      expect(html(fixture).querySelectorAll('app-cartao-agendamento').length).toBe(0);
+
+      const falasPessoaAoVivo = Array.from(html(fixture).querySelectorAll('app-mensagem-pessoa'));
+      expect(falasPessoaAoVivo.some((el) => el.textContent?.includes('Quinta, 15 de outubro às 14h'))).toBeFalse();
+      expect(falasPessoaAoVivo.some((el) => el.textContent?.includes('Quero um apartamento.'))).toBeTrue();
+
+      const falasLiaAoVivo = Array.from(html(fixture).querySelectorAll('app-mensagem-lia'));
+      expect(falasLiaAoVivo.some((el) => el.textContent?.includes('Reunião agendada com Helena Braga.'))).toBeFalse();
+      expect(falasLiaAoVivo.some((el) => el.textContent?.includes('Encaminhando para Helena Braga.'))).toBeTrue();
 
       const eventosAoVivo = html(fixture).querySelectorAll('app-evento-sistema');
       expect(eventosAoVivo.length).toBe(3);
@@ -4555,9 +4566,15 @@ describe('Chat', () => {
       tick();
       fixtureReload.detectChanges();
 
-      expect(html(fixtureReload).querySelector('app-agendamento-card')).toBeNull();
-      const falasPessoaReload = Array.from(html(fixtureReload).querySelectorAll('.pessoa'));
-      expect(falasPessoaReload.some((el) => el.textContent?.includes('Quinta, 15 de outubro'))).toBeFalse();
+      expect(html(fixtureReload).querySelectorAll('app-cartao-agendamento').length).toBe(0);
+
+      const falasPessoaReload = Array.from(html(fixtureReload).querySelectorAll('app-mensagem-pessoa'));
+      expect(falasPessoaReload.some((el) => el.textContent?.includes('Quinta, 15 de outubro às 14h'))).toBeFalse();
+      expect(falasPessoaReload.some((el) => el.textContent?.includes('Quero um apartamento.'))).toBeTrue();
+
+      const falasLiaReload = Array.from(html(fixtureReload).querySelectorAll('app-mensagem-lia'));
+      expect(falasLiaReload.some((el) => el.textContent?.includes('Reunião agendada com Helena Braga.'))).toBeFalse();
+      expect(falasLiaReload.some((el) => el.textContent?.includes('Encaminhando para Helena Braga.'))).toBeTrue();
 
       const eventosReload = html(fixtureReload).querySelectorAll('app-evento-sistema');
       expect(eventosReload.length).toBe(3);
