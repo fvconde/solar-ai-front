@@ -73,6 +73,7 @@ export interface ContatoRequest {
 export interface ContatoResponse {
   leadId: string;
   oferta: SlotOferecido[];
+  contatoEm?: string | null;
 }
 
 export interface AgendamentoRequest {
@@ -122,6 +123,7 @@ export interface ConversaResponse {
   consentimentoEm: string | null;
   versaoAvisoPrivacidade: string | null;
   oferta: SlotOferecido[];
+  contatoEm?: string | null;
 }
 
 export interface ExclusaoTitularResponse {

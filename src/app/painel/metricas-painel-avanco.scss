@@ -4,16 +4,12 @@
 .card-intencao.coluna-dupla { grid-column: 1 / -1; }
 .aviso-parcial { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 1.4; color: var(--texto-secundario); }
 .marcador-neutro { width: 8px; height: 8px; border-radius: 50%; background: var(--neutro); flex: none; }
-.mini-grafico-celular { display: none; }
 .trilho.follow-up-total > span { background: color-mix(in srgb, var(--marca) 70%, var(--superficie-elevada)); }
 .svg-tempo { display: block; overflow: visible; }
 .linha-followup { display: flex; justify-content: space-between; align-items: center; font-size: 12.5px; color: var(--texto-secundario); }
 .linha-followup strong, .linha-followup .mono { color: var(--texto-primario); }
 @media (max-width: 860px) {
-  .mini-grafico-celular { display: block; margin-top: 6px; }
-  .mini-grafico-celular .aviso-parcial { margin-bottom: 6px; }
-  .principais { display: none; }
-  .expandida .principais, .expandida .principais.com-equipe { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
-  .expandida .card-grafico { flex: none; width: 100%; box-sizing: border-box; }
-  .expandida .bloco-cards { flex: none; width: 100%; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
+  .principais, .principais.com-equipe { display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+  .card-grafico { flex: none; width: 100%; box-sizing: border-box; }
+  .bloco-cards { flex: none; width: 100%; display: flex; flex-direction: column; gap: 12px; box-sizing: border-box; }
 }

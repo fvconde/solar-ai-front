@@ -51,6 +51,7 @@ export interface ItemEvento {
   rotulo: string;
   texto: string;
   acao: AcaoEvento | null;
+  hora?: string | null;
 }
 
 /** O formulario de contato do handoff, enquanto o lead nao informou como falar com ele. */

@@ -19,13 +19,11 @@ export class MetricasPainel implements OnInit, OnDestroy {
   private readonly api = inject(PainelApi);
   private readonly sessao = inject(SessaoStore);
   private requisicao?: Subscription;
-  private readonly chave = `solar.metricas.${this.sessao.usuario()?.id ?? 'sessao'}`;
   readonly abrirPendentes = output<void>();
   readonly f = formatadorMetricas;
   readonly dados = signal<MetricasPainelResponse | null>(null);
   readonly carregando = signal(true);
   readonly erro = signal(false);
-  readonly expandido = signal(false);
   readonly supervisor = computed(() => this.sessao.perfil() === 'supervisor');
   readonly tituloIniciadas = computed(() => this.supervisor() ? 'Conversas iniciadas' : 'Conversas atribuídas a você');
   readonly intencoes = computed(() => {
@@ -122,7 +120,6 @@ export class MetricasPainel implements OnInit, OnDestroy {
   readonly vazio = computed(() => (this.dados()?.extras.privacidade.leads ?? 0) === 0 && this.baseAvanco() === 0);
 
   ngOnInit(): void {
-    try { this.expandido.set(localStorage.getItem(this.chave) === '1'); } catch {}
     this.carregar();
   }
 
@@ -134,11 +131,6 @@ export class MetricasPainel implements OnInit, OnDestroy {
       next: dados => { this.dados.set(dados); this.carregando.set(false); },
       error: () => { this.erro.set(true); this.carregando.set(false); },
     });
-  }
-
-  alternar(): void {
-    this.expandido.update(v => !v);
-    try { localStorage.setItem(this.chave, this.expandido() ? '1' : '0'); } catch {}
   }
 
   criterio(tipo: string): string {

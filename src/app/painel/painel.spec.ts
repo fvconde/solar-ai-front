@@ -330,13 +330,13 @@ describe('Painel (S-21)', () => {
     fixture.detectChanges();
 
     const html = fixture.nativeElement as HTMLElement;
-    expect(html.querySelectorAll('[role="tab"]').length).toBe(4);
+    expect(html.querySelectorAll('[role="tab"]').length).toBe(5);
     expect(html.querySelector('.seletor-filtros')).toBeNull();
     expect(html.querySelector('#aba-minha_fila')?.getAttribute('aria-selected')).toBe('true');
     const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Visão geral', 'Minha fila', 'Sem corretor elegível', 'Novos corretores']);
+    expect(botoes).toEqual(['Visão geral', 'Minha fila', 'Sem corretor elegível', 'Métricas', 'Novos corretores']);
   });
 
   it('6. supervisor sem vínculo não renderiza "Minha fila" de forma alguma', () => {
@@ -371,7 +371,7 @@ describe('Painel (S-21)', () => {
     const botoes = Array.from(html.querySelectorAll('.aba-supervisor')).map((b) =>
       b.textContent?.trim(),
     );
-    expect(botoes).toEqual(['Visão geral', 'Sem corretor elegível', 'Novos corretores']);
+    expect(botoes).toEqual(['Visão geral', 'Sem corretor elegível', 'Métricas', 'Novos corretores']);
   });
 
   it('7. estado de acesso restrito bloqueia antes de chamada de dados ou em 403', () => {
@@ -1097,5 +1097,145 @@ describe('Painel (S-21)', () => {
     fixtureLocal.detectChanges();
     expect(comp.transcricaoVisivel().length).toBe(2);
     expect(comp.transcricaoVisivel()[0].papel).toBe('lia');
+  });
+
+  it('corretor aprovado visualiza abas "Meus leads" e "Métricas", sem abas de supervisor ou Novos corretores', () => {
+    sessao.definir({
+      usuario: corretorComum,
+      perfil: 'corretor',
+      statusCorretor: 'aprovado',
+      corretorId: 'c-201',
+      vinculoAtivo: true,
+      filtrosPermitidos: ['meus_leads'],
+      filtroInicial: 'meus_leads',
+      pendentesAprovacao: 0,
+    });
+    const fixture = montarComponente();
+    const html = fixture.nativeElement as HTMLElement;
+    const abas = Array.from(html.querySelectorAll('[role="tab"]')).map((el) => el.textContent?.trim());
+    expect(abas).toEqual(['Meus leads', 'Métricas']);
+    expect(html.querySelector('#aba-novos-corretores')).toBeNull();
+    expect(html.querySelector('#aba-meus-leads')?.getAttribute('aria-selected')).toBe('true');
+    expect(html.querySelector('#aba-metricas')?.getAttribute('aria-selected')).toBe('false');
+    expect(html.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeFalse();
+    expect(html.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeTrue();
+  });
+
+  it('corretor em análise não visualiza barra de abas nem painel de métricas', () => {
+    sessao.definir({
+      usuario: corretorComum,
+      perfil: 'corretor',
+      statusCorretor: 'em_analise',
+      corretorId: 'c-201',
+      vinculoAtivo: false,
+      filtrosPermitidos: [],
+      filtroInicial: 'meus_leads',
+      pendentesAprovacao: 0,
+    });
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+    const html = fixture.nativeElement as HTMLElement;
+    expect(html.querySelectorAll('[role="tab"]').length).toBe(0);
+    expect(html.querySelector('#painel-metricas')).toBeNull();
+    expect(html.querySelector('app-metricas-painel')).toBeNull();
+  });
+
+  it('selecionar Métricas oculta a fila de leads e exibe painel-metricas sem disparar filtro=metricas na API', () => {
+    sessao.definir({
+      usuario: { id: 's-1', nome: 'Supervisor', email: 's@solar.com.br' },
+      perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 0,
+      corretorId: 'c-201',
+      vinculoAtivo: true,
+      filtrosPermitidos: ['minha_fila', 'visao_geral'],
+      filtroInicial: 'visao_geral',
+    });
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+    httpMock.expectOne('/api/painel/corretores/pendentes').flush([]);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('#aba-visao_geral') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    httpMock.expectOne((r) => r.url === '/api/painel/leads').flush(filaMock);
+    fixture.detectChanges();
+
+    const comp = fixture.componentInstance;
+    (fixture.nativeElement.querySelector('#aba-metricas') as HTMLButtonElement).click();
+    fixture.detectChanges();
+
+    expect(comp.metricasAtivo()).toBeTrue();
+    expect(comp.abaAtivaId()).toBe('aba-metricas');
+    expect(fixture.nativeElement.querySelector('#aba-metricas')?.getAttribute('aria-selected')).toBe('true');
+    expect(fixture.nativeElement.querySelector('#aba-visao_geral')?.getAttribute('aria-selected')).toBe('false');
+    expect(fixture.nativeElement.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeTrue();
+    expect(fixture.nativeElement.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeFalse();
+
+    const reqsMetricas = httpMock.match((r) => r.url === '/api/painel/leads' && r.params.get('filtro') === 'metricas');
+    expect(reqsMetricas.length).toBe(0);
+
+    comp.selecionarFiltro('minha_fila');
+    fixture.detectChanges();
+    httpMock.expectOne((r) => r.url === '/api/painel/leads' && r.params.get('filtro') === 'minha_fila').flush(filaMock);
+    fixture.detectChanges();
+
+    expect(comp.metricasAtivo()).toBeFalse();
+    expect(comp.abaAtivaId()).toBe('aba-minha_fila');
+    expect(fixture.nativeElement.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeFalse();
+    expect(fixture.nativeElement.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeTrue();
+  });
+
+  it('retomar meus leads no corretor desativa metricasAtivo', () => {
+    sessao.definir({
+      usuario: corretorComum,
+      perfil: 'corretor',
+      statusCorretor: 'aprovado',
+      corretorId: 'c-201',
+      vinculoAtivo: true,
+      filtrosPermitidos: ['meus_leads'],
+      filtroInicial: 'meus_leads',
+      pendentesAprovacao: 0,
+    });
+    const fixture = montarComponente();
+    const comp = fixture.componentInstance;
+
+    (fixture.nativeElement.querySelector('#aba-metricas') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(comp.metricasAtivo()).toBeTrue();
+    expect(comp.abaAtivaId()).toBe('aba-metricas');
+
+    (fixture.nativeElement.querySelector('#aba-meus-leads') as HTMLButtonElement).click();
+    fixture.detectChanges();
+    expect(comp.metricasAtivo()).toBeFalse();
+    expect(comp.abaAtivaId()).toBe('aba-meus-leads');
+    expect(fixture.nativeElement.querySelector('#painel-fila-leads')?.classList.contains('oculto')).toBeFalse();
+    expect(fixture.nativeElement.querySelector('#painel-metricas')?.classList.contains('oculto')).toBeTrue();
+  });
+
+  it('abrirPendentes na aba Métricas desativa metricasAtivo e ativa novosCorretoresAtivo', () => {
+    sessao.definir({
+      usuario: { id: 's-1', nome: 'Supervisor', email: 's@solar.com.br' },
+      perfil: 'supervisor',
+      statusCorretor: 'aprovado',
+      pendentesAprovacao: 2,
+      corretorId: 'c-201',
+      vinculoAtivo: true,
+      filtrosPermitidos: ['minha_fila', 'visao_geral'],
+      filtroInicial: 'minha_fila',
+    });
+    const fixture = TestBed.createComponent(Painel);
+    fixture.detectChanges();
+    const comp = fixture.componentInstance;
+
+    comp.selecionarMetricas();
+    fixture.detectChanges();
+    expect(comp.metricasAtivo()).toBeTrue();
+    expect(comp.novosCorretoresAtivo()).toBeFalse();
+
+    comp.selecionarNovosCorretores();
+    fixture.detectChanges();
+    expect(comp.metricasAtivo()).toBeFalse();
+    expect(comp.novosCorretoresAtivo()).toBeTrue();
+    expect(comp.abaAtivaId()).toBe('aba-novos-corretores');
   });
 });
