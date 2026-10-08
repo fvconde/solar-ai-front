@@ -27,7 +27,7 @@ import { LIMITE_MENSAGEM } from '../conversa/contrato';
             [value]="texto()"
             [disabled]="!campoEditavel()"
             [attr.maxlength]="limite"
-            placeholder="Escreva sua mensagem"
+            placeholder="Mensagem"
             aria-label="Escreva sua mensagem"
             (input)="aoDigitar($event)"
             (keydown.enter)="aoEnter($event)"

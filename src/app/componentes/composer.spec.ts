@@ -27,6 +27,9 @@ describe('Composer', () => {
     fixture.componentRef.setInput('podeApagar', false);
     fixture.detectChanges();
 
+    const textarea = el().querySelector<HTMLTextAreaElement>('textarea');
+    expect(textarea?.placeholder).toBe('Mensagem');
+
     const nav = el().querySelector('nav[aria-label="Seus dados"]');
     expect(nav).toBeTruthy();
 
