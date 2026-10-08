@@ -2960,7 +2960,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(recibos.length).toBe(1);
     expect(store.itens().some((i) => i.tipo === 'contato')).toBeFalse();
 
-    // Poll 1: mesma contagem de mensagens, contatoPendente vira true
     api.obterConversa.and.resolveTo(conversa(mensagensFixas, true, PERFIL_VAZIO, []));
     await store.verificarNovasMensagens();
 
@@ -2969,7 +2968,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.itens().some((i) => i.tipo === 'contato')).toBeTrue();
     expect(store.contatoRegistrado()).toBeFalse();
 
-    // Poll 2: mesma contagem de mensagens, contatoPendente volta a false
     api.obterConversa.and.resolveTo(conversa(mensagensFixas, false, PERFIL_VAZIO, [slot1]));
     await store.verificarNovasMensagens();
 
@@ -2978,7 +2976,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.itens().some((i) => i.tipo === 'contato')).toBeFalse();
     expect(store.contatoRegistrado()).toBeTrue();
 
-    // Confirmar que GET foi consumido e nao houve POST
     expect(api.obterConversa).toHaveBeenCalledTimes(3);
     expect(api.enviarMensagem).not.toHaveBeenCalled();
     expect(api.registrarContato).not.toHaveBeenCalled();
@@ -3013,13 +3010,11 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
       expect(recibos[0].texto).not.toContain('sentinela@teste.com');
     }
 
-    // Polling GET com contatoPendente: false
     api.obterConversa.and.resolveTo(conversa(mensagensFixas, false, PERFIL_VAZIO, [slot1]));
     await store.verificarNovasMensagens();
     recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
     expect(recibos.length).toBe(1);
 
-    // Reserva 200
     api.registrarAgendamento.and.resolveTo(confirmacaoSlot1);
     const mensagensConfirmadas = [
       ...mensagensFixas,
@@ -3032,7 +3027,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
     expect(recibos.length).toBe(1);
 
-    // Reload da conversa
     const storeReload = TestBed.runInInjectionContext(() => new ConversaStore());
     api.obterConversa.and.resolveTo(conversa(mensagensConfirmadas, false, PERFIL_VAZIO, []));
     await storeReload.abrirConversa('c1');
@@ -3041,7 +3035,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     const recibosReload = storeReload.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
     expect(recibosReload.length).toBe(1);
 
-    // Sentinelas ausentes de storage
     for (let i = 0; i < sessionStorage.length; i++) {
       const k = sessionStorage.key(i)!;
       const v = sessionStorage.getItem(k)!;
@@ -3067,7 +3060,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     api.obterConversa.and.resolveTo(conversa(mensagensFixas, true, PERFIL_VAZIO, []));
     await store.iniciar();
 
-    // Falha no POST registrarContato
     api.registrarContato.and.rejectWith(new Error('500 Internal Error'));
     await store.enviarContato({ nome: 'Teste', telefone: '11999990000', email: null });
 
@@ -3075,7 +3067,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')).toBeFalse();
     expect(store.itens().some((i) => i.tipo === 'contato')).toBeTrue();
 
-    // Sucesso com oferta vazia []
     api.registrarContato.and.resolveTo({ leadId: 'lead-vazio', oferta: [] });
     await store.enviarContato({ nome: 'Teste', telefone: '11999990000', email: null });
 
@@ -3087,7 +3078,6 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     const recibos = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
     expect(recibos.length).toBe(1);
 
-    // novaConversa limpa estado
     await store.novaConversa();
     expect(store.itens().length).toBe(0);
     expect(store.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')).toBeFalse();
@@ -3100,23 +3090,19 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(sessionStorage.getItem(chave)).toBeNull();
     expect(store.agendamentoRecolhido()).toBeFalse();
 
-    // Recolher
     store.recolherAgendamento();
     expect(store.agendamentoRecolhido()).toBeTrue();
     expect(sessionStorage.getItem(chave)).toBe('1');
 
-    // Reload (F5)
     const storeF5 = TestBed.runInInjectionContext(() => new ConversaStore());
     api.obterConversa.and.resolveTo(conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1, slot2]));
     await storeF5.abrirConversa('c1');
     expect(storeF5.agendamentoRecolhido()).toBeTrue();
 
-    // Reabrir
     storeF5.reabrirAgendamento();
     expect(storeF5.agendamentoRecolhido()).toBeFalse();
     expect(sessionStorage.getItem(chave)).toBeNull();
 
-    // Valor invalido em storage e ignorado (trata como false)
     sessionStorage.setItem(chave, 'qualquer-coisa');
     const storeInvalido = TestBed.runInInjectionContext(() => new ConversaStore());
     await storeInvalido.abrirConversa('c1');
@@ -3124,19 +3110,29 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
   });
 
   it('R2: excecoes em getItem/setItem/removeItem de sessionStorage nao quebram UX nem lanca erro', async () => {
-    await inicializarComOferta([slot1, slot2]);
+    const chaveC1 = 'solar.agendamentoRecolhido.v1:c1';
+    const spySet = spyOn(sessionStorage, 'setItem').and.throwError(new DOMException('QuotaExceededError'));
+    const spyGet = spyOn(sessionStorage, 'getItem').and.throwError(new DOMException('SecurityError'));
+    const spyRemove = spyOn(sessionStorage, 'removeItem').and.throwError(new DOMException('SecurityError'));
 
-    spyOn(sessionStorage, 'setItem').and.throwError(new DOMException('QuotaExceededError'));
-    spyOn(sessionStorage, 'getItem').and.throwError(new DOMException('SecurityError'));
-    spyOn(sessionStorage, 'removeItem').and.throwError(new DOMException('SecurityError'));
+    const storeComErro = TestBed.runInInjectionContext(() => new ConversaStore());
+    api.obterConversa.and.resolveTo(
+      conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1, slot2]),
+    );
+    await storeComErro.abrirConversa('c1');
 
-    expect(() => store.recolherAgendamento()).not.toThrow();
-    expect(store.agendamentoRecolhido()).toBeTrue();
+    expect(spyGet).toHaveBeenCalledWith(chaveC1);
+    expect(storeComErro.agendamentoRecolhido()).toBeFalse();
 
-    expect(() => store.reabrirAgendamento()).not.toThrow();
-    expect(store.agendamentoRecolhido()).toBeFalse();
+    expect(() => storeComErro.recolherAgendamento()).not.toThrow();
+    expect(spySet).toHaveBeenCalledWith(chaveC1, '1');
+    expect(storeComErro.agendamentoRecolhido()).toBeTrue();
 
-    expect(() => store.novaConversa()).not.toThrow();
+    expect(() => storeComErro.reabrirAgendamento()).not.toThrow();
+    expect(spyRemove).toHaveBeenCalledWith(chaveC1);
+    expect(storeComErro.agendamentoRecolhido()).toBeFalse();
+
+    expect(() => storeComErro.novaConversa()).not.toThrow();
   });
 
   it('R2: isolamento entre conversas, exclusao remove apenas a chave relevante e confirmacao prevalece', async () => {
@@ -3147,13 +3143,11 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     await store.abrirConversa('c1');
     expect(store.agendamentoRecolhido()).toBeTrue();
 
-    api.obterConversa.and.resolveTo({
-      ...conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1]),
-      conversaId: 'c3',
-    });
-    await store.abrirConversa('c3');
-    expect(store.agendamentoRecolhido()).toBeFalse();
+    await store.novaConversa();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c1')).toBeNull();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c2')).toBe('1');
 
+    sessionStorage.setItem('solar.agendamentoRecolhido.v1:c1', '1');
     api.obterConversa.and.resolveTo(conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1]));
     await store.abrirConversa('c1');
     api.apagarConversa.and.resolveTo({ leadExcluido: true, removidoEm: new Date().toISOString(), escopo: 'lead_e_vinculos', mensagem: 'Apagado' });
@@ -3162,8 +3156,27 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c1')).toBeNull();
     expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c2')).toBe('1');
 
-    // Confirmacao no GET prevalece sobre recolhimento e limpa marcador
+    sessionStorage.setItem('solar.agendamentoRecolhido.v1:c-post-conf', '1');
+    api.obterConversa.and.resolveTo({
+      ...conversa([fala('lead', 'Oi'), fala('agente', 'Ola', 'agendar_reuniao', 0, 'Helena Braga')], false, PERFIL_VAZIO, [slot1]),
+      conversaId: 'c-post-conf',
+    });
+    await store.abrirConversa('c-post-conf');
+    expect(store.agendamentoRecolhido()).toBeTrue();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c-post-conf')).toBe('1');
+
+    api.registrarAgendamento.and.resolveTo(confirmacaoSlot1);
+    api.obterConversa.and.resolveTo({
+      ...conversa([fala('lead', 'Oi'), fala('agente', 'Confirmado!', 'continuar_conversa', 0, 'Helena Braga', confirmacaoSlot1)], false, PERFIL_VAZIO, []),
+      conversaId: 'c-post-conf',
+    });
+    await store.registrarAgendamento(101);
+    expect(store.agendamentoEstaConfirmado()).toBeTrue();
+    expect(store.agendamentoRecolhido()).toBeFalse();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c-post-conf')).toBeNull();
+
     sessionStorage.setItem('solar.agendamentoRecolhido.v1:c4', '1');
+    sessionStorage.setItem('solar.agendamentoRecolhido.v1:c5', '1');
     api.obterConversa.and.resolveTo({
       ...conversa([fala('lead', 'Oi'), fala('agente', 'Confirmado!', 'continuar_conversa', 0, 'Helena Braga', confirmacaoSlot1)], false, PERFIL_VAZIO, []),
       conversaId: 'c4',
@@ -3172,6 +3185,7 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     expect(store.agendamentoEstaConfirmado()).toBeTrue();
     expect(store.agendamentoRecolhido()).toBeFalse();
     expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c4')).toBeNull();
+    expect(sessionStorage.getItem('solar.agendamentoRecolhido.v1:c5')).toBe('1');
   });
 
   it('R3: encaminhamento unico no fluxo ao vivo, polling e reload preservando falas e eventos', async () => {
@@ -3181,7 +3195,7 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
 
     api.enviarMensagem.and.resolveTo({
       conversaId: 'c-enc',
-      resposta: 'Encaminhando você',
+      resposta: 'Encaminhando seu caso para especialista',
       intencao: 'COMPRA',
       proximaAcao: 'agendar_reuniao',
       perfilLead: PERFIL_VAZIO,
@@ -3195,28 +3209,68 @@ describe('ConversaStore reserva por botao e reconciliacao T4b2', () => {
     let encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(encs.length).toBe(1);
 
-    const msgs = [
-      fala('lead', 'Quero agendar'),
-      fala('agente', 'Encaminhando você', 'agendar_reuniao', 0, 'Helena Braga'),
-    ];
-    api.obterConversa.and.resolveTo({
-      ...conversa(msgs, true, PERFIL_VAZIO, []),
+    store.agendamentoConfirmado.set(confirmacaoSlot1);
+    store.ofertaAgendamento.set([]);
+
+    api.enviarMensagem.and.resolveTo({
       conversaId: 'c-enc',
+      resposta: 'Ainda estou encaminhando você para Helena Braga',
+      intencao: 'COMPRA',
+      proximaAcao: 'agendar_reuniao',
+      perfilLead: PERFIL_VAZIO,
+      imoveisSugeridos: [],
+      corretor: 'Helena Braga',
+      contatoPendente: false,
+      agendamento: confirmacaoSlot1,
     });
-    await store.verificarNovasMensagens();
+    await store.enviar('Mais uma dúvida');
+
     encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(encs.length).toBe(1);
 
+    const falasLiaAoVivo = store.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
+    expect(falasLiaAoVivo).toEqual([
+      'Encaminhando seu caso para especialista',
+      'Ainda estou encaminhando você para Helena Braga',
+    ]);
+    expect(api.registrarAgendamento).not.toHaveBeenCalled();
+
+    const msgs = [
+      fala('lead', 'Quero agendar'),
+      fala('agente', 'Encaminhando seu caso para especialista', 'agendar_reuniao', 0, 'Helena Braga'),
+      fala('lead', 'Mais uma dúvida'),
+      fala('agente', 'Ainda estou encaminhando você para Helena Braga', 'agendar_reuniao', 0, 'Helena Braga', confirmacaoSlot1),
+    ];
+    api.obterConversa.and.resolveTo({
+      ...conversa(msgs, false, PERFIL_VAZIO, []),
+      conversaId: 'c-enc',
+    });
+    await store.verificarNovasMensagens();
+
+    encs = store.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
+    expect(encs.length).toBe(1);
+    const falasLiaPoll = store.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
+    expect(falasLiaPoll).toEqual([
+      'Encaminhando seu caso para especialista',
+      'Ainda estou encaminhando você para Helena Braga',
+    ]);
+
     const storeReload = TestBed.runInInjectionContext(() => new ConversaStore());
     api.obterConversa.and.resolveTo({
-      ...conversa(msgs, true, PERFIL_VAZIO, []),
+      ...conversa(msgs, false, PERFIL_VAZIO, []),
       conversaId: 'c-enc',
     });
     await storeReload.abrirConversa('c-enc');
+
     encs = storeReload.itens().filter((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
     expect(encs.length).toBe(1);
-    expect(storeReload.itens().some((i) => i.tipo === 'lia')).toBeTrue();
-    expect(storeReload.itens().some((i) => i.tipo === 'pessoa')).toBeTrue();
+    const falasLiaReload = storeReload.itens().filter((i) => i.tipo === 'lia').map((i) => (i as any).texto);
+    expect(falasLiaReload).toEqual([
+      'Encaminhando seu caso para especialista',
+      'Ainda estou encaminhando você para Helena Braga',
+    ]);
+    const falasPessoaReload = storeReload.itens().filter((i) => i.tipo === 'pessoa').map((i) => (i as any).texto);
+    expect(falasPessoaReload).toEqual(['Quero agendar', 'Mais uma dúvida']);
   });
 });
 

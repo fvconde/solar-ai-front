@@ -1061,16 +1061,13 @@ describe('Painel (S-21)', () => {
     });
     fixtureLocal.detectChanges();
 
-    // Filtro apenas na apresentacao
     const itens = comp.transcricaoVisivel();
     expect(itens.length).toBe(2);
     expect(itens[0].papel).toBe('lia');
     expect(itens[0].texto).toBe('Oi! Sou a Lia. Como posso ajudar?');
-    // Ola EXATO posterior preservado intacto
     expect(itens[1].papel).toBe('lead');
     expect(itens[1].texto).toBe('Olá');
 
-    // Payload original intacto
     expect(comp.leadDetalhe()?.transcricao.length).toBe(3);
     expect(comp.leadDetalhe()?.transcricao[0].texto).toBe('Olá');
 
@@ -1079,7 +1076,6 @@ describe('Painel (S-21)', () => {
     expect(mensagensLia.length).toBe(1);
     expect(mensagensPessoa.length).toBe(1);
 
-    // Outro texto inicial nao e removido
     comp.leadDetalhe.set({
       ...detalheMockComConversa,
       transcricao: [
@@ -1091,7 +1087,6 @@ describe('Painel (S-21)', () => {
     expect(comp.transcricaoVisivel().length).toBe(2);
     expect(comp.transcricaoVisivel()[0].texto).toBe('Olá, gostaria de ver casas.');
 
-    // Primeira mensagem vinda da Lia nao e removida
     comp.leadDetalhe.set({
       ...detalheMockComConversa,
       transcricao: [

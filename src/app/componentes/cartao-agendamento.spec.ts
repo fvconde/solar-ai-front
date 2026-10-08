@@ -411,10 +411,22 @@ describe('CartaoAgendamento', () => {
     expect(fixture.nativeElement.querySelector('.rodape')).toBeNull();
     expect(fixture.nativeElement.querySelector('.link-recolher')).toBeNull();
 
-    let selecaoEmitida = false;
-    componente.selecionar.subscribe(() => (selecaoEmitida = true));
+    let contSelecionar = 0;
+    let contRecolher = 0;
+    let contReabrir = 0;
+    componente.selecionar.subscribe(() => contSelecionar++);
+    componente.recolher.subscribe(() => contRecolher++);
+    componente.reabrir.subscribe(() => contReabrir++);
+
     botao.click();
+    expect(contSelecionar).toBe(0);
+
     componente.aoSelecionar(slot1.id);
-    expect(selecaoEmitida).toBeFalse();
+    componente.aoRecolher();
+    componente.aoReabrir();
+
+    expect(contSelecionar).toBe(0);
+    expect(contRecolher).toBe(0);
+    expect(contReabrir).toBe(0);
   });
 });
