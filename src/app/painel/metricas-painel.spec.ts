@@ -9,10 +9,9 @@ describe('Faixa de métricas (S-22)', () => {
   let http: HttpTestingController;
   let sessao: SessaoStore;
   let fixture: ComponentFixture<MetricasPainel>;
-  const chave = 'solar.metricas.teste-metricas';
 
   beforeEach(async () => {
-    localStorage.removeItem(chave);
+    localStorage.removeItem('solar.metricas.teste-metricas');
     await TestBed.configureTestingModule({
       imports: [MetricasPainel],
       providers: [provideHttpClient(), provideHttpClientTesting()],
@@ -24,7 +23,7 @@ describe('Faixa de métricas (S-22)', () => {
   afterEach(() => {
     fixture?.destroy();
     http.verify();
-    localStorage.removeItem(chave);
+    localStorage.removeItem('solar.metricas.teste-metricas');
   });
 
   function definirPerfil(perfil: 'supervisor' | 'corretor') {
@@ -44,10 +43,6 @@ describe('Faixa de métricas (S-22)', () => {
     iniciar().flush(dados);
     fixture.detectChanges();
     return fixture.nativeElement as HTMLElement;
-  }
-  function expandir() {
-    (fixture.nativeElement.querySelector('.alternar') as HTMLButtonElement).click();
-    fixture.detectChanges();
   }
 
   it('tem loading próprio, números com espaço reservado e aria-busy', () => {
@@ -90,21 +85,19 @@ describe('Faixa de métricas (S-22)', () => {
     dados.dadosEssenciaisPreenchidos = 8;
     const html = montar(dados);
     expect(html.textContent).toContain('Conversas atribuídas a você');
-    expect(html.querySelector('.resumo-celular')?.textContent).toContain('com dados essenciais');
-    expect(html.querySelector('.resumo-celular')?.textContent).toContain('conversas com horário confirmado');
-    expect(html.querySelector('.resumo-celular .cartao:last-child strong')?.textContent).toBe('4');
-    expect(html.querySelector('.mini-grafico-celular')).not.toBeNull();
+    expect(html.querySelector('[data-metrica=essenciais]')?.textContent).toBe('57%');
+    expect(html.querySelector('[data-metrica=confirmadas]')?.textContent).toBe('4');
+    expect(html.querySelector('.principais')).not.toBeNull();
+    expect(html.querySelector('.mini-grafico-celular')).toBeNull();
+    expect(html.querySelector('.resumo-celular')).toBeNull();
     expect(fixture.componentInstance.criterio('iniciadas')).toContain('atualmente atribuídas a você');
   });
-  it('expansão tem sete extras completos, controle ARIA e persiste por usuário', () => {
+  it('apresenta sete extras completos permanentemente, sem alternar ou persistência', () => {
     const html = montar();
-    expect(html.querySelector<HTMLElement>('.extras')?.hidden).toBeTrue();
-    expandir();
-    expect(html.querySelector<HTMLElement>('.extras')?.hidden).toBeFalse();
-    expect(html.querySelector('.alternar')?.getAttribute('aria-expanded')).toBe('true');
-    expect(html.querySelector('.alternar')?.getAttribute('aria-controls')).toBe('extras-metricas');
+    expect(html.querySelector('.alternar')).toBeNull();
+    expect(html.querySelector<HTMLElement>('.extras')?.hidden).toBeFalsy();
     expect(html.querySelectorAll('.grade-extras .cartao').length).toBe(7);
-    expect(localStorage.getItem(chave)).toBe('1');
+    expect(localStorage.getItem('solar.metricas.teste-metricas')).toBeNull();
     expect(html.querySelector('.extras')?.textContent).toContain('Tempo mediano até o primeiro encaminhamento');
     expect(html.querySelector('.extras')?.textContent).toContain('Follow-up automático');
     expect(html.querySelector('.extras')?.textContent).toContain('11 min');
@@ -117,14 +110,15 @@ describe('Faixa de métricas (S-22)', () => {
     expect(html.querySelector('.extras')?.textContent).toContain('Completam 1 mês sem contato');
     expect(html.querySelector('.extras')?.textContent).toContain('100%');
   });
-  it('restaura a preferência do usuário', () => {
-    localStorage.setItem(chave, '1');
-    montar();
-    expect(fixture.componentInstance.expandido()).toBeTrue();
+  it('ignora preferência legada de expansão e mantém extras visíveis sem gravar localStorage', () => {
+    const chaveLegada = 'solar.metricas.teste-metricas';
+    localStorage.setItem(chaveLegada, '0');
+    const html = montar();
+    expect(html.querySelector<HTMLElement>('.extras')?.hidden).toBeFalsy();
+    expect(localStorage.getItem(chaveLegada)).toBe('0');
   });
   it('vazio mostra zeros, travessão, barras de largura zero e listas vazias', () => {
     const html = montar(metricasParaTeste(true));
-    expandir();
     expect(html.textContent).toContain('Ainda não há conversas.');
     expect(html.textContent).toContain('Nenhuma sugestão de imóvel ainda.');
     expect(html.textContent).toContain('Nenhum horário marcado.');
@@ -139,7 +133,6 @@ describe('Faixa de métricas (S-22)', () => {
   });
   it('percentuais de score excluem sem avaliação e possuem faixas explícitas', () => {
     const html = montar();
-    expandir();
     const score = html.querySelector('.score')!;
     expect(score.textContent).toContain('12');
     expect(score.textContent).toContain('Frio · 0–39');
@@ -151,7 +144,6 @@ describe('Faixa de métricas (S-22)', () => {
   });
   it('tooltips acessíveis abrem por foco na camada superior e fecham com Escape', () => {
     const html = montar();
-    expandir();
     const botao = html.querySelector<HTMLButtonElement>('app-criterio-metrica button')!;
     botao.focus();
     fixture.detectChanges();
@@ -173,7 +165,6 @@ describe('Faixa de métricas (S-22)', () => {
   });
   it('tooltip abre com clique e fecha ao perder foco', () => {
     const html = montar();
-    expandir();
     const botao = html.querySelector<HTMLButtonElement>('app-criterio-metrica button')!;
     botao.click();
     fixture.detectChanges();
@@ -184,7 +175,6 @@ describe('Faixa de métricas (S-22)', () => {
   });
   it('focar segundo critério fecha o primeiro garantindo apenas uma caixa aberta', () => {
     const html = montar();
-    expandir();
     const botoes = html.querySelectorAll<HTMLButtonElement>('app-criterio-metrica button');
     expect(botoes.length).toBeGreaterThan(1);
     const primeiro = botoes[0];
@@ -208,7 +198,6 @@ describe('Faixa de métricas (S-22)', () => {
   });
   it('tooltip admite hover do conteúdo e não fecha ao sair com o botão ainda focado', fakeAsync(() => {
     const html = montar();
-    expandir();
     const botao = html.querySelector<HTMLButtonElement>('app-criterio-metrica button')!;
     botao.dispatchEvent(new MouseEvent('mouseenter'));
     fixture.detectChanges();
@@ -249,22 +238,16 @@ describe('Faixa de métricas (S-22)', () => {
     expect(criterio).toContain('mensagens automáticas não renovam');
     expect(criterio).not.toContain('12 meses');
   });
-  it('faixa inteira fechada e expandida respeita 40% da viewport e tem uma única rolagem vertical', () => {
+  it('seção de métricas preenche a altura e tem uma única rolagem vertical', () => {
     const html = montar();
     const faixa = html.querySelector<HTMLElement>('.metricas')!;
-    expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(window.innerHeight * .4 + 1);
-    expandir();
-    expect(faixa.getBoundingClientRect().height).toBeLessThanOrEqual(window.innerHeight * .4 + 1);
     const miolo = html.querySelector<HTMLElement>('.miolo')!;
+    expect(faixa.classList.contains('expandida')).toBeFalse();
+    expect(html.querySelector('.alternar')).toBeNull();
     expect(getComputedStyle(faixa).overflowY).toBe('auto');
-    expect(faixa.scrollHeight).toBeGreaterThan(faixa.clientHeight);
     expect(faixa.getAttribute('tabindex')).toBe('0');
     expect(getComputedStyle(miolo).overflowY).toBe('visible');
     expect(getComputedStyle(html.querySelector('.extras')!).overflowY).toBe('visible');
-    if (window.innerWidth <= 860) {
-      expect(html.querySelector('.alternar')!.getBoundingClientRect().height).toBeGreaterThanOrEqual(44);
-      expect(getComputedStyle(html.querySelector('.resumo-celular')!).display).toBe('grid');
-    }
   });
   it('aprovação é acionável sem depender da expansão', () => {
     montar();
@@ -313,9 +296,7 @@ describe('Faixa de métricas (S-22)', () => {
     expect(html.querySelector('[data-metrica=confirmadas]')?.textContent).toBe('3');
     expect(html.textContent).toContain('6 de 10 conversas');
     expect(html.textContent).toContain('3 de 10 conversas iniciadas no período');
-    expect(html.querySelector('.resumo-celular .cartao:first-child strong')?.textContent).toBe(String(10));
-    expect(html.querySelector('.resumo-celular .cartao:nth-child(2) strong')?.textContent).toBe('60%');
-    expect(html.querySelector('.resumo-celular .cartao:last-child strong')?.textContent).toBe(String(3));
+    expect(html.querySelector('.resumo-celular')).toBeNull();
   });
   it('horários coincide com a última barra e essenciais possui contador próprio para corretor', () => {
     definirPerfil('corretor');
@@ -355,7 +336,6 @@ describe('Faixa de métricas (S-22)', () => {
     expect(html.textContent).toContain('Ainda não há conversas no período. As barras aparecem quando alguém escrever para a Lia.');
     expect(html.querySelector('.barra-intencao')).not.toBeNull();
     expect(html.querySelector('.equipe')).not.toBeNull();
-    expandir();
     expect(html.querySelector('.score')).not.toBeNull();
     expect(html.textContent).toContain('Privacidade');
   });
@@ -364,7 +344,6 @@ describe('Faixa de métricas (S-22)', () => {
     dados.extras.tempoMedianoMin = null;
     dados.extras.tempoMedianoDiario = [];
     const html = montar(dados);
-    expandir();
     expect(html.textContent).toContain('A linha aparece com o primeiro encaminhamento.');
     expect(fixture.componentInstance.sparklineTempo().segmentos.length).toBe(0);
     expect(fixture.componentInstance.sparklineTempo().ultimo).toBeNull();
@@ -374,7 +353,6 @@ describe('Faixa de métricas (S-22)', () => {
     dadosLacuna.extras.tempoMedianoMin = 14;
     dadosLacuna.extras.tempoMedianoDiario = [18, null, 14, null, 12, null, 10];
     montar(dadosLacuna);
-    expandir();
     const spark = fixture.componentInstance.sparklineTempo();
     expect(spark.segmentos.length).toBe(0);
     expect(spark.isolados.length).toBe(4);
@@ -390,7 +368,6 @@ describe('Faixa de métricas (S-22)', () => {
       emObservacao: 1,
     };
     const html = montar(dados);
-    expandir();
     expect(html.textContent).toContain('Responderam em até 7 dias.');
     expect(html.textContent).toContain('2 de 4 · 50%');
     expect(html.textContent).toContain('1 follow-up em observação');
@@ -405,7 +382,6 @@ describe('Faixa de métricas (S-22)', () => {
       emObservacao: 3,
     };
     const htmlRecentes = montar(dadosRecentes);
-    expandir();
     expect(htmlRecentes.textContent).toContain('Responderam em até 3 dias.');
     expect(htmlRecentes.textContent).toContain('0 de 0 · —');
     expect(htmlRecentes.textContent).not.toContain('NaN');
@@ -422,8 +398,6 @@ describe('Faixa de métricas (S-22)', () => {
     fixture.detectChanges();
     expect(botaoBarra.getAttribute('aria-describedby')).toBeNull();
 
-    expect(html.querySelector('.mini-grafico-celular')).not.toBeNull();
-    expandir();
     expect(html.querySelector('.mini-grafico-celular')).toBeNull();
     expect(html.querySelectorAll('.item-barra button').length).toBe(6);
   });
