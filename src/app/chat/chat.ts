@@ -25,7 +25,7 @@ import { Indicador } from '../componentes/indicador';
 import { MensagemLia } from '../componentes/mensagem-lia';
 import { MensagemPessoa } from '../componentes/mensagem-pessoa';
 import { ContaApi } from '../conta/conta-api';
-import { ConversaResumo } from '../conta/conta-contrato';
+import { ConversaResumo, formatarTelefone } from '../conta/conta-contrato';
 import { ContatoRequest } from '../conversa/contrato';
 import { ConversaStore } from '../conversa/conversa-store';
 import { AcaoEvento, ItemTrilha } from '../conversa/trilha';
@@ -79,6 +79,29 @@ export class Chat implements OnInit, OnDestroy {
   readonly listaAberta = signal(false);
   private readonly conviteDispensadoEm = signal(lerLocal(CHAVE_CONVITE_DISPENSADO));
   private geracaoConversas = 0;
+  private geracaoConta = 0;
+  private readonly dadosConta = signal<{
+    usuarioId: string;
+    contato: ContatoRequest | null;
+  } | null>(null);
+
+  readonly dadosIniciaisContato = computed<ContatoRequest | null>(() => {
+    const usuarioAtual = this.sessao.usuario();
+    if (!usuarioAtual) {
+      return null;
+    }
+    const dados = this.dadosConta();
+    if (!dados || dados.usuarioId !== usuarioAtual.id) {
+      return null;
+    }
+    return dados.contato;
+  });
+
+  readonly contextoContato = computed<string>(() => {
+    const usuarioId = this.sessao.usuario()?.id ?? 'anon';
+    const conversaId = this.store.conversaAtual() ?? 'sem-conversa';
+    return `${usuarioId}:${conversaId}`;
+  });
   private ultimaAssinaturaPalco: string | null = null;
   private ultimoEstado: string | null = null;
   private ultimoPalcoEl: HTMLElement | null = null;
@@ -333,17 +356,56 @@ export class Chat implements OnInit, OnDestroy {
     });
 
     effect(() => {
+      const usuario = this.sessao.usuario();
+      if (!usuario) {
+        this.geracaoConta++;
+        this.dadosConta.set(null);
+        return;
+      }
+      const g = ++this.geracaoConta;
+      const usuarioId = usuario.id;
+      untracked(() => {
+        this.contaApi.obter().subscribe({
+          next: (conta) => {
+            if (g !== this.geracaoConta) {
+              return;
+            }
+            if (this.cliente()) {
+              void this.store.definirConsentimentoDaConta(conta.consentimento?.versao ?? null);
+            }
+            const nome = conta.nome ?? '';
+            const email = conta.email ?? '';
+            const telefoneRaw = (conta.telefone ?? '').trim();
+            const telefone = telefoneRaw ? formatarTelefone(telefoneRaw) : '';
+            this.dadosConta.set({
+              usuarioId,
+              contato: {
+                nome,
+                telefone,
+                email,
+              },
+            });
+          },
+          error: () => {
+            if (g !== this.geracaoConta) {
+              return;
+            }
+            this.dadosConta.set({
+              usuarioId,
+              contato: null,
+            });
+          },
+        });
+      });
+    });
+
+    effect(() => {
       if (!this.cliente()) {
         this.conversas.set([]);
         this.listaAberta.set(false);
         return;
       }
       untracked(() => {
-        this.contaApi.obter().subscribe({
-          next: (conta) =>
-            void this.store.definirConsentimentoDaConta(conta.consentimento?.versao ?? null),
-          error: () => undefined,
-        });
         this.carregarConversas();
       });
     });
@@ -365,6 +427,8 @@ export class Chat implements OnInit, OnDestroy {
   }
 
   ngOnDestroy(): void {
+    this.geracaoConta++;
+    this.dadosConta.set(null);
     this.removerOuvintesPalco();
     this.desconectarResizeObserver();
     this.abandonarAncora();

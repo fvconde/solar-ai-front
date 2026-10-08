@@ -22,6 +22,7 @@ import {
   limparTema,
   MARCA_POR_TEMA,
   sessaoCliente,
+  sessaoSupervisor,
   TEMAS,
 } from '../sessao/sessao-teste';
 import { Chat } from './chat';
@@ -3820,5 +3821,422 @@ describe('Chat', () => {
       fixture.destroy();
       flush();
     }));
+
+    describe('contato preenchido pela conta (T4)', () => {
+    it('cliente com conta completa busca conta uma vez, preenche campos com telefone formatado e envia contato mantendo oferta', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-cliente');
+      TestBed.inject(SessaoStore).definir(sessaoCliente());
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const reqConta = httpMock.expectOne('/api/conta');
+      expect(reqConta.request.method).toBe('GET');
+      reqConta.flush(conta(VERSAO_AVISO_PRIVACIDADE));
+
+      const reqLista = httpMock.expectOne('/api/conta/conversas');
+      reqLista.flush([
+        { id: 'c-t4-cliente', titulo: 'Cliente', atualizadaEm: AGORA, estado: 'em_andamento' },
+        ...conversas,
+      ]);
+
+      const reqConv = httpMock.expectOne('/conversas/c-t4-cliente');
+      reqConv.flush(conversaComOferta('c-t4-cliente', [], 'Helena Braga', true));
+      tick();
+      fixture.detectChanges();
+
+      httpMock.expectNone('/api/conta');
+
+      const rotulo = html(fixture).querySelector('app-formulario-contato .rotulo');
+      expect(rotulo?.textContent?.trim()).toBe('Como falar com você');
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      expect(inputNome.value).toBe('Marina Couto');
+      expect(inputTel.value).toBe('(11) 98765-4321');
+      expect(inputEmail.value).toBe('marina.couto@email.com');
+
+      const btnEnviar = html(fixture).querySelector('app-formulario-contato .acao') as HTMLButtonElement;
+      expect(btnEnviar.disabled).toBeFalse();
+      btnEnviar.click();
+      fixture.detectChanges();
+
+      const reqContato = httpMock.expectOne('/conversas/c-t4-cliente/contato');
+      expect(reqContato.request.method).toBe('POST');
+      expect(reqContato.request.body).toEqual({
+        nome: 'Marina Couto',
+        telefone: '(11) 98765-4321',
+        email: 'marina.couto@email.com',
+      });
+
+      reqContato.flush({
+        leadId: 'lead-t4-cliente',
+        oferta: [slotA1, slotA2],
+      });
+      tick();
+      fixture.detectChanges();
+
+      expect(html(fixture).querySelector('app-cartao-agendamento')).not.toBeNull();
+      expect(html(fixture).querySelectorAll('.slot-botao').length).toBe(2);
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('editar campos antes de enviar altera o payload de contato e nao dispara PATCH na conta', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-edicao');
+      TestBed.inject(SessaoStore).definir(sessaoCliente());
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/api/conta').flush(conta(VERSAO_AVISO_PRIVACIDADE));
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-edicao', titulo: 'Edicao', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-edicao').flush(
+        conversaComOferta('c-t4-edicao', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      inputNome.value = 'Marina Silva Editada';
+      inputNome.dispatchEvent(new Event('input'));
+      inputTel.value = '(11) 91111-2222';
+      inputTel.dispatchEvent(new Event('input'));
+      inputEmail.value = 'novo.email@solar.com.br';
+      inputEmail.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btnEnviar = html(fixture).querySelector('app-formulario-contato .acao') as HTMLButtonElement;
+      btnEnviar.click();
+      fixture.detectChanges();
+
+      const reqContato = httpMock.expectOne('/conversas/c-t4-edicao/contato');
+      expect(reqContato.request.method).toBe('POST');
+      expect(reqContato.request.body).toEqual({
+        nome: 'Marina Silva Editada',
+        telefone: '(11) 91111-2222',
+        email: 'novo.email@solar.com.br',
+      });
+      reqContato.flush({
+        leadId: 'lead-t4-edicao',
+        oferta: [slotA1],
+      });
+      tick();
+      fixture.detectChanges();
+
+      httpMock.expectNone('/api/conta');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('supervisor autenticado com telefone nulo busca conta sem listar conversas e permite envio com telefone vazio', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-supervisor');
+      TestBed.inject(SessaoStore).definir(sessaoSupervisor());
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const reqConta = httpMock.expectOne('/api/conta');
+      expect(reqConta.request.method).toBe('GET');
+      reqConta.flush({
+        id: 'u-supervisor',
+        nome: 'Helena Soares',
+        email: 'helena@solar.com.br',
+        telefone: null,
+        perfil: 'supervisor',
+        criadaEm: '2026-09-22T14:08:00Z',
+        corretor: null,
+        consentimento: null,
+        conversasSalvas: 0,
+      });
+
+      httpMock.expectNone('/api/conta/conversas');
+
+      httpMock.expectOne('/conversas/c-t4-supervisor').flush(
+        conversaComOferta('c-t4-supervisor', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      expect(inputNome.value).toBe('Helena Soares');
+      expect(inputTel.value).toBe('');
+      expect(inputEmail.value).toBe('helena@solar.com.br');
+
+      const btnEnviar = html(fixture).querySelector('app-formulario-contato .acao') as HTMLButtonElement;
+      expect(btnEnviar.disabled).toBeFalse();
+
+      btnEnviar.click();
+      fixture.detectChanges();
+
+      const reqContato = httpMock.expectOne('/conversas/c-t4-supervisor/contato');
+      expect(reqContato.request.method).toBe('POST');
+      expect(reqContato.request.body).toEqual({
+        nome: 'Helena Soares',
+        telefone: null,
+        email: 'helena@solar.com.br',
+      });
+      reqContato.flush({
+        leadId: 'lead-sup',
+        oferta: [slotA1],
+      });
+      tick();
+      fixture.detectChanges();
+
+      httpMock.expectNone('/api/conta/conversas');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('anonimo nao chama conta e exibe formulario vazio com validacao normal', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-anon');
+      TestBed.inject(SessaoStore).usuario.set(null);
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectNone('/api/conta');
+      httpMock.expectNone('/api/conta/conversas');
+
+      httpMock.expectOne('/conversas/c-t4-anon').flush(
+        conversaComOferta('c-t4-anon', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      expect(inputNome.value).toBe('');
+      expect(inputTel.value).toBe('');
+      expect(inputEmail.value).toBe('');
+
+      const btnEnviar = html(fixture).querySelector('app-formulario-contato .acao') as HTMLButtonElement;
+      expect(btnEnviar.disabled).toBeTrue();
+
+      inputEmail.value = 'visitante@solar.com.br';
+      inputEmail.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      expect(btnEnviar.disabled).toBeFalse();
+      btnEnviar.click();
+      fixture.detectChanges();
+
+      const reqContato = httpMock.expectOne('/conversas/c-t4-anon/contato');
+      expect(reqContato.request.body).toEqual({
+        nome: null,
+        telefone: null,
+        email: 'visitante@solar.com.br',
+      });
+      reqContato.flush({ leadId: 'lead-anon', oferta: [] });
+      tick();
+      fixture.detectChanges();
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('falha HTTP 500 da conta deixa formulario vazio sem bloquear contato', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-falha-conta');
+      TestBed.inject(SessaoStore).definir(sessaoCliente());
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const reqConta = httpMock.expectOne('/api/conta');
+      reqConta.flush('Erro', { status: 500, statusText: 'Internal Server Error' });
+
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-falha-conta', titulo: 'Falha', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-falha-conta').flush(
+        conversaComOferta('c-t4-falha-conta', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      expect(inputNome.value).toBe('');
+      expect(inputTel.value).toBe('');
+      expect(inputEmail.value).toBe('');
+
+      inputTel.value = '11999998888';
+      inputTel.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      const btnEnviar = html(fixture).querySelector('app-formulario-contato .acao') as HTMLButtonElement;
+      expect(btnEnviar.disabled).toBeFalse();
+
+      btnEnviar.click();
+      fixture.detectChanges();
+
+      const reqContato = httpMock.expectOne('/conversas/c-t4-falha-conta/contato');
+      expect(reqContato.request.body).toEqual({
+        nome: null,
+        telefone: '11999998888',
+        email: null,
+      });
+      reqContato.flush({ leadId: 'lead-falha', oferta: [] });
+      tick();
+      fixture.detectChanges();
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('resposta tardia da conta nao sobrescreve campo editado e preenche campos nao editados', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-tardio');
+      TestBed.inject(SessaoStore).definir(sessaoCliente());
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const reqConta = httpMock.expectOne('/api/conta');
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-tardio', titulo: 'Tardio', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-tardio').flush(
+        conversaComOferta('c-t4-tardio', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      inputNome.value = 'Nome Editado Antes';
+      inputNome.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+
+      reqConta.flush(conta(VERSAO_AVISO_PRIVACIDADE));
+      tick();
+      fixture.detectChanges();
+
+      expect(inputNome.value).toBe('Nome Editado Antes');
+      expect(inputTel.value).toBe('(11) 98765-4321');
+      expect(inputEmail.value).toBe('marina.couto@email.com');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('logout antes do retorno da conta descarta a resposta e limpa o formulario', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-logout');
+      const sessao = TestBed.inject(SessaoStore);
+      sessao.definir(sessaoCliente());
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      const reqConta = httpMock.expectOne('/api/conta');
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-logout', titulo: 'Logout', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-logout').flush(
+        conversaComOferta('c-t4-logout', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      sessao.limpar();
+      fixture.detectChanges();
+
+      reqConta.flush(conta(VERSAO_AVISO_PRIVACIDADE));
+      tick();
+      fixture.detectChanges();
+
+      const inputNome = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      expect(inputNome.value).toBe('');
+      expect(inputTel.value).toBe('');
+      expect(inputEmail.value).toBe('');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
+
+    it('troca de conversa no mesmo usuario reinicia alteracoes locais e preenche novamente da conta', fakeAsync(() => {
+      localStorage.setItem('solar.conversaId', 'c-t4-conv1');
+      TestBed.inject(SessaoStore).definir(sessaoCliente());
+      const fixture = TestBed.createComponent(Chat);
+      const store = TestBed.inject(ConversaStore);
+      fixture.detectChanges();
+
+      httpMock.expectOne('/api/conta').flush(conta(VERSAO_AVISO_PRIVACIDADE));
+      httpMock.expectOne('/api/conta/conversas').flush([
+        { id: 'c-t4-conv1', titulo: 'Conversa 1', atualizadaEm: AGORA, estado: 'em_andamento' },
+        { id: 'c-t4-conv2', titulo: 'Conversa 2', atualizadaEm: AGORA, estado: 'em_andamento' },
+      ]);
+      httpMock.expectOne('/conversas/c-t4-conv1').flush(
+        conversaComOferta('c-t4-conv1', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const inputNome1 = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      expect(inputNome1.value).toBe('Marina Couto');
+
+      inputNome1.value = 'Alteracao Local Na Conversa 1';
+      inputNome1.dispatchEvent(new Event('input'));
+      fixture.detectChanges();
+      expect(inputNome1.value).toBe('Alteracao Local Na Conversa 1');
+
+      void store.abrirConversa('c-t4-conv2');
+      fixture.detectChanges();
+
+      httpMock.expectOne('/conversas/c-t4-conv2').flush(
+        conversaComOferta('c-t4-conv2', [], 'Helena Braga', true),
+      );
+      tick();
+      fixture.detectChanges();
+
+      const inputNome2 = html(fixture).querySelector('app-formulario-contato input[type="text"]') as HTMLInputElement;
+      const inputTel2 = html(fixture).querySelector('app-formulario-contato input[type="tel"]') as HTMLInputElement;
+      const inputEmail2 = html(fixture).querySelector('app-formulario-contato input[type="email"]') as HTMLInputElement;
+
+      expect(inputNome2.value).toBe('Marina Couto');
+      expect(inputTel2.value).toBe('(11) 98765-4321');
+      expect(inputEmail2.value).toBe('marina.couto@email.com');
+
+      store.pararPolling();
+      httpMock.verify();
+      fixture.destroy();
+      flush();
+    }));
   });
+});
 });

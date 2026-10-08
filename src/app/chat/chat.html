@@ -113,6 +113,8 @@
                   <app-formulario-contato
                     [erro]="store.contatoErro()"
                     [enviando]="store.contatoEnviando()"
+                    [dadosIniciais]="dadosIniciaisContato()"
+                    [contexto]="contextoContato()"
                     (enviar)="registrarContato($event)"
                   />
                 }

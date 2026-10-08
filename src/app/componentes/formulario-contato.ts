@@ -1,4 +1,13 @@
-import { ChangeDetectionStrategy, Component, computed, input, output, signal } from '@angular/core';
+import {
+  ChangeDetectionStrategy,
+  Component,
+  computed,
+  effect,
+  input,
+  output,
+  signal,
+  untracked,
+} from '@angular/core';
 import { ContatoRequest, LIMITE_EMAIL, LIMITE_NOME, LIMITE_TELEFONE } from '../conversa/contrato';
 
 @Component({
@@ -24,7 +33,7 @@ import { ContatoRequest, LIMITE_EMAIL, LIMITE_NOME, LIMITE_TELEFONE } from '../c
           [attr.maxlength]="limiteNome"
           [value]="nome()"
           [disabled]="enviando()"
-          (input)="nome.set(valor($event))"
+          (input)="aoDigitarNome($event)"
         />
       </label>
 
@@ -38,7 +47,7 @@ import { ContatoRequest, LIMITE_EMAIL, LIMITE_NOME, LIMITE_TELEFONE } from '../c
           [attr.maxlength]="limiteTelefone"
           [value]="telefone()"
           [disabled]="enviando()"
-          (input)="telefone.set(valor($event))"
+          (input)="aoDigitarTelefone($event)"
         />
       </label>
 
@@ -50,7 +59,7 @@ import { ContatoRequest, LIMITE_EMAIL, LIMITE_NOME, LIMITE_TELEFONE } from '../c
           [attr.maxlength]="limiteEmail"
           [value]="email()"
           [disabled]="enviando()"
-          (input)="email.set(valor($event))"
+          (input)="aoDigitarEmail($event)"
         />
       </label>
 
@@ -148,6 +157,8 @@ import { ContatoRequest, LIMITE_EMAIL, LIMITE_NOME, LIMITE_TELEFONE } from '../c
 export class FormularioContato {
   readonly erro = input<string | null>(null);
   readonly enviando = input(false);
+  readonly dadosIniciais = input<ContatoRequest | null>(null);
+  readonly contexto = input<string>('');
   readonly enviar = output<ContatoRequest>();
 
   protected readonly limiteNome = LIMITE_NOME;
@@ -158,12 +169,62 @@ export class FormularioContato {
   protected readonly telefone = signal('');
   protected readonly email = signal('');
 
+  private ultimoContexto: string | null = null;
+  private nomeEditado = false;
+  private telefoneEditado = false;
+  private emailEditado = false;
+
+  constructor() {
+    effect(() => {
+      const contextoAtual = this.contexto();
+      const dados = this.dadosIniciais();
+
+      untracked(() => {
+        const contextoMudou = contextoAtual !== this.ultimoContexto;
+        if (contextoMudou) {
+          this.ultimoContexto = contextoAtual;
+          this.nomeEditado = false;
+          this.telefoneEditado = false;
+          this.emailEditado = false;
+          this.nome.set(dados?.nome ?? '');
+          this.telefone.set(dados?.telefone ?? '');
+          this.email.set(dados?.email ?? '');
+        } else if (dados) {
+          if (!this.nomeEditado) {
+            this.nome.set(dados.nome ?? '');
+          }
+          if (!this.telefoneEditado) {
+            this.telefone.set(dados.telefone ?? '');
+          }
+          if (!this.emailEditado) {
+            this.email.set(dados.email ?? '');
+          }
+        }
+      });
+    });
+  }
+
   protected readonly podeEnviar = computed(
     () => !this.enviando() && (this.telefone().trim().length > 0 || this.email().trim().length > 0),
   );
 
   protected valor(evento: Event): string {
     return (evento.target as HTMLInputElement).value;
+  }
+
+  protected aoDigitarNome(evento: Event): void {
+    this.nomeEditado = true;
+    this.nome.set(this.valor(evento));
+  }
+
+  protected aoDigitarTelefone(evento: Event): void {
+    this.telefoneEditado = true;
+    this.telefone.set(this.valor(evento));
+  }
+
+  protected aoDigitarEmail(evento: Event): void {
+    this.emailEditado = true;
+    this.email.set(this.valor(evento));
   }
 
   protected confirmar(): void {
