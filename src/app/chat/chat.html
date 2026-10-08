@@ -26,8 +26,8 @@
         </button>
       </div>
     }
-    <main #palco class="palco" [attr.aria-live]="store.emConversa() ? 'polite' : null">
-      <div class="coluna">
+    <main #palco class="palco" style="overflow-anchor: none;" [attr.aria-live]="store.emConversa() ? 'polite' : null">
+      <div #coluna class="coluna">
         @if (store.conversaApagada()) {
           <div #bannerApagada role="status" tabindex="-1" class="banner-apagada">
             <app-evento-sistema
@@ -85,7 +85,11 @@
                   <app-divisor-data [rotulo]="item.rotulo" />
                 }
                 @case ('pessoa') {
-                  <app-mensagem-pessoa [texto]="item.texto" [hora]="item.hora" />
+                  <app-mensagem-pessoa
+                    [texto]="item.texto"
+                    [hora]="item.hora"
+                    [attr.data-item-id]="item.id"
+                  />
                 }
                 @case ('lia') {
                   <app-mensagem-lia

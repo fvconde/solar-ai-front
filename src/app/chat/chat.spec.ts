@@ -1818,7 +1818,12 @@ describe('Chat', () => {
 
       function montarPalco(
         id: string,
-        opcoes: { confirmado?: boolean; oferta?: SlotOferecido[]; contatoPendente?: boolean } = {},
+        opcoes: {
+          confirmado?: boolean;
+          oferta?: SlotOferecido[];
+          contatoPendente?: boolean;
+          altura?: string;
+        } = {},
       ) {
         const mensagens = historicoLongo(opcoes.confirmado ? confItem12 : null);
         let oferta = opcoes.oferta ?? [];
@@ -1827,7 +1832,7 @@ describe('Chat', () => {
         const fixture = TestBed.createComponent(Chat);
         const store = TestBed.inject(ConversaStore);
         const hostEl = html(fixture);
-        hostEl.style.height = '350px';
+        hostEl.style.height = opcoes.altura ?? '350px';
         hostEl.style.display = 'flex';
         document.body.appendChild(hostEl);
         fixture.autoDetectChanges(true);
@@ -1843,7 +1848,9 @@ describe('Chat', () => {
           );
 
         httpMock.expectOne(`/conversas/${id}`).flush(corpo());
-        tick();
+        if ((globalThis as any).Zone?.current?.get('FakeAsyncTestZoneSpec')) {
+          tick();
+        }
         fixture.detectChanges();
 
         const palco = hostEl.querySelector('.palco') as HTMLElement;
@@ -1859,7 +1866,9 @@ describe('Chat', () => {
           store.pararPolling();
           hostEl.remove();
           fixture.destroy();
-          flush();
+          if ((globalThis as any).Zone?.current?.get('FakeAsyncTestZoneSpec')) {
+            flush();
+          }
         };
 
         return {
@@ -2128,7 +2137,7 @@ describe('Chat', () => {
         }
       }));
 
-      it('envio proprio pela UI forca o fim e a resposta posterior nao puxa quem subiu enquanto esperava', fakeAsync(() => {
+      it('envio proprio pela UI ancora a mensagem no topo e a resposta posterior nao puxa quem subiu enquanto esperava', fakeAsync(() => {
         const p = montarPalco('c-i12-envio', { confirmado: true });
         try {
           p.palco.scrollTop = 0;
@@ -2142,7 +2151,14 @@ describe('Chat', () => {
           const req = httpMock.expectOne('/conversas/c-i12-envio/mensagens');
           expect(req.request.method).toBe('POST');
           expect(req.request.body).toEqual({ texto: 'Minha pergunta' });
-          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          const msgsPessoa = p.hostEl.querySelectorAll('app-mensagem-pessoa');
+          const msgEnviada = msgsPessoa[msgsPessoa.length - 1] as HTMLElement;
+          expect(msgEnviada).not.toBeNull();
+          expect(msgEnviada.textContent).toContain('Minha pergunta');
+          const topoMsgRelativo =
+            msgEnviada.getBoundingClientRect().top - p.palco.getBoundingClientRect().top;
+          expect(Math.abs(topoMsgRelativo)).toBeLessThanOrEqual(1);
 
           p.palco.scrollTop = 0;
           req.flush({
@@ -2164,6 +2180,361 @@ describe('Chat', () => {
         } finally {
           p.limpar();
         }
+      }));
+
+      it('historico longo com envio pelo textarea posiciona a mensagem no topo antes da resposta independente da posicao anterior', fakeAsync(() => {
+        const p = montarPalco('c-s48-hist-longo', { confirmado: true, altura: '600px' });
+        try {
+          p.palco.scrollTop = 50;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Pergunta no historico longo';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-s48-hist-longo/mensagens');
+          expect(req.request.method).toBe('POST');
+
+          const msgs = p.hostEl.querySelectorAll('app-mensagem-pessoa');
+          const ultima = msgs[msgs.length - 1] as HTMLElement;
+          const topoRelativo =
+            ultima.getBoundingClientRect().top - p.palco.getBoundingClientRect().top;
+          expect(Math.abs(topoRelativo)).toBeLessThanOrEqual(1);
+          expect(p.palco.scrollTop).toBeGreaterThan(100);
+
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(coluna.style.paddingBottom).not.toBe('');
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('resposta curta cresce abaixo sem alterar scrollTop e novo envio ancora sem acumular espaco', fakeAsync(() => {
+        const p = montarPalco('c-s48-resp-curta', { confirmado: true, altura: '600px' });
+        try {
+          p.palco.scrollTop = 0;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Primeira pergunta';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req1 = httpMock.expectOne('/conversas/c-s48-resp-curta/mensagens');
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          const paddingInicial = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingInicial).toBeGreaterThan(0);
+          const scrollAposEnvio = p.palco.scrollTop;
+
+          req1.flush({
+            conversaId: 'c-s48-resp-curta',
+            resposta: 'Resposta curta da Lia.',
+            intencao: 'indefinida',
+            proximaAcao: 'continuar_conversa',
+            perfilLead: null,
+            imoveisSugeridos: [],
+            corretor: 'Helena Braga',
+            contatoPendente: false,
+            agendamento: null,
+          });
+          tick();
+          p.fixture.detectChanges();
+
+          expect(Math.abs(p.palco.scrollTop - scrollAposEnvio)).toBeLessThanOrEqual(1);
+          const paddingAposResposta = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingAposResposta).toBeLessThan(paddingInicial);
+          expect(paddingAposResposta).toBeGreaterThan(0);
+
+          area.value = 'Segunda pergunta';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req2 = httpMock.expectOne('/conversas/c-s48-resp-curta/mensagens');
+          expect(req2.request.method).toBe('POST');
+          const msgs = p.hostEl.querySelectorAll('app-mensagem-pessoa');
+          const novaMsg = msgs[msgs.length - 1] as HTMLElement;
+          const topoNovaMsg =
+            novaMsg.getBoundingClientRect().top - p.palco.getBoundingClientRect().top;
+          expect(Math.abs(topoNovaMsg)).toBeLessThanOrEqual(1);
+
+          const paddingNovo = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingNovo).toBeLessThan(paddingInicial + paddingAposResposta);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('resposta longa e cartoes de imoveis levam o espaco extra a zero mantendo scrollTop e ResizeObserver recalcula crescimento fisico', fakeAsync(() => {
+        const p = montarPalco('c-s48-resp-longa', { confirmado: true, altura: '600px' });
+        try {
+          p.palco.scrollTop = 0;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Quero ver opcoes de casas';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-s48-resp-longa/mensagens');
+          const msgsAntes = p.hostEl.querySelectorAll('app-mensagem-pessoa');
+          const msgEnviada = msgsAntes[msgsAntes.length - 1] as HTMLElement;
+          const scrollEsperado = p.palco.scrollTop;
+
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          const paddingAntesCrescimento = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingAntesCrescimento).toBeGreaterThan(0);
+
+          const cardExtra = document.createElement('div');
+          cardExtra.style.height = '100px';
+          coluna.appendChild(cardExtra);
+
+          (p.fixture.componentInstance as any).recalcularExtra();
+          p.fixture.detectChanges();
+
+          const paddingAposCrescimentoFisico = parseFloat(coluna.style.paddingBottom) || 0;
+          expect(paddingAposCrescimentoFisico).toBeLessThan(paddingAntesCrescimento);
+          cardExtra.remove();
+
+          req.flush({
+            conversaId: 'c-s48-resp-longa',
+            resposta: 'Aqui estao as opcoes encontradas: '.repeat(25),
+            intencao: 'busca_imoveis',
+            proximaAcao: 'continuar_conversa',
+            perfilLead: null,
+            imoveisSugeridos: [
+              {
+                id: 'imovel-1',
+                titulo: 'Casa no Jardim Paulistano',
+                preco: 1200000,
+                dormitorios: 3,
+                area: 200,
+                bairro: 'Jardim Paulistano',
+                cidade: 'Sao Paulo',
+                estado: 'SP',
+                fotos: ['/fotos/1.jpg'],
+              },
+            ],
+            corretor: 'Helena Braga',
+            contatoPendente: false,
+            agendamento: null,
+          });
+          tick();
+          p.fixture.detectChanges();
+
+          expect(coluna.style.paddingBottom).toBe('');
+          expect(Math.abs(p.palco.scrollTop - scrollEsperado)).toBeLessThanOrEqual(1);
+          const topoAinda =
+            msgEnviada.getBoundingClientRect().top - p.palco.getBoundingClientRect().top;
+          expect(Math.abs(topoAinda)).toBeLessThanOrEqual(1);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('rolagem manual por wheel abandona o espaco extra e resposta posterior nao puxa o leitor', fakeAsync(() => {
+        const p = montarPalco('c-s48-wheel', { confirmado: true, altura: '600px' });
+        try {
+          p.palco.scrollTop = 0;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Pergunta antes de rolar wheel';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-s48-wheel/mensagens');
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(coluna.style.paddingBottom).not.toBe('');
+
+          p.palco.dispatchEvent(new WheelEvent('wheel', { bubbles: true }));
+          p.fixture.detectChanges();
+
+          expect(coluna.style.paddingBottom).toBe('');
+
+          p.palco.scrollTop = 20;
+          req.flush({
+            conversaId: 'c-s48-wheel',
+            resposta: 'Resposta que nao deve mover o leitor.'.repeat(10),
+            intencao: 'indefinida',
+            proximaAcao: 'continuar_conversa',
+            perfilLead: null,
+            imoveisSugeridos: [],
+            corretor: 'Helena Braga',
+            contatoPendente: false,
+            agendamento: null,
+          });
+          tick();
+          p.fixture.detectChanges();
+
+          expect(p.palco.scrollTop).toBe(20);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('arraste manual ao fim abandona o espaco extra, fim e real e resposta posterior nao puxa o leitor', fakeAsync(() => {
+        const p = montarPalco('c-s48-scroll-fim', { confirmado: true, altura: '600px' });
+        try {
+          p.palco.scrollTop = 0;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Pergunta antes de arrastar ao fim';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-s48-scroll-fim/mensagens');
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(coluna.style.paddingBottom).not.toBe('');
+
+          p.palco.scrollTop = 100;
+          p.palco.dispatchEvent(new Event('scroll'));
+          p.fixture.detectChanges();
+
+          expect(coluna.style.paddingBottom).toBe('');
+
+          p.palco.scrollTop = maximo(p.palco);
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          const posicaoFimReal = p.palco.scrollTop;
+
+          req.flush({
+            conversaId: 'c-s48-scroll-fim',
+            resposta: 'Resposta apos scroll ao fim.'.repeat(8),
+            intencao: 'indefinida',
+            proximaAcao: 'continuar_conversa',
+            perfilLead: null,
+            imoveisSugeridos: [],
+            corretor: 'Helena Braga',
+            contatoPendente: false,
+            agendamento: null,
+          });
+          tick();
+          p.fixture.detectChanges();
+
+          expect(p.palco.scrollTop).toBe(posicaoFimReal);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('sem novo envio, abertura, reload e troca de conversa nao reservam espaco extra', fakeAsync(() => {
+        const p = montarPalco('c-s48-sem-reserva', { confirmado: true });
+        try {
+          const coluna = p.hostEl.querySelector('.coluna') as HTMLElement;
+          expect(coluna.style.paddingBottom).toBe('');
+
+          void p.store.abrirConversa('c-s48-trocada');
+          p.fixture.detectChanges();
+          httpMock
+            .expectOne('/conversas/c-s48-trocada')
+            .flush(
+              conversaComOferta(
+                'c-s48-trocada',
+                [],
+                'Helena Braga',
+                false,
+                null,
+                historicoLongo(null),
+              ),
+            );
+          tick();
+          p.fixture.detectChanges();
+
+          expect(coluna.style.paddingBottom).toBe('');
+
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = '   ';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          httpMock.expectNone('/conversas/c-s48-trocada/mensagens');
+          expect(coluna.style.paddingBottom).toBe('');
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('primeiro envio autenticado com criacao de conversa ancora no topo e reserva espaco temporario', fakeAsync(() => {
+        localStorage.setItem('solar.conversaId', 'conv-antiga');
+        TestBed.inject(SessaoStore).definir(sessaoCliente());
+        const fixture = TestBed.createComponent(Chat);
+        const hostEl = html(fixture);
+        hostEl.style.height = '600px';
+        hostEl.style.display = 'flex';
+        document.body.appendChild(hostEl);
+        fixture.autoDetectChanges(true);
+
+        fixture.detectChanges();
+        httpMock.expectOne('/api/conta').flush(conta(VERSAO_AVISO_PRIVACIDADE));
+        httpMock.expectOne('/api/conta/conversas').flush(conversas);
+        httpMock.expectOne('/conversas/conv-antiga').flush(conversaComMensagens('conv-antiga'));
+        tick();
+        fixture.detectChanges();
+
+        html(fixture).querySelector<HTMLButtonElement>('app-composer .botao-apagar')!.click();
+        fixture.detectChanges();
+        tick();
+
+        html(fixture).querySelector<HTMLButtonElement>('app-confirmacao-exclusao .botao-destrutivo')!.click();
+        fixture.detectChanges();
+
+        const reqDelete = httpMock.expectOne('/conversas/conv-antiga/titular');
+        reqDelete.flush(mockSucessoExclusao('apenas_conversa'));
+        tick();
+        fixture.detectChanges();
+
+        const store = TestBed.inject(ConversaStore);
+        expect(store.estado()).toBe('inicio-conta');
+        expect(store.conversaAtual()).toBe('');
+
+        const area = hostEl.querySelector('textarea') as HTMLTextAreaElement;
+        area.value = 'Primeira mensagem na conta';
+        area.dispatchEvent(new Event('input'));
+        fixture.detectChanges();
+        (hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+        fixture.detectChanges();
+
+        const reqConsent = httpMock.expectOne((r) => r.method === 'POST' && r.url.endsWith('/consentimento'));
+        expect(reqConsent.request.method).toBe('POST');
+        reqConsent.flush({});
+        tick();
+        fixture.detectChanges();
+
+        const reqMsg = httpMock.expectOne((r) => r.method === 'POST' && r.url.endsWith('/mensagens'));
+        expect(reqMsg.request.method).toBe('POST');
+
+        const palco = hostEl.querySelector('.palco') as HTMLElement;
+        const msg = hostEl.querySelector('app-mensagem-pessoa') as HTMLElement;
+        expect(msg).not.toBeNull();
+        const topoRelativo = msg.getBoundingClientRect().top - palco.getBoundingClientRect().top;
+        expect(Math.abs(topoRelativo)).toBeLessThanOrEqual(1);
+
+        const coluna = hostEl.querySelector('.coluna') as HTMLElement;
+        expect(coluna.style.paddingBottom).not.toBe('');
+
+        hostEl.remove();
+        store.pararPolling();
+        httpMock.verify();
+        fixture.destroy();
+        flush();
       }));
 
       it('envio de contato 200 forca o fim', fakeAsync(() => {
