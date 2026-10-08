@@ -1769,7 +1769,19 @@ describe('Chat', () => {
       fixture.detectChanges();
       tick();
 
-      expect(palco.scrollTop).toBeGreaterThan(0);
+      expect(palco.scrollTop).toBe(0);
+
+      palco.scrollTop = palco.scrollHeight;
+      const alturaAntes = palco.scrollHeight;
+      store.itens.update((itens) => [
+        ...itens,
+        { tipo: 'pessoa', id: 'nova-msg-2', texto: 'Outra pergunta do lead', hora: '10:31' },
+      ]);
+      fixture.detectChanges();
+      tick();
+
+      expect(palco.scrollHeight).toBeGreaterThan(alturaAntes);
+      expect(palco.scrollHeight - palco.clientHeight - palco.scrollTop).toBeLessThanOrEqual(1);
 
       store.pararPolling();
       httpMock.verify();
@@ -1779,6 +1791,454 @@ describe('Chat', () => {
       fixture.destroy();
       flush();
     }));
+
+    describe('item 12: rolagem do leitor', () => {
+      const confItem12: AgendamentoDaConversa = {
+        estado: 'confirmado',
+        horario: slotA1,
+        alternativas: [],
+      };
+
+      function historicoLongo(confirmado: AgendamentoDaConversa | null): MensagemDaConversa[] {
+        const mensagens: MensagemDaConversa[] = [];
+        for (let i = 0; i < 24; i++) {
+          mensagens.push({
+            papel: i % 2 === 0 ? 'lead' : 'agente',
+            texto: `Mensagem longa de teste de rolagem numero ${i} para gerar overflow no palco`,
+            em: `2026-10-07T10:${String(i).padStart(2, '0')}:00Z`,
+            proximaAcao: i === 1 ? 'agendar_reuniao' : null,
+            corretor: i === 1 ? 'Helena Braga' : null,
+            agendamento: null,
+          });
+        }
+        if (confirmado) {
+          mensagens.push(
+            {
+              papel: 'lead',
+              texto: 'Quarta, 7 de outubro às 9h',
+              em: '2026-10-07T10:40:00Z',
+              proximaAcao: null,
+              corretor: null,
+              agendamento: null,
+            },
+            {
+              papel: 'agente',
+              texto:
+                'Combinado! Helena Braga vai te chamar no contato que você forneceu no horário agendado.',
+              em: '2026-10-07T10:40:05Z',
+              proximaAcao: 'continuar_conversa',
+              corretor: 'Helena Braga',
+              agendamento: confirmado,
+            },
+          );
+        }
+        return mensagens;
+      }
+
+      function mensagemNova(n: number, proximaAcao: ProximaAcao | null = null): MensagemDaConversa {
+        return {
+          papel: 'agente',
+          texto: `Resposta nova ${n} ${'com bastante texto para ocupar varias linhas no palco '.repeat(8)}`,
+          em: `2026-10-07T11:${String(n).padStart(2, '0')}:00Z`,
+          proximaAcao,
+          corretor: 'Helena Braga',
+          agendamento: null,
+        };
+      }
+
+      const slotOutroDia: SlotOferecido = {
+        id: 104,
+        inicio: '2026-10-08T09:00:00-03:00',
+        fim: '2026-10-08T10:00:00-03:00',
+      };
+
+      function distancia(palco: HTMLElement): number {
+        return palco.scrollHeight - palco.clientHeight - palco.scrollTop;
+      }
+
+      function maximo(palco: HTMLElement): number {
+        return palco.scrollHeight - palco.clientHeight;
+      }
+
+      function montarPalco(
+        id: string,
+        opcoes: { confirmado?: boolean; oferta?: SlotOferecido[]; contatoPendente?: boolean } = {},
+      ) {
+        const mensagens = historicoLongo(opcoes.confirmado ? confItem12 : null);
+        let oferta = opcoes.oferta ?? [];
+        const contatoPendente = opcoes.contatoPendente ?? false;
+        localStorage.setItem('solar.conversaId', id);
+        const fixture = TestBed.createComponent(Chat);
+        const store = TestBed.inject(ConversaStore);
+        const hostEl = html(fixture);
+        hostEl.style.height = '350px';
+        hostEl.style.display = 'flex';
+        document.body.appendChild(hostEl);
+        fixture.autoDetectChanges(true);
+
+        const corpo = () =>
+          conversaComOferta(
+            id,
+            oferta.map((s) => ({ ...s })),
+            'Helena Braga',
+            contatoPendente,
+            null,
+            structuredClone(mensagens),
+          );
+
+        httpMock.expectOne(`/conversas/${id}`).flush(corpo());
+        tick();
+        fixture.detectChanges();
+
+        const palco = hostEl.querySelector('.palco') as HTMLElement;
+        expect(palco).not.toBeNull();
+        expect(palco.scrollHeight).toBeGreaterThan(palco.clientHeight + 200);
+
+        let destruido = false;
+        const limpar = () => {
+          if (destruido) {
+            return;
+          }
+          destruido = true;
+          store.pararPolling();
+          hostEl.remove();
+          fixture.destroy();
+          flush();
+        };
+
+        return {
+          fixture,
+          store,
+          hostEl,
+          palco,
+          mensagens,
+          corpo,
+          definirOferta: (nova: SlotOferecido[]) => {
+            oferta = nova;
+          },
+          ciclo: () => {
+            tick(3000);
+            const req = httpMock.expectOne(`/conversas/${id}`);
+            expect(req.request.method).toBe('GET');
+            req.flush(corpo());
+            tick();
+            fixture.detectChanges();
+          },
+          limpar,
+          encerrar: () => {
+            store.pararPolling();
+            httpMock.verify();
+            limpar();
+          },
+        };
+      }
+
+      it('polling GET real com conteudo igual e referencias novas nunca escreve scroll, no topo nem perto do fim', fakeAsync(() => {
+        const p = montarPalco('c-i12-igual', { confirmado: true });
+        try {
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+          expect(p.store.agendamentoEstaConfirmado()).toBeTrue();
+
+          p.ciclo();
+          const itensAntes = p.store.itens();
+          const apresentacaoAntes = p.fixture.componentInstance.itensApresentacao();
+          expect(apresentacaoAntes.some((i) => i.tipo === 'marcador-cartao')).toBeTrue();
+          expect(
+            apresentacaoAntes.some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado'),
+          ).toBeTrue();
+          expect(
+            apresentacaoAntes.some((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado'),
+          ).toBeTrue();
+
+          p.palco.scrollTop = 0;
+          p.ciclo();
+          p.ciclo();
+          p.ciclo();
+          expect(p.palco.scrollTop).toBe(0);
+          expect(p.store.itens()).not.toBe(itensAntes);
+          expect(p.fixture.componentInstance.itensApresentacao()).not.toBe(apresentacaoAntes);
+          expect(p.store.itens().map((i) => i.tipo)).toEqual(itensAntes.map((i) => i.tipo));
+
+          p.palco.scrollTop = maximo(p.palco) - 30;
+          const posicaoPerto = p.palco.scrollTop;
+          p.ciclo();
+          p.ciclo();
+          expect(p.palco.scrollTop).toBe(posicaoPerto);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('conteudo passivo novo segue o fim ate 80px inclusive mesmo crescendo mais de 80px e preserva o leitor acima', fakeAsync(() => {
+        const p = montarPalco('c-i12-limites', { confirmado: true });
+        try {
+          p.ciclo();
+          let n = 0;
+          const crescer = () => {
+            const antes = p.palco.scrollHeight;
+            p.mensagens.push(mensagemNova(n++));
+            p.ciclo();
+            expect(p.palco.scrollHeight - antes).toBeGreaterThan(80);
+          };
+          const posicionar = (distanciaAlvo: number) => {
+            p.palco.scrollTop = maximo(p.palco) - distanciaAlvo;
+            expect(Math.round(distancia(p.palco))).toBe(distanciaAlvo);
+          };
+
+          posicionar(0);
+          crescer();
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          posicionar(80);
+          crescer();
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          posicionar(81);
+          const posicao81 = p.palco.scrollTop;
+          crescer();
+          expect(p.palco.scrollTop).toBe(posicao81);
+
+          p.palco.scrollTop = 0;
+          crescer();
+          expect(p.palco.scrollTop).toBe(0);
+
+          p.palco.scrollTop = Math.floor(maximo(p.palco) / 2);
+          const posicaoMeio = p.palco.scrollTop;
+          crescer();
+          expect(p.palco.scrollTop).toBe(posicaoMeio);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('mudancas reais de oferta e de evento seguem o fim quando perto e nao movem o leitor acima', fakeAsync(() => {
+        const p = montarPalco('c-i12-reais', { oferta: [slotA1, slotA2] });
+        try {
+          p.ciclo();
+          const posicionar = (distanciaAlvo: number) => {
+            p.palco.scrollTop = maximo(p.palco) - distanciaAlvo;
+          };
+
+          p.palco.scrollTop = 0;
+          p.definirOferta([slotA1, slotA2, slotOutroDia]);
+          p.ciclo();
+          expect(p.palco.scrollTop).toBe(0);
+          p.definirOferta([slotA1, slotA2]);
+          p.ciclo();
+          expect(p.palco.scrollTop).toBe(0);
+
+          posicionar(0);
+          const alturaAntes = p.palco.scrollHeight;
+          p.definirOferta([slotA1, slotA2, slotOutroDia]);
+          p.ciclo();
+          expect(p.palco.scrollHeight).toBeGreaterThan(alturaAntes);
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          posicionar(0);
+          const eventosAntes = p.hostEl.querySelectorAll('app-evento-sistema').length;
+          p.mensagens.push(mensagemNova(50, 'encerrar'));
+          p.ciclo();
+          expect(p.hostEl.querySelectorAll('app-evento-sistema').length).toBeGreaterThan(
+            eventosAntes,
+          );
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('abertura, troca de conversa e reload abrem no fim', fakeAsync(() => {
+        const p = montarPalco('c-i12-abre', { confirmado: true });
+        let limparReload: () => void = () => undefined;
+        try {
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          p.palco.scrollTop = 0;
+          void p.store.abrirConversa('c-i12-outra');
+          p.fixture.detectChanges();
+          httpMock
+            .expectOne('/conversas/c-i12-outra')
+            .flush(
+              conversaComOferta(
+                'c-i12-outra',
+                [],
+                'Helena Braga',
+                false,
+                null,
+                historicoLongo(null),
+              ),
+            );
+          tick();
+          p.fixture.detectChanges();
+          expect(p.palco.scrollHeight).toBeGreaterThan(p.palco.clientHeight + 200);
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+          p.encerrar();
+
+          TestBed.resetTestingModule();
+          TestBed.configureTestingModule({
+            imports: [Chat],
+            providers: [provideHttpClient(), provideHttpClientTesting(), provideRouter([])],
+          });
+          const httpMockReload = TestBed.inject(HttpTestingController);
+          const storeReload = TestBed.inject(ConversaStore);
+          expect(storeReload).not.toBe(p.store);
+          const fixtureReload = TestBed.createComponent(Chat);
+          const hostReload = html(fixtureReload);
+          hostReload.style.height = '350px';
+          hostReload.style.display = 'flex';
+          document.body.appendChild(hostReload);
+          limparReload = () => {
+            storeReload.pararPolling();
+            hostReload.remove();
+            fixtureReload.destroy();
+            flush();
+          };
+          fixtureReload.autoDetectChanges(true);
+          httpMockReload
+            .expectOne('/conversas/c-i12-outra')
+            .flush(
+              conversaComOferta(
+                'c-i12-outra',
+                [],
+                'Helena Braga',
+                false,
+                null,
+                historicoLongo(null),
+              ),
+            );
+          tick();
+          fixtureReload.detectChanges();
+          const palcoReload = hostReload.querySelector('.palco') as HTMLElement;
+          expect(palcoReload.scrollHeight).toBeGreaterThan(palcoReload.clientHeight + 200);
+          expect(distancia(palcoReload)).toBeLessThanOrEqual(1);
+          storeReload.pararPolling();
+          httpMockReload.verify();
+        } finally {
+          p.limpar();
+          limparReload();
+        }
+      }));
+
+      it('envio proprio pela UI forca o fim e a resposta posterior nao puxa quem subiu enquanto esperava', fakeAsync(() => {
+        const p = montarPalco('c-i12-envio', { confirmado: true });
+        try {
+          p.palco.scrollTop = 0;
+          const area = p.hostEl.querySelector('textarea') as HTMLTextAreaElement;
+          area.value = 'Minha pergunta';
+          area.dispatchEvent(new Event('input'));
+          p.fixture.detectChanges();
+          (p.hostEl.querySelector('.enviar') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-i12-envio/mensagens');
+          expect(req.request.method).toBe('POST');
+          expect(req.request.body).toEqual({ texto: 'Minha pergunta' });
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          p.palco.scrollTop = 0;
+          req.flush({
+            conversaId: 'c-i12-envio',
+            resposta: `Resposta da Lia ${'com bastante texto para ocupar varias linhas no palco '.repeat(8)}`,
+            intencao: 'indefinida',
+            proximaAcao: 'continuar_conversa',
+            perfilLead: null,
+            imoveisSugeridos: [],
+            corretor: 'Helena Braga',
+            contatoPendente: false,
+            agendamento: null,
+          });
+          tick();
+          p.fixture.detectChanges();
+          expect(p.palco.scrollTop).toBe(0);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('envio de contato 200 forca o fim', fakeAsync(() => {
+        const p = montarPalco('c-i12-contato', { contatoPendente: true });
+        try {
+          p.palco.scrollTop = 0;
+          const formulario = p.fixture.debugElement.query(By.directive(FormularioContato));
+          expect(formulario).not.toBeNull();
+          formulario.componentInstance.enviar.emit({
+            nome: 'Lead Item 12',
+            telefone: '11999990000',
+            email: 'lead12@solar.com.br',
+          });
+          p.fixture.detectChanges();
+
+          const req = httpMock.expectOne('/conversas/c-i12-contato/contato');
+          expect(req.request.method).toBe('POST');
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          req.flush({ leadId: 'lead-i12', oferta: [slotA1, slotA2] });
+          tick();
+          p.fixture.detectChanges();
+          expect(p.hostEl.querySelector('app-cartao-agendamento')).not.toBeNull();
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+
+      it('clique em horario com reserva 200 e GET reconciliado forca o fim e preserva guards e unico slot confirmado', fakeAsync(() => {
+        const p = montarPalco('c-i12-horario', { oferta: [slotA1, slotA2] });
+        try {
+          p.palco.scrollTop = 0;
+          (p.hostEl.querySelector('.slot-botao') as HTMLButtonElement).click();
+          p.fixture.detectChanges();
+
+          const post = httpMock.expectOne('/conversas/c-i12-horario/agendamentos');
+          expect(post.request.method).toBe('POST');
+          expect(post.request.body).toEqual({ slotId: slotA1.id });
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+          for (const slot of Array.from(p.hostEl.querySelectorAll('.slot-botao')) as HTMLButtonElement[]) {
+            expect(slot.disabled).toBeTrue();
+          }
+
+          post.flush(confItem12);
+          tick();
+          p.fixture.detectChanges();
+
+          const get = httpMock.expectOne('/conversas/c-i12-horario');
+          expect(get.request.method).toBe('GET');
+          get.flush(
+            conversaComOferta(
+              'c-i12-horario',
+              [],
+              'Helena Braga',
+              false,
+              confItem12,
+              historicoLongo(confItem12),
+            ),
+          );
+          tick();
+          p.fixture.detectChanges();
+
+          expect(distancia(p.palco)).toBeLessThanOrEqual(1);
+          const confirmados = p.hostEl.querySelectorAll('app-cartao-agendamento .slot-botao');
+          expect(confirmados.length).toBe(1);
+          expect(confirmados[0].getAttribute('aria-pressed')).toBe('true');
+          expect((confirmados[0] as HTMLButtonElement).disabled).toBeTrue();
+          expect(p.hostEl.querySelectorAll('app-cartao-agendamento').length).toBe(1);
+
+          p.encerrar();
+        } finally {
+          p.limpar();
+        }
+      }));
+    });
 
     it('R3: GET inicial com confirmado + oferta[] mantem unico slot real selecionado, sem Agora nao e sem linha verde', fakeAsync(() => {
       localStorage.setItem('solar.conversaId', 'c-init-conf');

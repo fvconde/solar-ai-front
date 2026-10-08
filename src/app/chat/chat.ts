@@ -32,6 +32,7 @@ import { SessaoStore } from '../sessao/sessao-store';
 import { HistoricoConversas } from './historico-conversas';
 
 const CHAVE_CONVITE_DISPENSADO = 'solar.conviteDispensado';
+const TOLERANCIA_FIM_PX = 80;
 
 export interface MarcadorCartaoVisual {
   readonly tipo: 'marcador-cartao';
@@ -76,10 +77,12 @@ export class Chat implements OnInit {
   readonly listaAberta = signal(false);
   private readonly conviteDispensadoEm = signal(lerLocal(CHAVE_CONVITE_DISPENSADO));
   private geracaoConversas = 0;
-  private ultimoItensRef: unknown = null;
+  private ultimaAssinaturaPalco: string | null = null;
   private ultimoEstado: string | null = null;
   private ultimoPalcoEl: HTMLElement | null = null;
-  private ultimaAssinaturaAgenda: string | null = null;
+  private ultimaConversa: string | null = null;
+  private ultimaAcaoPropria = false;
+  private ultimaAltura = 0;
 
   readonly mostrarConvite = computed(() => {
     if (this.sessao.ativa() || !this.store.emConversa()) {
@@ -151,24 +154,32 @@ export class Chat implements OnInit {
     return resultado;
   });
 
+  private readonly assinaturaPalco = computed(() => {
+    const confirmado = this.store.agendamentoConfirmado()?.horario;
+    const perdido = this.store.horarioPerdido();
+    return JSON.stringify([
+      this.itensApresentacao().map(assinaturaItem),
+      this.store.ofertaAgendamento().map((slot) => [slot.id, slot.inicio, slot.fim]),
+      confirmado ? [confirmado.id, confirmado.inicio, confirmado.fim] : null,
+      perdido ? [perdido.id, perdido.inicio, perdido.fim] : null,
+      this.store.corretorAgendamento(),
+      this.store.agendamentoRecolhido(),
+      this.store.agendamentoErro(),
+      this.store.contatoErro(),
+      this.store.agendamentoEnviando(),
+      this.store.contatoEnviando(),
+      this.store.agendamentoSincronizacaoPendente(),
+    ]);
+  });
+
   constructor() {
     afterRenderEffect(() => {
-      const itens = this.itensApresentacao();
+      const assinatura = this.assinaturaPalco();
       const estado = this.store.estado();
+      const conversa = this.store.conversaAtual();
       const apagada = this.store.conversaApagada();
+      const acaoPropria = this.store.agendamentoEnviando() || this.store.contatoEnviando();
       const elemento = this.palco()?.nativeElement;
-
-      const oferta = this.store.ofertaAgendamento();
-      const recolhido = this.store.agendamentoRecolhido();
-      const perdido = this.store.horarioPerdido();
-      const erro = this.store.agendamentoErro();
-      const confirmado = !!this.store.agendamentoConfirmado();
-      const busyOuPendente =
-        this.store.agendamentoEnviando() || this.store.agendamentoSincronizacaoPendente();
-
-      const slotsStr = oferta.map((s) => `${s.id}:${s.inicio}:${s.fim}`).join(';');
-      const perdidoStr = perdido ? `${perdido.id}:${perdido.inicio}:${perdido.fim}` : '';
-      const assinatura = `${slotsStr}|${recolhido}|${perdidoStr}|${erro ?? ''}|${confirmado}|${busyOuPendente}`;
 
       if (apagada) {
         this.bannerApagada()?.nativeElement.focus();
@@ -180,18 +191,24 @@ export class Chat implements OnInit {
         return;
       }
 
-      const itensMudaram = itens !== this.ultimoItensRef;
-      const estadoMudou = estado !== this.ultimoEstado;
-      const elementoMudou = elemento !== this.ultimoPalcoEl;
-      const agendaMudou = assinatura !== this.ultimaAssinaturaAgenda;
+      const abertura = elemento !== this.ultimoPalcoEl || conversa !== this.ultimaConversa;
+      const envioProprio =
+        (estado === 'preparando' && this.ultimoEstado !== 'preparando') ||
+        (acaoPropria && !this.ultimaAcaoPropria);
+      const mudou = assinatura !== this.ultimaAssinaturaPalco || estado !== this.ultimoEstado;
+      const pertoDoFim =
+        this.ultimaAltura - elemento.scrollTop - elemento.clientHeight <= TOLERANCIA_FIM_PX;
 
-      if (itensMudaram || estadoMudou || elementoMudou || agendaMudou) {
-        this.ultimoItensRef = itens;
-        this.ultimoEstado = estado;
-        this.ultimoPalcoEl = elemento;
-        this.ultimaAssinaturaAgenda = assinatura;
+      this.ultimaAssinaturaPalco = assinatura;
+      this.ultimoEstado = estado;
+      this.ultimoPalcoEl = elemento;
+      this.ultimaConversa = conversa;
+      this.ultimaAcaoPropria = acaoPropria;
+
+      if (abertura || envioProprio || (mudou && pertoDoFim)) {
         elemento.scrollTop = elemento.scrollHeight;
       }
+      this.ultimaAltura = elemento.scrollHeight;
     });
 
     effect(() => {
@@ -322,6 +339,28 @@ export class Chat implements OnInit {
         this.conversas.set([]);
       },
     });
+  }
+}
+
+function assinaturaItem(item: ItemApresentacao): unknown[] {
+  switch (item.tipo) {
+    case 'divisor':
+      return [item.tipo, item.rotulo];
+    case 'pessoa':
+      return [item.tipo, item.texto, item.hora];
+    case 'lia':
+      return [item.tipo, item.texto, item.hora, item.intencao, item.imoveis];
+    case 'evento':
+      return [
+        item.tipo,
+        item.variante,
+        item.rotulo,
+        item.texto,
+        item.acao?.rotulo ?? null,
+        item.acao?.tipo ?? null,
+      ];
+    default:
+      return [item.tipo];
   }
 }
 
