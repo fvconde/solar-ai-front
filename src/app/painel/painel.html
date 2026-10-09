@@ -31,14 +31,27 @@
             class="aba-supervisor"
             [id]="'aba-' + f"
             aria-controls="painel-fila-leads"
-            [attr.aria-selected]="!novosCorretoresAtivo() && filtroAtivo() === f"
-            [attr.tabindex]="!novosCorretoresAtivo() && filtroAtivo() === f ? 0 : -1"
+            [attr.aria-selected]="!novosCorretoresAtivo() && !metricasAtivo() && filtroAtivo() === f"
+            [attr.tabindex]="!novosCorretoresAtivo() && !metricasAtivo() && filtroAtivo() === f ? 0 : -1"
             (click)="selecionarFiltro(f)"
             (keydown)="navegarAbasSupervisor($event)"
           >
             {{ rotulosFiltro[f] }}
           </button>
         }
+        <button
+          type="button"
+          role="tab"
+          id="aba-metricas"
+          class="aba-supervisor"
+          aria-controls="painel-metricas"
+          [attr.aria-selected]="metricasAtivo()"
+          [attr.tabindex]="metricasAtivo() ? 0 : -1"
+          (click)="selecionarMetricas()"
+          (keydown)="navegarAbasSupervisor($event)"
+        >
+          Métricas
+        </button>
         <button
           type="button"
           role="tab"
@@ -79,21 +92,43 @@
         </p>
         <app-fila-aprovacao />
       </div>
+    } @else if (perfil() === 'corretor') {
+      <nav class="abas-supervisor" role="tablist" aria-label="Abas do painel">
+        <button
+          type="button"
+          role="tab"
+          id="aba-meus-leads"
+          class="aba-supervisor"
+          aria-controls="painel-fila-leads"
+          [attr.aria-selected]="!metricasAtivo()"
+          [attr.tabindex]="!metricasAtivo() ? 0 : -1"
+          (click)="retomarMeusLeads()"
+          (keydown)="navegarAbasSupervisor($event)"
+        >
+          Meus leads
+        </button>
+        <button
+          type="button"
+          role="tab"
+          id="aba-metricas"
+          class="aba-supervisor"
+          aria-controls="painel-metricas"
+          [attr.aria-selected]="metricasAtivo()"
+          [attr.tabindex]="metricasAtivo() ? 0 : -1"
+          (click)="selecionarMetricas()"
+          (keydown)="navegarAbasSupervisor($event)"
+        >
+          Métricas
+        </button>
+      </nav>
     }
     <div
       id="painel-fila-leads"
       class="conteudo-fila-painel"
-      [class.oculto]="perfil() === 'supervisor' && novosCorretoresAtivo()"
-      [attr.role]="perfil() === 'supervisor' ? 'tabpanel' : null"
-      [attr.aria-labelledby]="perfil() === 'supervisor' ? abaAtivaId() : null"
+      role="tabpanel"
+      [attr.aria-labelledby]="abaAtivaId()"
+      [class.oculto]="novosCorretoresAtivo() || metricasAtivo()"
     >
-      @if (!novosCorretoresAtivo()) {
-        @defer (on immediate) {
-          <app-metricas-painel (abrirPendentes)="selecionarNovosCorretores()" />
-        } @placeholder {
-          <div class="metricas-aguardando" role="status">Carregando métricas…</div>
-        }
-      }
       @if (perfil() !== 'supervisor') {
         <div class="barra-fila">
           <div class="grupo-esquerda-fila">
@@ -386,6 +421,22 @@
         }
       </section>
       </main>
+    </div>
+
+    <div
+      id="painel-metricas"
+      class="conteudo-fila-painel"
+      role="tabpanel"
+      aria-labelledby="aba-metricas"
+      [class.oculto]="!metricasAtivo()"
+    >
+      @if (metricasAtivo()) {
+        @defer (on immediate) {
+          <app-metricas-painel (abrirPendentes)="selecionarNovosCorretores()" />
+        } @placeholder {
+          <div class="metricas-aguardando" role="status">Carregando métricas…</div>
+        }
+      }
     </div>
   }
 

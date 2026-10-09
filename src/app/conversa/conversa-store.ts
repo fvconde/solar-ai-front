@@ -16,14 +16,35 @@ import {
   agruparSlotsPorDia,
   dataDoAgendamento,
   diaDe,
+  diaExtensoDoAgendamento,
   horaAgora,
   horaDe,
+  horaDoAgendamento,
+  periodoDoAgendamento,
   rotuloDeDia,
 } from './horario';
 import { AcaoEvento, EstadoConversa, ItemTrilha } from './trilha';
 
 function ehHandoff(acao: ProximaAcao | null): boolean {
   return acao === 'agendar_reuniao' || acao === 'direcionar_especialista';
+}
+
+function extrairHoraContato(iso: string | null | undefined): {
+  hora: string | null;
+  isoValido: string | null;
+} {
+  if (!iso || typeof iso !== 'string') {
+    return { hora: null, isoValido: null };
+  }
+  const limpo = iso.trim();
+  if (!limpo) {
+    return { hora: null, isoValido: null };
+  }
+  const h = horaDe(limpo);
+  if (!h || h.trim() === '') {
+    return { hora: null, isoValido: null };
+  }
+  return { hora: h, isoValido: limpo };
 }
 
 const CHAVE_CONVERSA = 'solar.conversaId';
@@ -178,6 +199,7 @@ export class ConversaStore {
   private cronometroPolling: ReturnType<typeof setInterval> | undefined;
   private revisaoAgenda = 0;
   private tokenPolling: object | null = null;
+  private timestampContato: string | null = null;
 
   async iniciar(): Promise<void> {
     if (this.apagando()) {
@@ -435,6 +457,8 @@ export class ConversaStore {
       }
       this.contatoRegistrado.set(true);
       this.ofertaAgendamento.set(resposta.oferta ?? []);
+      const { hora: horaContato, isoValido } = extrairHoraContato(resposta.contatoEm);
+      this.timestampContato = isoValido;
       this.removerContato();
       this.removerReciboContato();
       this.acrescentar({
@@ -444,6 +468,7 @@ export class ConversaStore {
         rotulo: 'Contato enviado',
         texto: 'O corretor usará o contato que você forneceu.',
         acao: null,
+        hora: horaContato,
       });
     } catch {
       if (g !== this.geracao) {
@@ -752,6 +777,7 @@ export class ConversaStore {
         conversa.mensagens,
         conversa.contatoPendente,
         conversa.perfilLead?.intencao ?? null,
+        conversa.contatoEm,
       ),
     );
     this.estado.set(this.estadoDe(conversa.mensagens));
@@ -805,26 +831,30 @@ export class ConversaStore {
 
     const eventoAgendamento = this.eventoDoAgendamento(resposta.agendamento);
     const ehConfirmacao =
-      resposta.agendamento?.estado === 'confirmado' && !!resposta.agendamento.horario;
+      resposta.agendamento?.estado === 'confirmado' &&
+      !!resposta.agendamento.horario &&
+      !!resposta.agendamento.horario.inicio;
 
-    this.acrescentar({
-      tipo: 'lia',
-      id: this.proximoId(),
-      texto: resposta.resposta,
-      hora: horaAgora(),
-      imoveis: resposta.imoveisSugeridos ?? [],
-      intencao: resposta.intencao,
-      revelar: true,
-    });
+    if (ehConfirmacao && eventoAgendamento) {
+      this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...eventoAgendamento, hora: null });
+    } else {
+      this.acrescentar({
+        tipo: 'lia',
+        id: this.proximoId(),
+        texto: resposta.resposta,
+        hora: horaAgora(),
+        imoveis: resposta.imoveisSugeridos ?? [],
+        intencao: resposta.intencao,
+        revelar: true,
+      });
 
-    if (!ehConfirmacao) {
       const evento = eventoAgendamento ?? this.desfecho(resposta.proximaAcao, resposta.corretor);
       if (evento) {
         const jaExisteEncaminhado =
           evento.rotulo === 'Encaminhado' &&
           this.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
         if (!jaExisteEncaminhado) {
-          this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
+          this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento, hora: null });
         }
       }
     }
@@ -838,6 +868,7 @@ export class ConversaStore {
       } else if (this.corretorAgendamento()) {
         this.removerContato();
         if (!this.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado')) {
+          const { hora: horaContato } = extrairHoraContato(this.timestampContato);
           this.acrescentar({
             tipo: 'evento',
             id: this.proximoId(),
@@ -845,6 +876,7 @@ export class ConversaStore {
             rotulo: 'Contato enviado',
             texto: 'O corretor usará o contato que você forneceu.',
             acao: null,
+            hora: horaContato,
           });
         }
       }
@@ -855,6 +887,9 @@ export class ConversaStore {
     this.estado.set(proximoEstado);
     if (proximoEstado === 'conversando') {
       this.iniciarPolling();
+      if (ehHandoff(resposta.proximaAcao) || ehConfirmacao) {
+        void this.verificarNovasMensagens();
+      }
     } else {
       this.pararPolling();
     }
@@ -937,6 +972,7 @@ export class ConversaStore {
               conversa.mensagens,
               conversa.contatoPendente,
               conversa.perfilLead?.intencao ?? null,
+              conversa.contatoEm,
             ),
           );
           this.estado.set(this.estadoDe(conversa.mensagens));
@@ -947,21 +983,28 @@ export class ConversaStore {
           this.totalMensagens = conversa.mensagens.length;
           for (const msg of novas) {
             if (msg.papel === 'agente') {
-              const eventoAgendamento = this.eventoDoAgendamento(msg.agendamento);
               const ehConfirmacao =
-                msg.agendamento?.estado === 'confirmado' && !!msg.agendamento.horario;
+                msg.agendamento?.estado === 'confirmado' &&
+                !!msg.agendamento.horario &&
+                !!msg.agendamento.horario.inicio;
+              const eventoAgendamento = this.eventoDoAgendamento(
+                msg.agendamento,
+                ehConfirmacao ? horaDe(msg.em) : null,
+              );
 
-              this.acrescentar({
-                tipo: 'lia',
-                id: this.proximoId(),
-                texto: msg.texto,
-                hora: horaDe(msg.em),
-                imoveis: msg.imoveisSugeridos ?? [],
-                intencao: conversa.perfilLead?.intencao ?? null,
-                revelar: true,
-              });
+              if (ehConfirmacao && eventoAgendamento) {
+                this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...eventoAgendamento });
+              } else {
+                this.acrescentar({
+                  tipo: 'lia',
+                  id: this.proximoId(),
+                  texto: msg.texto,
+                  hora: horaDe(msg.em),
+                  imoveis: msg.imoveisSugeridos ?? [],
+                  intencao: conversa.perfilLead?.intencao ?? null,
+                  revelar: true,
+                });
 
-              if (!ehConfirmacao) {
                 const evento =
                   eventoAgendamento ??
                   (msg.proximaAcao && this.desfecho(msg.proximaAcao, msg.corretor));
@@ -970,7 +1013,12 @@ export class ConversaStore {
                     evento.rotulo === 'Encaminhado' &&
                     this.itens().some((i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado');
                   if (!jaExisteEncaminhado) {
-                    this.acrescentar({ tipo: 'evento', id: this.proximoId(), ...evento });
+                    this.acrescentar({
+                      tipo: 'evento',
+                      id: this.proximoId(),
+                      ...evento,
+                      hora: evento.rotulo === 'Encaminhado' ? horaDe(msg.em) : null,
+                    });
                   }
                 }
               }
@@ -981,9 +1029,11 @@ export class ConversaStore {
               }
             }
           }
+          this.reconciliarHoras(conversa);
           this.sincronizarContatoERecibo(conversa);
         }
       } else {
+        this.reconciliarHoras(conversa);
         this.sincronizarContatoERecibo(conversa);
       }
     } catch {
@@ -997,6 +1047,7 @@ export class ConversaStore {
   private desfecho(
     acao: ProximaAcao,
     corretor: string | null,
+    hora?: string | null,
   ): Omit<Extract<ItemTrilha, { tipo: 'evento' }>, 'tipo' | 'id'> | null {
     switch (acao) {
       case 'agendar_reuniao':
@@ -1007,6 +1058,7 @@ export class ConversaStore {
             ? `Sua conversa foi encaminhada para ${corretor}, da Solar. O atendimento continua a partir do que você já contou.`
             : 'Sua conversa foi encaminhada para a Solar. Um corretor assume a partir do que você já contou.',
           acao: null,
+          hora: hora ?? null,
         };
       case 'direcionar_especialista':
         return {
@@ -1016,6 +1068,7 @@ export class ConversaStore {
             ? `${corretor}, da Solar, assume a próxima etapa com você.`
             : 'Preparando a próxima etapa com um corretor.',
           acao: null,
+          hora: null,
         };
       case 'encerrar':
         return {
@@ -1023,6 +1076,7 @@ export class ConversaStore {
           rotulo: 'Conversa encerrada',
           texto: 'Esta conversa foi encerrada e a Lia não enviará novas mensagens.',
           acao: { rotulo: 'Iniciar nova conversa', tipo: 'nova-conversa' },
+          hora: null,
         };
       default:
         return null;
@@ -1031,9 +1085,30 @@ export class ConversaStore {
 
   private eventoDoAgendamento(
     agendamento: AgendamentoDaConversa | null,
+    hora?: string | null,
   ): Omit<Extract<ItemTrilha, { tipo: 'evento' }>, 'tipo' | 'id'> | null {
-    if (!agendamento || agendamento.estado === 'confirmado') {
+    if (!agendamento) {
       return null;
+    }
+
+    if (agendamento.estado === 'confirmado') {
+      if (!agendamento.horario || !agendamento.horario.inicio) {
+        return null;
+      }
+      const inicio = agendamento.horario.inicio;
+      const diaExtenso = diaExtensoDoAgendamento(inicio);
+      const horaDoSlot = horaDoAgendamento(inicio);
+      const periodo = periodoDoAgendamento(inicio);
+      if (!diaExtenso || !horaDoSlot || !periodo) {
+        return null;
+      }
+      return {
+        variante: 'sucesso',
+        rotulo: 'Reunião agendada',
+        texto: `O corretor entrará em contato no horário agendado: ${diaExtenso.toLowerCase()}, ${horaDoSlot} da ${periodo}.`,
+        acao: null,
+        hora: hora ?? null,
+      };
     }
 
     const alternativas = agendamento.alternativas.map((slot) => this.rotuloDoHorario(slot));
@@ -1045,6 +1120,7 @@ export class ConversaStore {
         ? `Esse horário acabou de ser reservado. Ainda estão livres: ${alternativas.join('; ')}.`
         : 'Esse horário acabou de ser reservado. O corretor confirma uma alternativa pelo seu contato.',
       acao: null,
+      hora: null,
     };
   }
 
@@ -1096,13 +1172,46 @@ export class ConversaStore {
     mensagens: MensagemDaConversa[],
     contatoPendente: boolean,
     intencao: string | null = null,
+    contatoEm: string | null = null,
   ): ItemTrilha[] {
     const itens: ItemTrilha[] = [];
     let dia = '';
     let jaEncaminhado = false;
 
+    const { hora: horaContatoReconstrucao, isoValido: isoContatoReconstrucao } =
+      extrairHoraContato(contatoEm);
+    this.timestampContato = isoContatoReconstrucao;
+
+    const indicesOcultarLead = new Set<number>();
+    for (let i = 0; i < mensagens.length; i++) {
+      const msg = mensagens[i];
+      if (
+        msg.papel === 'agente' &&
+        msg.agendamento?.estado === 'confirmado' &&
+        msg.agendamento.horario?.inicio
+      ) {
+        if (i > 0) {
+          const anterior = mensagens[i - 1];
+          const inicio = msg.agendamento.horario.inicio;
+          const diaExtenso = diaExtensoDoAgendamento(inicio);
+          const hora = horaDoAgendamento(inicio);
+          const textoEsperado = `${diaExtenso} às ${hora}`;
+          if (
+            anterior.papel === 'lead' &&
+            anterior.em === msg.em &&
+            anterior.texto === textoEsperado
+          ) {
+            indicesOcultarLead.add(i - 1);
+          }
+        }
+      }
+    }
+
     for (const [indice, mensagem] of mensagens.entries()) {
       if (indice === 0 && mensagem.papel === 'lead' && mensagem.texto === ABERTURA) {
+        continue;
+      }
+      if (indicesOcultarLead.has(indice)) {
         continue;
       }
 
@@ -1126,21 +1235,32 @@ export class ConversaStore {
         continue;
       }
 
-      const eventoAgendamento = this.eventoDoAgendamento(mensagem.agendamento);
       const ehConfirmacao =
-        mensagem.agendamento?.estado === 'confirmado' && !!mensagem.agendamento.horario;
+        mensagem.agendamento?.estado === 'confirmado' &&
+        !!mensagem.agendamento.horario &&
+        !!mensagem.agendamento.horario.inicio;
+      const eventoAgendamento = this.eventoDoAgendamento(
+        mensagem.agendamento,
+        ehConfirmacao ? horaDe(mensagem.em) : null,
+      );
 
-      itens.push({
-        tipo: 'lia',
-        id: this.proximoId(),
-        texto: mensagem.texto,
-        hora: horaDe(mensagem.em),
-        imoveis: mensagem.imoveisSugeridos ?? [],
-        intencao,
-        revelar: false,
-      });
+      if (ehConfirmacao && eventoAgendamento) {
+        itens.push({
+          tipo: 'evento',
+          id: this.proximoId(),
+          ...eventoAgendamento,
+        });
+      } else {
+        itens.push({
+          tipo: 'lia',
+          id: this.proximoId(),
+          texto: mensagem.texto,
+          hora: horaDe(mensagem.em),
+          imoveis: mensagem.imoveisSugeridos ?? [],
+          intencao,
+          revelar: false,
+        });
 
-      if (!ehConfirmacao) {
         const evento =
           eventoAgendamento ??
           (mensagem.proximaAcao && this.desfecho(mensagem.proximaAcao, mensagem.corretor));
@@ -1148,7 +1268,12 @@ export class ConversaStore {
           if (evento.rotulo === 'Encaminhado') {
             if (!jaEncaminhado) {
               jaEncaminhado = true;
-              itens.push({ tipo: 'evento', id: this.proximoId(), ...evento });
+              itens.push({
+                tipo: 'evento',
+                id: this.proximoId(),
+                ...evento,
+                hora: horaDe(mensagem.em),
+              });
             }
           } else {
             itens.push({ tipo: 'evento', id: this.proximoId(), ...evento });
@@ -1172,6 +1297,7 @@ export class ConversaStore {
           rotulo: 'Contato enviado',
           texto: 'O corretor usará o contato que você forneceu.',
           acao: null,
+          hora: horaContatoReconstrucao,
         });
       }
     }
@@ -1238,6 +1364,8 @@ export class ConversaStore {
           lista.push({ tipo: 'contato', id: this.proximoId() });
         }
       } else if (deveTerRecibo) {
+        const { hora: horaRecibo, isoValido } = extrairHoraContato(conversa.contatoEm);
+        this.timestampContato = isoValido;
         lista = lista.filter((i) => i.tipo !== 'contato');
         const recibos = lista.filter((i) => i.tipo === 'evento' && i.rotulo === 'Contato enviado');
         if (recibos.length === 0) {
@@ -1248,19 +1376,29 @@ export class ConversaStore {
             rotulo: 'Contato enviado',
             texto: 'O corretor usará o contato que você forneceu.',
             acao: null,
+            hora: horaRecibo,
           });
-        } else if (recibos.length > 1) {
-          let primeiro = false;
-          lista = lista.filter((i) => {
-            if (i.tipo === 'evento' && i.rotulo === 'Contato enviado') {
-              if (!primeiro) {
-                primeiro = true;
-                return true;
+        } else {
+          let primeiro = true;
+          lista = lista
+            .filter((i) => {
+              if (i.tipo === 'evento' && i.rotulo === 'Contato enviado') {
+                if (primeiro) {
+                  primeiro = false;
+                  return true;
+                }
+                return false;
               }
-              return false;
-            }
-            return true;
-          });
+              return true;
+            })
+            .map((i) => {
+              if (i.tipo === 'evento' && i.rotulo === 'Contato enviado') {
+                if (i.hora !== horaRecibo) {
+                  return { ...i, hora: horaRecibo };
+                }
+              }
+              return i;
+            });
         }
       } else {
         lista = lista.filter(
@@ -1269,6 +1407,89 @@ export class ConversaStore {
       }
 
       return lista;
+    });
+  }
+
+  private ehOrigemDoEncaminhado(m: MensagemDaConversa): boolean {
+    if (m.papel !== 'agente') {
+      return false;
+    }
+    const ehConfirmacao =
+      m.agendamento?.estado === 'confirmado' &&
+      !!m.agendamento.horario &&
+      !!m.agendamento.horario.inicio;
+    const eventoAgendamento = this.eventoDoAgendamento(m.agendamento);
+    if (ehConfirmacao && eventoAgendamento) {
+      return false;
+    }
+    const evento =
+      eventoAgendamento ?? (m.proximaAcao ? this.desfecho(m.proximaAcao, m.corretor) : null);
+    return evento?.rotulo === 'Encaminhado';
+  }
+
+  private reconciliarHoras(conversa: ConversaResponse): void {
+    if (!conversa.consentimentoEm || conversa.versaoAvisoPrivacidade !== VERSAO_AVISO_PRIVACIDADE) {
+      return;
+    }
+
+    const primeiraMsgEncaminhado = conversa.mensagens.find((m) => this.ehOrigemDoEncaminhado(m));
+    const horaEncaminhado =
+      primeiraMsgEncaminhado?.em ? horaDe(primeiraMsgEncaminhado.em) || null : null;
+
+    const msgConfirmacao = conversa.mensagens.find(
+      (m) =>
+        m.papel === 'agente' &&
+        m.agendamento?.estado === 'confirmado' &&
+        !!m.agendamento?.horario?.inicio,
+    );
+    const horaConfirmacao = msgConfirmacao?.em ? horaDe(msgConfirmacao.em) || null : null;
+
+    const { hora: horaContato, isoValido: isoContato } = extrairHoraContato(conversa.contatoEm);
+    this.timestampContato = isoContato;
+
+    this.itens.update((atuais) => {
+      let modificou = false;
+      const idxEncaminhado = atuais.findIndex(
+        (i) => i.tipo === 'evento' && i.rotulo === 'Encaminhado',
+      );
+      let idxLiaOrigem = -1;
+      if (idxEncaminhado > 0) {
+        for (let i = idxEncaminhado - 1; i >= 0; i--) {
+          if (atuais[i].tipo === 'lia') {
+            idxLiaOrigem = i;
+            break;
+          }
+        }
+      }
+
+      const novos = atuais.map((item, idx) => {
+        if (item.tipo === 'evento') {
+          if (item.rotulo === 'Encaminhado' && horaEncaminhado && item.hora !== horaEncaminhado) {
+            modificou = true;
+            return { ...item, hora: horaEncaminhado };
+          }
+          if (
+            item.rotulo === 'Reunião agendada' &&
+            horaConfirmacao &&
+            item.hora !== horaConfirmacao
+          ) {
+            modificou = true;
+            return { ...item, hora: horaConfirmacao };
+          }
+          if (item.rotulo === 'Contato enviado' && item.hora !== horaContato) {
+            modificou = true;
+            return { ...item, hora: horaContato };
+          }
+        } else if (item.tipo === 'lia') {
+          if (idx === idxLiaOrigem && horaEncaminhado && item.hora !== horaEncaminhado) {
+            modificou = true;
+            return { ...item, hora: horaEncaminhado };
+          }
+        }
+        return item;
+      });
+
+      return modificou ? novos : atuais;
     });
   }
 
@@ -1388,6 +1609,7 @@ export class ConversaStore {
 
   private resetarAgenda(): void {
     this.invalidarLeiturasDaAgenda();
+    this.timestampContato = null;
     this.ofertaAgendamento.set([]);
     this.corretorAgendamento.set(null);
     this.contatoRegistrado.set(false);
@@ -1456,6 +1678,7 @@ export class ConversaStore {
           conversa.mensagens,
           conversa.contatoPendente,
           conversa.perfilLead?.intencao ?? null,
+          conversa.contatoEm,
         ),
       );
       this.estado.set(this.estadoDe(conversa.mensagens));

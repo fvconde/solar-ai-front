@@ -123,6 +123,27 @@
     color: var(--texto-secundario);
     font-variant-numeric: tabular-nums;
   }
+
+  @media (max-width: 860px) {
+    .bloco-rotulo {
+      min-width: 0;
+      max-width: 100%;
+    }
+
+    .rotulo-etapa {
+      display: block;
+      width: 100%;
+      min-width: 0;
+      max-width: 100%;
+      box-sizing: border-box;
+      -webkit-line-clamp: unset;
+      -webkit-box-orient: unset;
+      overflow: visible;
+      overflow-wrap: break-word;
+      word-break: break-word;
+      hyphens: auto;
+    }
+  }
 }
 
 .compacto-container {

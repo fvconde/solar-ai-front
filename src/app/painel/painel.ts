@@ -60,6 +60,7 @@ export class Painel implements OnInit, OnDestroy {
 
   readonly filtroAtivo = signal<string>('meus_leads');
   readonly novosCorretoresAtivo = signal(false);
+  readonly metricasAtivo = signal(false);
   readonly intencaoAtiva = signal<string>('');
 
   readonly leadSelecionadoId = signal<string | null>(null);
@@ -83,9 +84,18 @@ export class Painel implements OnInit, OnDestroy {
     ),
   );
   readonly pendentesAprovacao = computed(() => this.sessao.pendentesAprovacao() ?? 0);
-  readonly abaAtivaId = computed(() =>
-    this.novosCorretoresAtivo() ? 'aba-novos-corretores' : `aba-${this.filtroAtivo()}`,
-  );
+  readonly abaAtivaId = computed(() => {
+    if (this.metricasAtivo()) {
+      return 'aba-metricas';
+    }
+    if (this.novosCorretoresAtivo()) {
+      return 'aba-novos-corretores';
+    }
+    if (this.perfil() === 'supervisor') {
+      return `aba-${this.filtroAtivo()}`;
+    }
+    return 'aba-meus-leads';
+  });
 
   readonly filtroFixo = computed(() => this.filtrosPermitidos().length === 1);
   readonly temSeletor = computed(() => this.filtrosPermitidos().length > 1);
@@ -180,6 +190,7 @@ export class Painel implements OnInit, OnDestroy {
 
   selecionarFiltro(filtro: string): void {
     this.novosCorretoresAtivo.set(false);
+    this.metricasAtivo.set(false);
     this.filtroAtivo.set(filtro);
     this.router.navigate([], {
       relativeTo: this.route,
@@ -191,8 +202,18 @@ export class Painel implements OnInit, OnDestroy {
 
   selecionarNovosCorretores(): void {
     if (this.perfil() !== 'supervisor') return;
+    this.metricasAtivo.set(false);
     this.novosCorretoresAtivo.set(true);
     void this.router.navigate(['/painel'], { queryParams: { filtro: null } });
+  }
+
+  selecionarMetricas(): void {
+    this.novosCorretoresAtivo.set(false);
+    this.metricasAtivo.set(true);
+  }
+
+  retomarMeusLeads(): void {
+    this.metricasAtivo.set(false);
   }
 
   navegarAbasSupervisor(evento: KeyboardEvent): void {
@@ -265,6 +286,7 @@ export class Painel implements OnInit, OnDestroy {
   }
 
   voltarParaMeusLeads(): void {
+    this.metricasAtivo.set(false);
     this.acessoRestrito.set(false);
     this.filtroAtivo.set('meus_leads');
     this.router.navigate(['/painel'], { queryParams: { filtro: null } });

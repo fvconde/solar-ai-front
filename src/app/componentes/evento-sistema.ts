@@ -1,4 +1,4 @@
-import { ChangeDetectionStrategy, Component, input, output } from '@angular/core';
+import { ChangeDetectionStrategy, Component, computed, input, output } from '@angular/core';
 import { AcaoEvento, VarianteEvento } from '../conversa/trilha';
 
 @Component({
@@ -27,6 +27,9 @@ import { AcaoEvento, VarianteEvento } from '../conversa/trilha';
         <div class="cabeca">
           <span class="marca-estado" [attr.data-variante]="variante()"></span>
           <span class="rotulo">{{ rotulo() }}</span>
+          @if (horaValida(); as h) {
+            <span class="hora">{{ h }}</span>
+          }
         </div>
         <p class="texto">{{ texto() }}</p>
         @if (acao(); as botao) {
@@ -102,6 +105,12 @@ import { AcaoEvento, VarianteEvento } from '../conversa/trilha';
       color: var(--texto-secundario);
     }
 
+    .hora {
+      font-size: 13px;
+      color: var(--texto-secundario);
+      font-variant-numeric: tabular-nums;
+    }
+
     .texto {
       margin-top: 9px;
       font-size: 15.5px;
@@ -129,6 +138,12 @@ export class EventoSistema {
   readonly rotulo = input.required<string>();
   readonly texto = input.required<string>();
   readonly acao = input<AcaoEvento | null>(null);
+  readonly hora = input<string | null | undefined>(null);
   readonly compacto = input<boolean>(false);
   readonly acionar = output<AcaoEvento>();
+
+  readonly horaValida = computed(() => {
+    const h = this.hora()?.trim();
+    return h && h !== '-' && h !== 'null' && h !== 'undefined' ? h : null;
+  });
 }

@@ -360,6 +360,7 @@ describe('CartaoAgendamento', () => {
 
     const estiloHost = window.getComputedStyle(fixture.nativeElement);
     expect(estiloHost.maxWidth).toBe('560px');
+    expect(estiloHost.marginInlineStart).toBe('0px');
 
     const slotsLinha = fixture.nativeElement.querySelector('.slots-linha') as HTMLElement;
     const estiloLinha = window.getComputedStyle(slotsLinha);
@@ -428,5 +429,39 @@ describe('CartaoAgendamento', () => {
     expect(contSelecionar).toBe(0);
     expect(contRecolher).toBe(0);
     expect(contReabrir).toBe(0);
+  });
+
+  it('alinha host a esquerda da coluna em wide e mobile nos dois temas com tolerancia de 1px', () => {
+    fixture.componentRef.setInput('corretor', 'Helena Braga');
+    fixture.componentRef.setInput('grupos', gruposDoisDias);
+    fixture.detectChanges();
+
+    const viewports = ['800px', '360px'];
+    const temas = ['claro', 'escuro'];
+
+    for (const largura of viewports) {
+      for (const tema of temas) {
+        document.documentElement.setAttribute('data-tema', tema);
+        const container = document.createElement('div');
+        container.style.width = largura;
+        container.style.display = 'flex';
+        container.style.flexDirection = 'column';
+        container.style.alignItems = 'stretch';
+        container.style.boxSizing = 'border-box';
+        document.body.appendChild(container);
+        container.appendChild(fixture.nativeElement);
+        fixture.detectChanges();
+
+        const cartao = fixture.nativeElement.querySelector('.cartao') as HTMLElement;
+        expect(cartao).not.toBeNull();
+        const rectContainer = container.getBoundingClientRect();
+        const rectCartao = cartao.getBoundingClientRect();
+
+        expect(Math.abs(rectCartao.left - rectContainer.left)).toBeLessThanOrEqual(1);
+
+        document.body.removeChild(container);
+        document.documentElement.removeAttribute('data-tema');
+      }
+    }
   });
 });
