@@ -2,104 +2,70 @@
 
 [![CI](https://github.com/fvconde/solar-ai-front/actions/workflows/ci.yml/badge.svg)](https://github.com/fvconde/solar-ai-front/actions/workflows/ci.yml)
 
-> *Nota sobre o badge de CI*: O badge reflete o status das execuções do workflow no GitHub Actions na branch padrão. Antes da integração da branch `feature/S-28` em `develop`/`main` e do primeiro disparo no repositório remoto, o badge poderá exibir status pendente ou não encontrado.
+Interface web do **Solar**, um SDR imobiliário com IA. O lead conversa com a **Lia**, a corretora virtual, e o corretor humano acompanha os leads qualificados num painel.
 
-> **Interface do Usuário (Chat do Lead e Painel do Corretor)**  
-> Para a visão geral da plataforma Solar, governança completa de privacidade e diagrama de arquitetura do sistema, consulte o **[README Hub do Solar](https://github.com/fvconde/solar-ai-docs)**.
+| Repositório | Papel |
+|---|---|
+| **solar-ai-front** | Chat do lead e painel do corretor (Angular) |
+| [solar-ai-api](https://github.com/fvconde/solar-ai-api) | API, banco e regras de negócio (.NET) |
+| [solar-ai](https://github.com/fvconde/solar-ai) | Agente da Lia (Python, LangGraph, Gemini) |
 
----
-
-## 1. Papel no Ecossistema
-
-O `solar-ai-front` é a aplicação cliente web do Solar. Desenvolvido em **Angular 20 standalone** com gerenciamento de estado baseado em **Signals**, ele concentra duas interfaces essenciais:
-1. **Chat do Lead (`/`)**: Interface conversacional direta com a corretora virtual **Lia**. Implementa o fluxo obrigatório de consentimento LGPD na abertura, kickoff silencioso, renderização de cards de imóveis e formulário seguro de coleta de contato no handoff.
-2. **Painel do Corretor (`/painel`)**: Console operacional interno para corretores humanos parceiros acompanharem a fila de leads qualificados em tempo real, com ordenação prioritária por score e filtros por corretor/intenção.
-3. **Aviso de Privacidade Completo (`/privacidade`)**: Página dedicada contendo os termos integrais de governança e proteção de dados do Solar.
+**Stack:** Angular 20 (standalone + Signals) · TypeScript · SCSS · Karma/Jasmine
 
 ---
 
-## 2. Como Rodar Localmente
+## Rodar localmente
 
 ### Pré-requisitos
-- Node.js 22+ e npm instalados.
-- Backend (`solar-ai-api`) e Agente (`solar-ai`) em execução (orquestrados pelo Docker Compose do `solar-ai-docs`).
 
-### Execução em Desenvolvimento
+- Node.js 22+
+- Backend rodando em `http://localhost:8080`. Ele sobe com um único `docker compose up` a partir do [solar-ai-api](https://github.com/fvconde/solar-ai-api#rodar-localmente).
+
+### Subir
+
 ```bash
 npm install
 npm start
 ```
 
-O comando `npm start` executa o `ng serve` em `http://localhost:4200` utilizando as regras de proxy definidas em `proxy.conf.json`. O proxy encaminha requisições para `/conversas`, `/painel` e `/health` diretamente para `http://localhost:8080`, eliminando a necessidade de configurações manuais de CORS no navegador durante o desenvolvimento local.
+Abra http://localhost:4200. O `ng serve` usa o `proxy.conf.json` para encaminhar as chamadas à API em `localhost:8080`, então não é preciso configurar CORS.
 
----
+### Telas
 
-## 3. Interfaces e Fluxos do Usuário
-
-### Fluxo de Consentimento e Chat do Lead
-1. **Aviso de Consentimento na Abertura (`app-aviso-consentimento`)**:
-   - Apresenta o termo resumido de privacidade exigindo aceite ativo (checkbox desmarcada por padrão).
-   - O botão de confirmação dispara `POST /conversas/{guid}/consentimento`. Se o usuário não consentir, nenhuma mensagem é transmitida e a sessão não é iniciada.
-   - O identificador da conversa (`guid`) é mantido em `localStorage`; o carimbo e a versão do aviso são validados pelo servidor.
-2. **Kickoff Silencioso**:
-   - Após o consentimento confirmado pelo servidor, o frontend envia uma mensagem inicial `"Olá"` que não é renderizada na tela, disparando a primeira fala natural de apresentação da Lia.
-3. **Handoff e Formulário de Contato (`app-formulario-contato`)**:
-   - Quando o lead atinge os critérios de agendamento ou encaminhamento especializado, um formulário de contato surge na trilha solicitando `nome`, `telefone` e `e-mail`.
-   - O envio ocorre via `POST /conversas/{guid}/contato`, gravando os dados diretamente no banco de dados da API, sem transitar pela IA.
-
-### Painel do Corretor (`/painel`)
-- Permite selecionar o corretor logado e consultar a listagem de leads qualificados.
-- As requisições enviam a credencial administrativa `X-Chave-Privacidade` e o identificador do corretor selecionado `X-Corretor-Id`.
-- Permite filtrar por intenção (`compra`, `aluguel`, `investimento`) e isolar leads atribuídos ao próprio profissional logado.
-
----
-
-## 4. Contratos Consumidos da API
-
-- `POST /conversas/{guid}/consentimento`: Registra o consentimento do lead com a versão da política vigente.
-- `POST /conversas/{guid}/mensagens`: Envia fala do lead (`{ "texto": string }`) e recebe resposta estruturada da Lia (`MensagemResponse`).
-- `POST /conversas/{guid}/contato`: Registra nome e meios de contato (`telefone`, `email`) do titular.
-- `GET /conversas/{guid}`: Reconstrói o histórico da conversa e o estado do atendimento após recarregar a página.
-- `GET /painel/corretores`: Lista corretores ativos para o seletor do painel.
-- `GET /painel/leads`: Recupera a fila de leads qualificados com scores calculados.
-
----
-
-## 5. Mapa de `proximaAcao` para a Interface
-
-A propriedade `proximaAcao` retornada pela API determina o comportamento visual da trilha do chat:
-
-| `proximaAcao` | Efeito Visual na Trilha |
+| Rota | Tela |
 |---|---|
-| `continuar_conversa` | Exibe a fala da Lia e mantém o composer de digitação ativo. |
-| `sugerir_imoveis` | Renderiza a pilha de até 3 cartões de recomendação imobiliária abaixo da fala da Lia. |
-| `agendar_reuniao` | Dispara o evento de sucesso "Encaminhado", solicitando dados de contato ou confirmando agendamento. |
-| `direcionar_especialista` | Dispara o evento de sistema "Próxima etapa", direcionando o investidor a um consultor humano. |
-| `encerrar` | Evento terminal na conversa; remove o campo de digitação e exibe o botão "Iniciar nova conversa". |
+| `/` | Chat com a Lia (pede consentimento LGPD antes da primeira mensagem) |
+| `/entrar` | Login de corretor e cliente |
+| `/cadastro` · `/seja-corretor` | Cadastro de cliente · cadastro de corretor |
+| `/painel` | Painel do corretor: fila de leads por score, detalhe do lead, métricas e aprovação de novos corretores (supervisor) |
+| `/conta` | Dados do cliente, histórico de conversas e exclusão da conta |
+| `/privacidade` | Aviso de privacidade completo |
+
+Para entrar no painel localmente, use `supervisor.vinculado@solar.local` e a senha definida em `SEMENTE__SENHASUPERVISOR` no `.env` do solar-ai-api.
 
 ---
 
-## 6. Design System e Tokens
-
-- **Fonte de Verdade**: Projeto Claude Design "Board de interface Lia" (`Solar Chat - Handoff v1.0`).
-- **Tokens de Estilo**: Cores, tipografia, elevação e espaçamentos definidos em `src/styles.scss` espelhando exatamente a nomenclatura do handoff.
-- **Modo Noturno / Claro**: Suporte automático via `prefers-color-scheme`, com override manual por atributo `data-tema="claro" | "escuro"` na tag `<html>`.
-
----
-
-## 7. Pendências do Handoff que Dependem de Decisão Fora do Front
-
-- Retomada proativa (follow-up): implementada com polling na aba aberta, intervalo configurável e limite de 2 tentativas por lead — controle de ativar/desativar pela interface ainda não existe.
-- Estado "sem resultado" quando nenhum imóvel atende à faixa.
-
----
-
-## 8. Testes e Build
+## Testes e build
 
 ```bash
-# Executar suíte de testes unitários (Karma + Jasmine em Chrome Headless)
-npm test
-
-# Gerar build otimizado de produção em dist/
-npm run build
+npm test              # testes unitários (Karma + Jasmine)
+npm run build         # build de produção em dist/
 ```
+
+---
+
+## Como a conversa funciona
+
+1. Na abertura, o lead aceita o aviso de privacidade. Sem consentimento, nada é enviado.
+2. O front manda um "Olá" silencioso, e a Lia se apresenta.
+3. A cada mensagem, a resposta da API traz `proximaAcao`, que decide o que aparece na tela:
+
+| `proximaAcao` | Na tela |
+|---|---|
+| `continuar_conversa` | Fala da Lia, campo de digitação ativo |
+| `sugerir_imoveis` | Até 3 cartões de imóveis com o motivo da recomendação |
+| `agendar_reuniao` | Horários para escolher e formulário de contato |
+| `direcionar_especialista` | Encaminhamento a um consultor humano |
+| `encerrar` | Fim da conversa, com botão para iniciar outra |
+
+Nome, telefone e e-mail vão direto para a API pelo formulário de contato e nunca passam pela IA.
